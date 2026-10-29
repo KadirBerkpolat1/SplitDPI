@@ -152,6 +152,19 @@ geçirir.
 `sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
 günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
 kalırsa onu listeler.
+## Hazır ayarlar nereden geliyor
+
+Sağlayıcı stratejilerinin çıkış noktası Çağrı Taşkın'ın
+[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) projesidir
+(MIT). [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs)
+gibi MIT lisanslı başka derlemeler de stratejileri karşılaştırmak için
+kullanılır. Her sağlayıcı dosyası, stratejilerinin gerçek bir bağlantıda en son
+ne zaman çalıştığını `reported` alanında tutar. `scan` çalışan bir stratejiyi
+kaydettiğinde, [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
+deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS numaranız,
+sağlayıcınız, ülkeniz, strateji ve sürümler. Siz issue'yu göndermedikçe hiçbir
+şey gönderilmez; içinde IP adresiniz ya da kendi siteleriniz hiçbir zaman
+yer almaz.
 
 ## Strateji bildirme
 

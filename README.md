@@ -141,6 +141,19 @@ until you run `revert` or start it again.
 `sudo splitdpi uninstall` lists what it would remove and changes nothing.
 `sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
 the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove.
+## Where presets come from
+
+The ISP strategies started from
+[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) by Çağrı
+Taşkın (MIT). Other MIT-licensed collections, such as
+[erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs),
+are used to cross-check them. Each ISP file records in its `reported` field
+when its strategies were last seen working on a real connection. When `scan`
+saves a working strategy, it prints a link that opens a prefilled issue in
+[SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
+your AS number, ISP, country, the strategy and the versions. Nothing is sent
+until you submit the issue, and it never contains your IP address or your own
+sites.
 
 ## Reporting a strategy
 

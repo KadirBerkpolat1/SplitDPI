@@ -69,8 +69,8 @@ func runApps(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 				mark = "*"
 			}
 			fmt.Fprintf(w, "%s %-10s %s\n", mark, a.ID, a.Name)
-			if a.Note != "" {
-				fmt.Fprintln(w, "    "+a.Note)
+			if note := ops.AppNote(a); note != "" {
+				fmt.Fprintln(w, "    "+note)
 			}
 		}
 		return nil

@@ -49,7 +49,7 @@ help = "Hazır stratejileri listeler ya da birini seçer (list | set ID)."
 help = "Açık uygulamaların test adreslerine ve sitelerinize HTTPS ile erişilip erişilemediğini dener."
 
 [probe]
-usage = "Kullanım: splitdpi probe [--apps id,id]"
+usage = "Kullanım: splitdpi probe [--apps id,id] [-v]"
 no_apps = "Açık uygulama ya da eklenmiş site yok. Şunu çalıştırın: sudo splitdpi apps enable discord  ya da: sudo splitdpi sites add ALAN"
 failed = "Bir veya daha fazla test başarısız oldu."
 dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
@@ -58,7 +58,7 @@ dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
 help = "Sağlayıcınızda ya da tek bir sitede (--site ALAN) çalışan bir DPI stratejisi bulur (önce hazır ayarlar, sonra blockcheck2)."
 
 [scan]
-usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck]"
+usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck] [-v]"
 site_ipv4 = "%s blockcheck2 ile yalnızca IPv4 üzerinden taranıyor; bu bilgisayarda küresel IPv6 yok."
 site_ipv46 = "%s blockcheck2 ile IPv4 ve IPv6 üzerinden taranıyor."
 verify = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
@@ -373,3 +373,32 @@ removed = "Kaldırıldı: %s"
 leftover = "Hâlâ duruyor: %s"
 done = "SplitDPI kaldırıldı."
 not_clean = "Kaldırma tamamlanmadı; yukarıdakiler hâlâ duruyor. Sorunu giderip `sudo splitdpi uninstall --yes` komutunu yeniden çalıştırın."
+[probeerr.reset]
+what = "Sağlayıcı bu siteyi engelliyor: bağlantı kesildi."
+todo = "Tarama ile başka bir strateji deneyin: sudo splitdpi scan"
+
+[probeerr.timeout]
+what = "Site zamanında yanıt vermedi."
+todo = "Sağlayıcı trafiği sessizce düşürüyor ya da site çalışmıyor olabilir. Tarama deneyin: sudo splitdpi scan. Bütün siteler yavaşsa internet bağlantınızı kontrol edin."
+
+[probeerr.dns]
+what = "Sitenin adresi bulunamadı: DNS yanıt vermedi ya da yanıtı değiştirildi."
+todo = "DNS'i şifreli DNS-over-HTTPS üzerinden geçirin, sonra splitdpi'yi yeniden başlatın: sudo splitdpi dns on"
+
+[probeerr.tls]
+what = "Güvenli bağlantı kurulamadı: sertifika siteyle eşleşmedi ya da el sıkışma yarıda kaldı."
+todo = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Şifreli DNS'i açın (sudo splitdpi dns on), sonra tarama deneyin: sudo splitdpi scan"
+
+[probeerr.http]
+what = "Site yerine başka bir şey yanıt verdi; büyük olasılıkla sağlayıcının engelleme sayfası."
+todo = "Tarama deneyin: sudo splitdpi scan. Sorun sürerse şifreli DNS'i açın: sudo splitdpi dns on"
+
+[probeerr.other]
+what = "Bağlantı başka bir nedenle kurulamadı."
+todo = "Hatayı görmek için komutu -v ile yeniden çalıştırın ve sitenin hiç açılıp açılmadığını kontrol edin."
+
+[share]
+scan = "Aynı sağlayıcıyı kullananlara yardım edin: bu sonucu hazır ayar deposuyla paylaşın. Bağlantı önceden doldurulmuş bir GitHub issue'su açar; siz göndermedikçe hiçbir şey gönderilmez:\n%s"
+
+[appnote]
+telegram = "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor."
