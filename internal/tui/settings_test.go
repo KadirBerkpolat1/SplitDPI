@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -128,6 +129,36 @@ func TestSettingsDNSConfirm(t *testing.T) {
 	has(t, v, "Cloudflare (DNS-over-HTTPS)")
 	if strings.Contains(v, "restart it to apply") {
 		t.Error("restart note while stopped")
+	}
+}
+
+// With dnscrypt-proxy encrypting DNS, the picker says so above the providers
+// and the confirm repeats it; choosing a provider is still allowed.
+func TestSettingsDNSSystemEncrypted(t *testing.T) {
+	note := "Your system already encrypts DNS with dnscrypt-proxy, so SplitDPI's encrypted DNS is not needed. It only affects programs that send DNS queries straight to a server instead of through the local resolver."
+	f := newFake()
+	plain := press(t, toSetting(t, f, rowDNS), "enter")
+	if strings.Contains(plain.View(), "already encrypts") {
+		t.Errorf("note without an encrypting resolver:\n%s", plain.View())
+	}
+	if m := press(t, press(t, plain, "down"), "enter"); slices.Contains(m.dialog.changes, note) {
+		t.Errorf("confirm note without an encrypting resolver: %q", m.dialog.changes)
+	}
+
+	f.systemDNS = "dnscrypt-proxy"
+	m := press(t, toSetting(t, f, rowDNS), "enter")
+	v := flat(pageText(m.View()))
+	has(t, v, note)
+	if strings.Index(v, note) > strings.Index(v, i18n.T("dns2.off_note")) {
+		t.Errorf("note below the providers:\n%s", m.View())
+	}
+	m = press(t, press(t, m, "down"), "enter")
+	if m.dialog == nil || !slices.Contains(m.dialog.changes, note) {
+		t.Fatalf("confirm without the note: %+v", m.dialog)
+	}
+	press(t, m, "y")
+	if f.count("dns auto doh") != 1 {
+		t.Errorf("calls %q", f.calls)
 	}
 }
 
@@ -277,6 +308,18 @@ func TestSettingsFit80x24(t *testing.T) {
 		p = press(t, press(t, p, "down"), "t")
 		views["picker dot"] = p.View()
 		views["dns confirm"] = press(t, p, "enter").View()
+		f.systemDNS = "dnscrypt-proxy"
+		s := press(t, press(t, m, "down"), "enter")
+		views["picker system"] = s.View()
+		s = press(t, press(t, s, "down"), "t")
+		views["picker dot system"] = s.View()
+		views["dns confirm system"] = press(t, s, "enter").View()
+		for _, name := range []string{"picker system", "picker dot system"} {
+			if !strings.Contains(flat(pageText(views[name])), i18n.T("dns_system.bypass_only")) {
+				t.Errorf("%s %s: the system DNS note is cut off:\n%s", lang, name, views[name])
+			}
+		}
+		f.systemDNS = ""
 		u := press(t, press(t, press(t, m, "down"), "down"), "enter")
 		views["uninstall confirm"] = u.View()
 		views["uninstalled"] = press(t, u, "y").View()
@@ -297,7 +340,7 @@ func TestSettingsFit80x24(t *testing.T) {
 				t.Errorf("%s %s: missing key %s", lang, name, k)
 			}
 		}
-		for _, name := range []string{"dns confirm", "uninstall confirm"} {
+		for _, name := range []string{"dns confirm", "dns confirm system", "uninstall confirm"} {
 			if !strings.Contains(views[name], i18n.T("confirm_keys.no")+" "+i18n.T("shell.confirm.no")) {
 				t.Errorf("%s %s: the y/n line is cut off:\n%s", lang, name, views[name])
 			}

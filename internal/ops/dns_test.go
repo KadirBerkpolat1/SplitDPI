@@ -126,28 +126,35 @@ func dnsScanOps(t *testing.T) (*Ops, *dohHTTP) {
 func TestScanDNSCheck(t *testing.T) {
 	const autoDoH = "dns SECURE_DNS=1 DOH_SERVERS=https://1.1.1.1/dns-query https://8.8.8.8/dns-query https://9.9.9.9/dns-query"
 	for _, tc := range []struct {
-		name     string
-		provider string // configured before the scan
-		system   string // system resolver answer
-		answer   string // what DNSCheck returns
-		asked    bool
-		env      string // blockcheck2's DNS line
-		saved    string
+		name      string
+		provider  string // configured before the scan
+		system    string // system resolver answer
+		answer    string // what DNSCheck returns
+		asked     bool
+		env       string // blockcheck2's DNS line
+		saved     string
+		encrypted bool // dnscrypt-proxy runs
+		force     bool // --dns given
 	}{
 		{name: "clean", provider: "off", system: "104.16.0.1", env: "dns SECURE_DNS= DOH_SERVERS=", saved: "off"},
 		{name: "poisoned yes", provider: "off", system: "195.175.254.2", answer: "auto", asked: true, env: autoDoH, saved: "auto"},
 		{name: "poisoned no", provider: "off", system: "195.175.254.2", asked: true, env: "dns SECURE_DNS= DOH_SERVERS=", saved: "off"},
+		{name: "system encrypted", provider: "off", system: "195.175.254.2", answer: "auto", encrypted: true, env: "dns SECURE_DNS= DOH_SERVERS=", saved: "off"},
+		{name: "system encrypted, --dns", provider: "off", system: "195.175.254.2", answer: "auto", encrypted: true, force: true, asked: true, env: autoDoH, saved: "auto"},
 		{name: "already on", provider: "adguard", system: "195.175.254.2", env: "dns SECURE_DNS=1 DOH_SERVERS=https://94.140.14.14/dns-query https://94.140.15.15/dns-query", saved: "adguard"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o, h := dnsScanOps(t)
 			fakeSystemDNS(t, tc.system)
+			if tc.encrypted {
+				o.Root = fstest.MapFS{"proc/321/stat": {Data: []byte("321 (dnscrypt-proxy) S 1 321 321 0 -1 0\n")}}
+			}
 			if _, err := o.SetDNS(tc.provider, dns.DoT); err != nil {
 				t.Fatal(err)
 			}
 			var asked []probe.DNSResult
 			var log []string
-			opt := scan.Options{ASN: 9121, Site: "pastebin.com", DNSCheck: func(_ context.Context, p []probe.DNSResult) string {
+			opt := scan.Options{ASN: 9121, Site: "pastebin.com", DNSForce: tc.force, DNSCheck: func(_ context.Context, p []probe.DNSResult) string {
 				asked = p
 				return tc.answer
 			}}
@@ -165,11 +172,16 @@ func TestScanDNSCheck(t *testing.T) {
 			if s.Provider != tc.saved {
 				t.Errorf("saved %+v, want %s", s, tc.saved)
 			}
-			if tc.answer != "" && s.Protocol != dns.DoH {
+			if tc.asked && tc.answer != "" && s.Protocol != dns.DoH {
 				t.Errorf("scan turned DNS on over %s", s.Protocol)
 			}
-			if tc.provider == "off" && !slices.Contains(h.hosts, "1.1.1.1") {
-				t.Errorf("reference DoH asked %q", h.hosts)
+			skipped := tc.encrypted && !tc.force
+			if tc.provider == "off" && slices.Contains(h.hosts, "1.1.1.1") == skipped {
+				t.Errorf("reference DoH asked %q, skipped %v", h.hosts, skipped)
+			}
+			skipLine := "System DNS is already encrypted (dnscrypt-proxy), so the DNS poisoning check is skipped."
+			if slices.Contains(log, skipLine) != skipped {
+				t.Errorf("log %q, skipped %v", log, skipped)
 			}
 		})
 	}

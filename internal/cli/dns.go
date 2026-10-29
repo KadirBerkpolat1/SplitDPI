@@ -14,9 +14,9 @@ func init() {
 	commands["dns"] = Command{Name: "dns", Root: true, Help: "cmd.dns.help", Run: runDNS}
 }
 
-func runDNS(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
+func runDNS(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
 	if len(args) == 0 {
-		return printDNS(o, w)
+		return printDNS(ctx, o, w)
 	}
 	provider, proto, err := parseDNSArgs(args)
 	if err != nil {
@@ -34,6 +34,7 @@ func runDNS(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		if p.Note != "" {
 			fmt.Fprintln(w, p.Note)
 		}
+		printSystemDNS(ctx, o, w)
 		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if running {
@@ -63,7 +64,7 @@ func parseDNSArgs(args []string) (string, dns.Protocol, error) {
 	return provider, proto, nil
 }
 
-func printDNS(o *ops.Ops, w io.Writer) error {
+func printDNS(ctx context.Context, o *ops.Ops, w io.Writer) error {
 	s, err := o.DNSSetting()
 	if err != nil {
 		return err
@@ -77,8 +78,18 @@ func printDNS(o *ops.Ops, w io.Writer) error {
 			fmt.Fprintln(w, p.Note)
 		}
 	}
+	printSystemDNS(ctx, o, w)
 	fmt.Fprintln(w, i18n.T("dns.usage"))
 	return nil
+}
+
+// printSystemDNS says when the system already encrypts DNS, and what
+// SplitDPI's DNS still does then.
+func printSystemDNS(ctx context.Context, o *ops.Ops, w io.Writer) {
+	if name, ok := o.SystemEncryptedDNS(ctx); ok {
+		fmt.Fprintln(w, i18n.T("dns_system.not_needed", name))
+		fmt.Fprintln(w, i18n.T("dns_system.bypass_only"))
+	}
 }
 
 func dnsChoice(o *ops.Ops, id string) ops.DNSProvider {

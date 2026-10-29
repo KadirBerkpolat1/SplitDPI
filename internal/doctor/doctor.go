@@ -86,10 +86,24 @@ func Run(ctx context.Context, env Env) []Check {
 		cs = append(cs, Check{ID: "conflict", Msg: i18n.T("doctor.conflict.none")})
 	}
 	cs = append(cs, initCheck(env), ipv6(ctx, env))
+	if name, ok := EncryptedDNS(ctx, env); ok {
+		cs = append(cs, Check{ID: "dns", Msg: i18n.T("dns_system.doctor", name)})
+	}
 	if c := dnsCheck(ctx, env); c != nil {
 		cs = append(cs, *c)
 	}
 	return cs
+}
+
+// EncryptedDNS names the local resolver that already encrypts this machine's
+// DNS, if any.
+func EncryptedDNS(ctx context.Context, env Env) (string, bool) {
+	procs, _ := env.Procs()
+	comms := make([]string, len(procs))
+	for i, p := range procs {
+		comms[i] = p.Comm
+	}
+	return sysinfo.EncryptedResolver(ctx, env.Root, env.Run, comms)
 }
 
 func dnsCheck(ctx context.Context, env Env) *Check {

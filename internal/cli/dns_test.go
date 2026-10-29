@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 	"testing/fstest"
@@ -48,6 +49,43 @@ func TestDNSShow(t *testing.T) {
 	out, _ = runOps(t, o, "dns")
 	has(t, out, "Encrypted DNS: Quad9 over DNS-over-HTTPS.")
 	has(t, out, "malware")
+}
+
+// dnscryptRoot is a machine where dnscrypt-proxy already encrypts DNS.
+var dnscryptRoot = fstest.MapFS{"proc/321/stat": {Data: []byte("321 (dnscrypt-proxy) S 1 321 321 0 -1 0\n")}}
+
+const (
+	notNeeded  = "Your system already encrypts DNS with dnscrypt-proxy, so SplitDPI's encrypted DNS is not needed."
+	bypassOnly = "It only affects programs that send DNS queries straight to a server instead of through the local resolver."
+)
+
+func TestDNSWhenSystemEncrypts(t *testing.T) {
+	o, _ := runOpsFor(t, dnscryptRoot)
+	out, code := runOps(t, o, "dns")
+	eq(t, code, 0)
+	has(t, out, "Encrypted DNS is off")
+	has(t, out, notNeeded)
+	has(t, out, bypassOnly)
+
+	out, code = runOps(t, o, "dns", "quad9")
+	eq(t, code, 0)
+	has(t, out, "Encrypted DNS is on: Quad9 over DNS-over-HTTPS.")
+	has(t, out, notNeeded)
+	has(t, out, bypassOnly)
+	if c, _ := config.Load(o.P); c.DNSProvider != "quad9" {
+		t.Errorf("setting refused: %s", c.DNSProvider)
+	}
+
+	out, _ = runOps(t, o, "dns")
+	has(t, out, "Encrypted DNS: Quad9 over DNS-over-HTTPS.")
+	has(t, out, notNeeded)
+
+	plain, _ := runOpsFor(t, fstest.MapFS{})
+	for _, args := range [][]string{{"dns"}, {"dns", "quad9"}} {
+		if out, _ := runOps(t, plain, args...); strings.Contains(out, "already encrypts") {
+			t.Errorf("%v without an encrypting resolver: %s", args, out)
+		}
+	}
 }
 
 func TestDNSOnWhileRunningSaysRestart(t *testing.T) {

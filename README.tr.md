@@ -206,12 +206,33 @@ Varsayılan protokol DNS-over-HTTPS'tir; `--dot` DNS-over-TLS'i seçer. DoT 853
 numaralı portu kullanır ve bazı sağlayıcılar bu portu engeller.
 `sudo splitdpi dns off` şifreli DNS'i kapatır. Seçim bir sonraki başlatmada
 geçerli olur; terminal arayüzünde Ayarlar sayfası aynı seçenekleri sunar.
-Hiçbir çözümleyici ayarını değiştirmez ve `inet splitdpi` tablosuyla birlikte
-kaybolur. Yerel ağ adları sağlayıcıya hiç gitmez, ağınızın her zamanki DNS
-sunucusuna sorulur: tek parçalı adlar, `.lan`, `.local`, `.home.arpa`,
-`.internal`, `.localdomain`, arama alan adlarınız ve özel adreslerin ters
-sorguları. VPN arayüzlerinden (config.toml'daki `skip_ifaces`) geçen DNS'e
-dokunulmaz; böylece VPN'in ayrık DNS'i çalışmaya devam eder.
+
+- **Sistem ayarları olduğu gibi kalır.** SplitDPI sistemin DNS ayarlarını hiç
+  değiştirmez: hiçbir çözümleyici yapılandırma dosyasına ya da servisine
+  dokunmaz; yönlendirme `inet splitdpi` tablosuyla birlikte kaybolur.
+- **Karar yerel çözümleyicinin.** Bu bilgisayardaki çözümleyicilere
+  (`127.0.0.0/8`, `::1`) giden sorgular hiç yönlendirilmez; programlar
+  systemd-resolved'ın yerel adresini (127.0.0.53), dnscrypt-proxy'yi ya da
+  başka bir yerel çözümleyiciyi eskisi gibi, onun kurallarıyla kullanır.
+  Yalnızca bilgisayardan 53. port üzerinden çıkan DNS yönlendirilir. DNS'i
+  zaten şifreleyen bir çözümleyici 53. porttan bir şey göndermez; bu durumda
+  SplitDPI'nin DNS'i yalnızca doğrudan dışarıdaki bir sunucuya soran programları
+  etkiler.
+- **Zaten şifreliyse.** dnscrypt-proxy, Stubby, NextDNS, AdGuard Home, TLS
+  üzerinden yönlendiren Unbound ya da Knot Resolver veya DNS-over-TLS açık
+  systemd-resolved kullanılıyorsa `doctor` bunu söyler, `splitdpi dns` ve
+  Ayarlar SplitDPI'nin DNS'ine gerek olmadığını belirtir (yine de açılabilir),
+  `scan` ise `--dns` verilmedikçe zehirlenme sorusunu atlar.
+- **VPN'ler ve yerel adlar.** VPN arayüzlerinden (config.toml'daki
+  `skip_ifaces`) geçen DNS'e dokunulmaz; böylece VPN'in ayrık DNS'i çalışmaya
+  devam eder. Yerel ağ adları sağlayıcıya hiç gitmez, ağınızın her zamanki DNS
+  sunucusuna sorulur: tek parçalı adlar, `.lan`, `.local`, `.home.arpa`,
+  `.internal`, `.localdomain`, arama alan adlarınız ve özel adreslerin ters
+  sorguları.
+- **Yine de değişenler.** `quad9` ya da `adguard` seçiliyse engelledikleri alan
+  adları çözülmez. Otel, havalimanı gibi giriş sayfası açan Wi-Fi ağlarında,
+  giriş sayfası görünmezse DNS'i kapatın (`sudo splitdpi dns off`) ve
+  SplitDPI'yi yeniden başlatın.
 
 ## Nasıl çalışır, ne beklemeli
 

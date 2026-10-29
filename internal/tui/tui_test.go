@@ -71,6 +71,8 @@ type fake struct {
 	uninstallErr error
 
 	engineErr error
+
+	systemDNS string // the resolver that already encrypts DNS, if any
 }
 
 func newFake() *fake {
@@ -231,6 +233,9 @@ func (f *fake) SetDNS(provider string, proto dns.Protocol) (bool, error) {
 	defer f.mu.Unlock()
 	f.cfg.DNSProvider, f.cfg.DNSProtocol = provider, proto
 	return f.st.State == "running", nil
+}
+func (f *fake) SystemEncryptedDNS(context.Context) (string, bool) {
+	return f.systemDNS, f.systemDNS != ""
 }
 func (f *fake) UninstallPlan() ops.UninstallPlan { return f.plan }
 func (f *fake) Uninstall(ctx context.Context) (ops.UninstallReport, error) {

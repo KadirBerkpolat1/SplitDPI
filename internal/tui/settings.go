@@ -29,6 +29,7 @@ type dnsPicker struct {
 	list   []ops.DNSProvider
 	cursor int
 	proto  dns.Protocol
+	system string // the resolver that already encrypts the system's DNS, if any
 }
 
 type setting struct {
@@ -213,8 +214,15 @@ func (m *Model) openDNSPicker() tea.Cmd {
 		p.proto = dns.DoH
 	}
 	p.cursor = max(slices.IndexFunc(p.list, func(d ops.DNSProvider) bool { return d.ID == m.cfg.DNSProvider }), 0)
+	p.system, _ = m.b.SystemEncryptedDNS(m.ctx)
 	m.settings.dns, m.focus = p, 0
 	return nil
+}
+
+// systemDNSNote says the system already encrypts DNS with name, and what
+// SplitDPI's DNS still does then.
+func systemDNSNote(name string) string {
+	return i18n.T("dns_system.not_needed", name) + " " + i18n.T("dns_system.bypass_only")
 }
 
 // dnsCLI is the command that makes the same choice.
@@ -277,6 +285,9 @@ func (m *Model) chooseDNS() tea.Cmd {
 	if ch.Note != "" {
 		changes = append(changes, ch.Note)
 	}
+	if p.system != "" {
+		changes = append(changes, systemDNSNote(p.system))
+	}
 	if m.bypassOn() {
 		changes = append(changes, i18n.T("settings_dns.on_restart"))
 	}
@@ -305,6 +316,9 @@ func (m *Model) setDNS(ch ops.DNSProvider, proto dns.Protocol) tea.Cmd {
 func (m Model) dnsPickerView(w, h int) string {
 	p := m.settings.dns
 	head := []string{i18n.T("settings_dns.protocol") + " " + titleStyle.Render(p.proto.Name())}
+	if p.system != "" {
+		head = append(head, strings.Split(lipgloss.NewStyle().Width(w).Render(goodStyle.Render(systemDNSNote(p.system))), "\n")...)
+	}
 	if p.proto == dns.DoT {
 		head = append(head, strings.Split(lipgloss.NewStyle().Width(w).Render(warnStyle.Render(i18n.T("settings_dns.dot_note"))), "\n")...)
 	}

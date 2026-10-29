@@ -77,7 +77,7 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		},
 		// Trials after this see c, so a DNS turned on here serves them too.
 		Blockcheck: func(ctx context.Context, p scan.BlockcheckParams, prog func(string)) (string, error) {
-			if dnsErr = o.scanDNS(ctx, &c, opt.DNSCheck, p.Domains); dnsErr != nil {
+			if dnsErr = o.scanDNS(ctx, &c, opt, p.Domains, progress); dnsErr != nil {
 				return "", dnsErr
 			}
 			if c.DNSOn() {
@@ -114,10 +114,20 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 }
 
 // scanDNS runs opt.DNSCheck when DNS is off and some of domains look
-// poisoned, and turns on the provider it returns, in c and in config.
-func (o *Ops) scanDNS(ctx context.Context, c *config.Config, ask func(context.Context, []probe.DNSResult) string, domains []string) error {
+// poisoned, and turns on the provider it returns, in c and in config. When
+// the system already encrypts DNS, it only says so, unless opt.DNSForce.
+func (o *Ops) scanDNS(ctx context.Context, c *config.Config, opt scan.Options, domains []string, progress func(string)) error {
+	ask := opt.DNSCheck
 	if ask == nil || c.DNSOn() {
 		return nil
+	}
+	if !opt.DNSForce {
+		if name, ok := o.SystemEncryptedDNS(ctx); ok {
+			if progress != nil {
+				progress(i18n.T("dns_system.scan_skip", name))
+			}
+			return nil
+		}
 	}
 	var poisoned []probe.DNSResult
 	for _, r := range o.CheckDNS(ctx, domains) {

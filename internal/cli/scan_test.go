@@ -3,10 +3,14 @@ package cli
 import (
 	"bytes"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -70,6 +74,40 @@ func TestScanSiteUsageAndBadDomain(t *testing.T) {
 	out, code := run(t, 1000, "scan", "--site", "pastebin.com")
 	eq(t, code, 1)
 	has(t, out, "sudo splitdpi scan --site pastebin.com")
+}
+
+// With dnscrypt-proxy encrypting DNS, a scan says so instead of checking for
+// poisoning and asking, even on a terminal that would answer yes.
+func TestScanSkipsDNSQuestionWhenSystemEncrypts(t *testing.T) {
+	o, _ := runOpsFor(t, dnscryptRoot)
+	dir := filepath.Join(o.P.EngineDir, "zapret2-"+engine.Version)
+	bin := filepath.Join(dir, "binaries", "linux-x86_64")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string]string{
+		filepath.Join(bin, "nfqws2"):            "",
+		filepath.Join(dir, "blockcheck2.sh"):    "#!/bin/sh\necho\necho '* SUMMARY'\n",
+		filepath.Join(o.P.EngineDir, "current"): "zapret2-" + engine.Version + "\nlinux-x86_64\n",
+	} {
+		if err := os.WriteFile(name, []byte(data), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldIn, oldTTY := dnsPromptIn, dnsPromptTTY
+	t.Cleanup(func() { dnsPromptIn, dnsPromptTTY = oldIn, oldTTY })
+	dnsPromptIn, dnsPromptTTY = strings.NewReader("y\n"), func() bool { return true }
+
+	out, _ := runOps(t, o, "scan", "--site", "pastebin.com", "--asn", "9121")
+	has(t, out, "System DNS is already encrypted (dnscrypt-proxy), so the DNS poisoning check is skipped.")
+	for _, not := range []string{"[y/N]", "DNS poisoning:", "--dns auto"} {
+		if strings.Contains(out, not) {
+			t.Errorf("output has %q:\n%s", not, out)
+		}
+	}
+	if c, _ := config.Load(o.P); c.DNSOn() {
+		t.Errorf("scan turned DNS on: %s", c.DNSProvider)
+	}
 }
 
 func TestScanDNSChoice(t *testing.T) {

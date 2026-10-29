@@ -360,6 +360,40 @@ func TestScanDNSQuestionProviderList(t *testing.T) {
 	<-done
 }
 
+// When the system already encrypts DNS, the scan skips the DNS question and
+// says why in one line; the TUI shows that line, opens no dialog, and never
+// forces the check.
+func TestScanSkipsDNSQuestionWhenSystemEncrypts(t *testing.T) {
+	defer i18n.Init("en")
+	for _, lang := range []string{"en", "tr"} {
+		i18n.Init(lang)
+		f := newFake()
+		line := i18n.T("dns_system.scan_skip", "dnscrypt-proxy")
+		var forced bool
+		started := make(chan struct{})
+		f.scanFn = func(ctx context.Context, opt scan.Options, progress func(string)) (scan.Report, error) {
+			forced = opt.DNSForce
+			progress(line) // what ops says in place of asking
+			close(started)
+			<-ctx.Done()
+			return scan.Report{}, ctx.Err()
+		}
+		m, cmd := toScan(t, f)
+		done := make(chan tea.Msg, 1)
+		go func() { done <- cmd() }()
+		<-started
+		m, _ = update(t, m, scanTickMsg{})
+		v := m.View()
+		fits(t, lang+" dns skipped", v)
+		has(t, flat(pageText(v)), line)
+		if m.ask != nil || forced {
+			t.Errorf("%s: dialog %v, forced %v", lang, m.ask != nil, forced)
+		}
+		m.cancelScan()
+		<-done
+	}
+}
+
 // A cancelled scan or a quitting TUI frees the waiting scan with "".
 func TestScanDNSQuestionCancel(t *testing.T) {
 	t.Run("quit with the dialog open", func(t *testing.T) {

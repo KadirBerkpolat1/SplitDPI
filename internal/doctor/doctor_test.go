@@ -171,6 +171,26 @@ func TestDNSPoisoned(t *testing.T) {
 	eq(t, c.Fix, "sudo splitdpi dns on")
 }
 
+func TestDNSAlreadyEncrypted(t *testing.T) {
+	f := newFake(t)
+	cs := doctor.Run(context.Background(), f.env)
+	for _, c := range cs {
+		if c.ID == "dns" {
+			t.Errorf("dns line without an encrypting resolver: %+v", c)
+		}
+	}
+
+	f.env.Procs = func() ([]doctor.Proc, error) { return procs("systemd", "dnscrypt-proxy"), nil }
+	c := one(t, doctor.Run(context.Background(), f.env), "dns", doctor.OK)
+	eq(t, c.Msg, "system DNS is already encrypted (dnscrypt-proxy)")
+	eq(t, c.Fix, "")
+
+	f.env.Procs = func() ([]doctor.Proc, error) { return procs("systemd-resolve"), nil }
+	f.out["resolvectl status"] = "Global\n  Protocols: -LLMNR -mDNS +DNSOverTLS DNSSEC=no/unsupported\n"
+	c = one(t, doctor.Run(context.Background(), f.env), "dns", doctor.OK)
+	eq(t, c.Msg, "system DNS is already encrypted (systemd-resolved)")
+}
+
 func TestStrategyOldEngine(t *testing.T) {
 	f := newFake(t)
 	cfg := "[strategy]\nid=\"x\"\nengine=\"v1.0.5\"\n"

@@ -35,6 +35,7 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 	opt.DNSCheck = func(_ context.Context, poisoned []probe.DNSResult) string {
 		return scanDNSChoice(o, w, dnsFlag, poisoned)
 	}
+	opt.DNSForce = dnsFlag != ""
 	if opt.Site != "" {
 		if opt.Site, err = domain.Normalize(opt.Site); err != nil {
 			return err

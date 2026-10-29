@@ -190,12 +190,32 @@ of these providers:
 It uses DNS-over-HTTPS by default; `--dot` picks DNS-over-TLS, which uses port
 853 and is blocked by some ISPs. `sudo splitdpi dns off` turns it off. The
 choice applies on the next start, and Settings in the terminal UI offers the
-same choices. It changes no resolver settings and disappears with the
-`inet splitdpi` table. Local names still go to your network's usual DNS
-server, never to the provider: single-label names, `.lan`, `.local`,
-`.home.arpa`, `.internal`, `.localdomain`, your search domains, and reverse
-lookups of private addresses. DNS through VPN interfaces (`skip_ifaces` in
-config.toml) is left alone, so VPN split DNS keeps working.
+same choices.
+
+- **System settings stay as they are.** SplitDPI never changes system DNS
+  settings: no resolver configuration file or service is edited, and the
+  redirect disappears with the `inet splitdpi` table.
+- **Local resolvers decide.** Queries to resolvers on this machine
+  (`127.0.0.0/8`, `::1`) are never redirected, so programs keep using the
+  systemd-resolved stub (127.0.0.53), dnscrypt-proxy or any other local
+  resolver as before, with its own rules. Only DNS leaving the machine on port
+  53 is redirected. A resolver that already encrypts DNS sends nothing on port
+  53, so SplitDPI's DNS then only affects programs that query an outside server
+  directly.
+- **Already encrypted.** When dnscrypt-proxy, Stubby, NextDNS, AdGuard Home,
+  Unbound or Knot Resolver forwarding over TLS, or systemd-resolved with
+  DNS-over-TLS is in use, `doctor` says so, `splitdpi dns` and Settings say
+  SplitDPI's DNS is not needed (turning it on is still allowed), and `scan`
+  skips the poisoning question unless you pass `--dns`.
+- **VPNs and local names.** DNS through VPN interfaces (`skip_ifaces` in
+  config.toml) is left alone, so VPN split DNS keeps working. Local names go to
+  your network's usual DNS server, never to the provider: single-label names,
+  `.lan`, `.local`, `.home.arpa`, `.internal`, `.localdomain`, your search
+  domains, and reverse lookups of private addresses.
+- **What still changes.** With `quad9` or `adguard`, the domains they block do
+  not resolve. Hotel, airport and other captive-portal Wi-Fi may not show its
+  login page until you turn DNS off (`sudo splitdpi dns off`) and restart
+  SplitDPI.
 
 ## How it works, and what to expect
 

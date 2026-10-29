@@ -616,3 +616,9 @@ no = "h"
 [takeover_boot]
 state = "açılışta başlayıp başlamadığı okunamadı"
 change = "%s servisinin açılışta başlaması kapatılacak (şu anki ayarı okunamadı; geri alma onu açar)."
+
+[dns_system]
+doctor = "sistem DNS'i zaten şifreli (%s)"
+scan_skip = "Sistem DNS'i zaten şifreli (%s); DNS zehirlenmesi denetimi atlanıyor."
+not_needed = "Sisteminiz DNS'i zaten %s ile şifreliyor; SplitDPI'nin şifreli DNS'ine gerek yok."
+bypass_only = "Yalnızca DNS sorgularını yerel çözümleyiciden geçirmeden doğrudan bir sunucuya gönderen programları etkiler."

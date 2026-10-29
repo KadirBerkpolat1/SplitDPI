@@ -29,6 +29,9 @@ type Options struct {
 	// its domains look poisoned. It returns the dns_provider to turn on for
 	// the rest of the scan and keep, or "" to stay on the system resolver.
 	DNSCheck func(ctx context.Context, poisoned []probe.DNSResult) string
+	// DNSForce checks for poisoning even when the system already encrypts
+	// DNS, where the check is otherwise skipped (an explicit --dns).
+	DNSForce bool
 	// Trial, when set, gets each finished trial, preset or blockcheck2, in
 	// place of the progress line a blockcheck2 trial otherwise prints.
 	Trial func(Trial)

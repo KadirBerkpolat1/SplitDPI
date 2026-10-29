@@ -616,3 +616,9 @@ no = "n"
 [takeover_boot]
 state = "could not tell whether it starts on boot"
 change = "Keep %s from starting on boot (its current setting could not be read; revert turns it on)."
+
+[dns_system]
+doctor = "system DNS is already encrypted (%s)"
+scan_skip = "System DNS is already encrypted (%s), so the DNS poisoning check is skipped."
+not_needed = "Your system already encrypts DNS with %s, so SplitDPI's encrypted DNS is not needed."
+bypass_only = "It only affects programs that send DNS queries straight to a server instead of through the local resolver."

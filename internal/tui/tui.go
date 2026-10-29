@@ -59,6 +59,7 @@ type Backend interface {
 
 	DNSProviders() []ops.DNSProvider
 	SetDNS(provider string, proto dns.Protocol) (running bool, err error)
+	SystemEncryptedDNS(ctx context.Context) (name string, ok bool)
 	UninstallPlan() ops.UninstallPlan
 	Uninstall(ctx context.Context) (ops.UninstallReport, error)
 

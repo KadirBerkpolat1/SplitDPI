@@ -9,6 +9,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -67,6 +68,13 @@ func (o *Ops) SetDNS(provider string, proto dns.Protocol) (running bool, err err
 	}
 	_, _, held := supervisor.LockInfo(o.P)
 	return held, nil
+}
+
+// SystemEncryptedDNS names the local resolver that already encrypts this
+// machine's DNS, if any. SplitDPI leaves queries to local resolvers alone, so
+// its own encrypted DNS then only serves programs that bypass that resolver.
+func (o *Ops) SystemEncryptedDNS(ctx context.Context) (name string, ok bool) {
+	return doctor.EncryptedDNS(ctx, o.doctorEnv())
 }
 
 // dnsClient resolves like the forwarder does with c; with DNS off, like auto
