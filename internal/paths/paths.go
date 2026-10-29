@@ -15,6 +15,7 @@ type Paths struct {
 	EngineDir    string
 	PresetCache  string
 	AutoHostlist string
+	TakeoverFile string
 	RunDir       string
 	LockFile     string
 	StatusFile   string
@@ -48,6 +49,7 @@ func Under(root string) Paths {
 		EngineDir:    filepath.Join(state, "engine"),
 		PresetCache:  filepath.Join(state, "presets"),
 		AutoHostlist: filepath.Join(state, "autohostlist.txt"),
+		TakeoverFile: filepath.Join(state, "takeover.json"),
 		RunDir:       run,
 		LockFile:     filepath.Join(run, "lock"),
 		StatusFile:   filepath.Join(run, "status.json"),

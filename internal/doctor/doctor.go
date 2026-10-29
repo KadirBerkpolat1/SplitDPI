@@ -41,8 +41,8 @@ type Env struct {
 	Run      execx.Runner
 	LookPath func(string) (string, error)
 	Procs    func() ([]Proc, error) // every process (/proc/*/stat)
-	Euid      func() int
-	DNSCheck  func(context.Context) []probe.DNSResult // nil skips the dns check
+	Euid     func() int
+	DNSCheck func(context.Context) []probe.DNSResult // nil skips the dns check
 }
 
 type Proc struct {
@@ -62,7 +62,10 @@ var probeRuleset = `table inet ` + probeTable + ` {
 }
 `
 
-var conflictProcs = []string{"nfqws", "nfqws2", "tpws", "ciadpi"}
+// zapretProcs run under a zapret install, which `splitdpi takeover` can switch off.
+var zapretProcs = []string{"nfqws", "nfqws2", "tpws"}
+
+var conflictProcs = slices.Concat(zapretProcs, []string{"ciadpi"})
 
 const fixEngine = "sudo splitdpi engine install"
 
@@ -119,12 +122,13 @@ func ExitCode(cs []Check) int {
 // Conflicts lists other DPI-bypass tools and their leftovers. It returns nothing on a clean system.
 func Conflicts(ctx context.Context, env Env) []Check {
 	var cs []Check
-	procs, _ := env.Procs()
-	ours := ownProcess(env.P, procs)
-	for _, name := range conflictProcs {
-		if slices.ContainsFunc(procs, func(p Proc) bool { return p.Comm == name && !ours(p) }) {
-			cs = append(cs, Check{ID: "conflict", Severity: Blocker, Msg: i18n.T("doctor.conflict.process", name)})
+	names, _ := ConflictProcs(env)
+	for _, name := range names {
+		c := Check{ID: "conflict", Severity: Blocker, Msg: i18n.T("doctor.conflict.process", name)}
+		if slices.Contains(zapretProcs, name) {
+			c.Msg, c.Fix = i18n.T("takeover.conflict", name), "sudo splitdpi takeover"
 		}
+		cs = append(cs, c)
 	}
 	if len(cs) == 0 {
 		for _, dir := range []string{"opt/zapret", "opt/zapret2"} {
@@ -146,6 +150,20 @@ func Conflicts(ctx context.Context, env Env) []Check {
 		}
 	}
 	return cs
+}
+
+// ConflictProcs returns the names of the other DPI-bypass processes running,
+// leaving out splitdpi's own nfqws2.
+func ConflictProcs(env Env) ([]string, error) {
+	procs, err := env.Procs()
+	ours := ownProcess(env.P, procs)
+	var names []string
+	for _, name := range conflictProcs {
+		if slices.ContainsFunc(procs, func(p Proc) bool { return p.Comm == name && !ours(p) }) {
+			names = append(names, name)
+		}
+	}
+	return names, err
 }
 
 // ownProcess matches splitdpi's own nfqws2 while a supervisor holds the lock:
@@ -229,7 +247,7 @@ func tool(env Env, name, pkg string, missing Severity, pm sysinfo.PkgManager) Ch
 	if p, err := env.LookPath(name); err == nil {
 		return Check{ID: name, Msg: i18n.T("doctor.tool.ok", name, p)}
 	}
-	return Check{ID: name, Severity: missing, Msg: i18n.T("doctor.tool.missing."+name), Fix: sysinfo.InstallHint(pm, pkg)}
+	return Check{ID: name, Severity: missing, Msg: i18n.T("doctor.tool.missing." + name), Fix: sysinfo.InstallHint(pm, pkg)}
 }
 
 // nfqueue loads a throwaway queue rule to prove the kernel supports NFQUEUE.

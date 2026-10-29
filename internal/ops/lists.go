@@ -1,9 +1,12 @@
 package ops
 
 import (
+	"bufio"
+	"io"
 	"maps"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
@@ -125,4 +128,63 @@ func (o *Ops) SitesRemove(d string) error {
 		return err
 	}
 	return config.RemoveFromList(o.P.UserHosts, n)
+}
+
+// ImportSkip is a line of an imported file that is not a domain.
+type ImportSkip struct {
+	Line int // 1-based
+	Text string
+}
+
+// SitesImport adds the domains in the text file at path to the user's sites:
+// one per line, "#" starts a comment, and *.example.com or .example.com mean
+// example.com. added holds the domains that were not in the list yet.
+func (o *Ops) SitesImport(path string) (added []string, skipped []ImportSkip, err error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+	return o.importSites(f)
+}
+
+func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, err error) {
+	have, err := config.ReadList(o.P.UserHosts)
+	if err != nil {
+		return nil, nil, err
+	}
+	seen := make(map[string]bool, len(have))
+	for _, d := range have {
+		seen[d] = true
+	}
+	sc := bufio.NewScanner(r)
+	for n := 1; sc.Scan(); n++ {
+		text, _, _ := strings.Cut(sc.Text(), "#")
+		text = strings.TrimSpace(strings.TrimPrefix(text, "\ufeff"))
+		if text == "" {
+			continue
+		}
+		d, err := domain.Normalize(strings.TrimPrefix(text, "."))
+		if err != nil {
+			skipped = append(skipped, ImportSkip{Line: n, Text: text})
+			continue
+		}
+		if !seen[d] {
+			seen[d] = true
+			added = append(added, d)
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, nil, err
+	}
+	if len(added) == 0 {
+		return nil, skipped, nil
+	}
+	if err := os.MkdirAll(o.P.ConfigDir, 0o755); err != nil {
+		return nil, nil, err
+	}
+	if err := config.AddToList(o.P.UserHosts, added...); err != nil {
+		return nil, nil, err
+	}
+	return added, skipped, nil
 }

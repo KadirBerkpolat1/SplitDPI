@@ -63,7 +63,8 @@ shows the command that does the same thing, so you can script it.
 | `splitdpi enable` / `disable` | Installs and starts the service, or stops and removes it. |
 | `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
-| `splitdpi sites list\|add DOMAIN\|remove DOMAIN` | Manages your own blocked sites, which the bypass always handles. |
+| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles; `import` adds every domain in a text file, one per line. |
+| `splitdpi takeover [--yes]` | Finds another zapret or zapret2 install and shows what switching to SplitDPI changes; `--yes` imports its sites, stops its service and turns off its start on boot. |
 | `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
@@ -132,6 +133,8 @@ unmodified.
 `sudo splitdpi revert` stops SplitDPI, removes its service, deletes its table
 and its runtime files, and then checks that nothing is left. It prints
 `clean`, or lists what remains. `--purge` also removes its settings and data.
+If `takeover` switched off another zapret install, revert turns its service
+back on; `takeover` never deletes or edits that install's files.
 Revert never reads the configuration, so a broken config cannot block it. If
 SplitDPI is killed, its queue rules stay in place but let all traffic through
 until you run `revert` or start it again.
