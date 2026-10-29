@@ -519,3 +519,26 @@ still_running = "%s still runs outside a service: stop it yourself before starti
 done = "Done. Open splitdpi to set it up and start it: sudo splitdpi"
 restored = "Turned back on: %s"
 conflict = "%s is running (zapret, another DPI-bypass tool); splitdpi can switch it off and keep its sites"
+
+[settings_dns]
+label = "Encrypted DNS"
+change = "Choose DNS"
+use = "Use %s"
+protocol = "Protocol:"
+dot_note = "DNS-over-TLS uses port 853, which some internet providers block. If sites stop opening, switch back to DNS-over-HTTPS."
+title = "Turn on encrypted DNS?"
+via = "While SplitDPI runs, DNS queries go to %s over %s. The system DNS settings are not touched."
+on_restart = "SplitDPI is running now: this applies after it restarts."
+
+[settings_uninstall]
+label = "Uninstall SplitDPI"
+value = "service, settings and program"
+do = "Uninstall"
+title = "Uninstall SplitDPI?"
+stop = "SplitDPI stops and its firewall rules are removed."
+service = "Its service is removed: %s"
+paths = "These are deleted: %s"
+restore = "If SplitDPI turned off a zapret service, that service is turned back on."
+no_undo = "This cannot be undone: your settings and site list are deleted too. To install SplitDPI again, use the install command in the README at:"
+working = "Uninstalling SplitDPI..."
+any_key = "SplitDPI is no longer on this computer. Press any key to close this window."

@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -47,6 +48,10 @@ type fake struct {
 	sites      []string
 	strategies []ops.StrategyChoice
 	ipv6       bool
+
+	plan         ops.UninstallPlan
+	uninstallRep ops.UninstallReport
+	uninstallErr error
 }
 
 func newFake() *fake {
@@ -159,6 +164,29 @@ func (f *fake) AcceptDisclaimer() error {
 	return nil
 }
 func (f *fake) SetLang(lang string) error { f.record("lang " + lang); return nil }
+
+func (f *fake) DNSProviders() []ops.DNSProvider {
+	out := []ops.DNSProvider{
+		{ID: dns.Off, Name: i18n.T("dns2.off_name"), Note: i18n.T("dns2.off_note")},
+		{ID: dns.Auto, Name: i18n.T("dns2.auto_name"), Note: i18n.T("dns2.auto_note")},
+	}
+	for _, p := range dns.Providers {
+		out = append(out, ops.DNSProvider{ID: p.ID, Name: p.Name, Note: i18n.T("dns2.note_" + p.ID)})
+	}
+	return out
+}
+func (f *fake) SetDNS(provider string, proto dns.Protocol) (bool, error) {
+	f.record("dns " + provider + " " + string(proto))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cfg.DNSProvider, f.cfg.DNSProtocol = provider, proto
+	return f.st.State == "running", nil
+}
+func (f *fake) UninstallPlan() ops.UninstallPlan { return f.plan }
+func (f *fake) Uninstall(ctx context.Context) (ops.UninstallReport, error) {
+	f.record("uninstall")
+	return f.uninstallRep, f.uninstallErr
+}
 
 func newModel(t *testing.T, f *fake) Model {
 	t.Helper()
