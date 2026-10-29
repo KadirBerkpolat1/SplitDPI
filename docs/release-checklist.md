@@ -58,14 +58,16 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 
 Tick these on the release commit, with the date.
 
-- [ ] `go vet ./...` passes.
-- [ ] `go test -count=1 ./...` passes.
-- [ ] `sudo -E SPLITDPI_BIN=/tmp/splitdpi go test -tags integration ./test/integration/...`
+- [x] `go vet ./...` passes.
+- [x] `go test -count=1 ./...` passes.
+- [x] `sudo -E SPLITDPI_BIN=/tmp/splitdpi go test -tags integration ./test/integration/...`
       passes after `go build -o /tmp/splitdpi ./cmd/splitdpi`.
-- [ ] `splitdpi presets check internal/presets/data` exits 0.
-- [ ] CI is green, all 9 jobs: `test`, `integration`, `build` and the six
+- [x] `splitdpi presets check internal/presets/data` exits 0.
+- [x] CI is green, all 9 jobs: `test`, `integration`, `build` and the six
       `distros` jobs (Debian 13, Fedora, Arch, openSUSE Tumbleweed, Alpine,
       Void glibc).
+
+(2026-10-29, on `e96e10d`.)
 
 By Berk's decision, the real-connection and VM retests under
 [On real systems](#on-real-systems) were skipped for v0.2.0. The v0.1.0
