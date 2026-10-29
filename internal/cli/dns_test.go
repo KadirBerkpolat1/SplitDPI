@@ -32,7 +32,7 @@ func TestDNSProviderDoT(t *testing.T) {
 	eq(t, code, 0)
 	has(t, out, "AdGuard over DNS-over-TLS")
 	has(t, out, "blocks ads and trackers")
-	has(t, out, "VPN split-DNS")
+	has(t, out, "sudo splitdpi dns off")
 	if c, _ := config.Load(o.P); c.DNSProvider != "adguard" || c.DNSProtocol != dns.DoT {
 		t.Errorf("saved %s/%s", c.DNSProvider, c.DNSProtocol)
 	}
@@ -74,7 +74,7 @@ func TestStatusWarnsDNS(t *testing.T) {
 	writeConfig(t, o.P, "dns = true\n")
 	out, code := runOps(t, o, "status")
 	eq(t, code, 0)
-	has(t, out, "VPN split-DNS and LAN hostnames may break")
+	has(t, out, "sudo splitdpi dns off")
 }
 
 func TestDNSUsageAndRoot(t *testing.T) {
