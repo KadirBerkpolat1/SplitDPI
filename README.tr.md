@@ -152,6 +152,7 @@ geçirir.
 `sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
 günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
 kalırsa onu listeler.
+
 ## Hazır ayarlar nereden geliyor
 
 Sağlayıcı stratejilerinin çıkış noktası Çağrı Taşkın'ın
