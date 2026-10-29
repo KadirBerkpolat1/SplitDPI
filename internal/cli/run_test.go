@@ -191,7 +191,7 @@ func TestStopNotRunning(t *testing.T) {
 }
 
 func TestRunCommandsUsage(t *testing.T) {
-	for _, args := range [][]string{{"run", "x"}, {"stop", "x"}, {"status", "x"}, {"revert", "--bogus"}} {
+	for _, args := range [][]string{{"run", "x"}, {"run", "--background", "x"}, {"stop", "x"}, {"status", "x"}, {"revert", "--bogus"}} {
 		if _, code := run(t, 0, args...); code != 2 {
 			t.Errorf("%v: code %d, want 2", args, code)
 		}

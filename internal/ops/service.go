@@ -65,15 +65,29 @@ func (o *Ops) Enable(ctx context.Context) error {
 	if err := m.Start(ctx); err != nil {
 		return err
 	}
+	if _, ok := o.waitRunning("service", nil); !ok {
+		return ErrServiceNotStarted
+	}
+	return nil
+}
+
+// waitRunning waits up to enableWait for a supervisor in mode to hold the
+// lock and report running, and returns its PID. It gives up early when
+// exited delivers: the process that was to run is gone.
+func (o *Ops) waitRunning(mode string, exited <-chan error) (int, bool) {
 	deadline := time.Now().Add(enableWait)
 	for time.Now().Before(deadline) {
-		_, mode, held := supervisor.LockInfo(o.P)
-		if st, _ := supervisor.ReadStatus(o.P); held && mode == "service" && st.State == "running" {
-			return nil
+		pid, m, held := supervisor.LockInfo(o.P)
+		if st, _ := supervisor.ReadStatus(o.P); held && m == mode && st.State == "running" {
+			return pid, true
 		}
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-exited:
+			return 0, false
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
-	return ErrServiceNotStarted
+	return 0, false
 }
 
 // Disable stops, disables and removes the service.

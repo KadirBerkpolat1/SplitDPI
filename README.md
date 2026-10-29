@@ -52,6 +52,13 @@ start the setup. The setup checks your system, installs the zapret2 engine
 itself, finds your ISP, asks which apps should work, tests strategies, and then
 runs SplitDPI now or at every boot.
 
+There are three ways to keep the bypass on. In the UI window (`r`, or
+`splitdpi run`) it stops when that window closes. In the background for this
+session (`b`, or `sudo splitdpi run --background`) it keeps running after the
+terminal closes and stops at reboot; quitting the UI while it runs the bypass
+offers to move it there. At every boot (`sudo splitdpi enable`) it runs as a
+service. `sudo splitdpi stop` stops any of them.
+
 ## The terminal UI
 
 - **Top:** the name and version, and a status pill on the right that shows
@@ -81,6 +88,7 @@ needs a terminal of at least 80x24.
 | `splitdpi probe [--apps ID,ID] [-v]` | Tests whether each enabled app's sites and your own sites are reachable, and says why one is not. |
 | `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one without a scan. |
 | `splitdpi run` | Runs in this terminal; Ctrl-C stops it and removes its rules. |
+| `splitdpi run --background` | Runs on after the terminal closes, until reboot; its output goes to `/var/log/splitdpi.log`. |
 | `splitdpi enable` / `disable` | Installs and starts the service, or stops and removes it. |
 | `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |

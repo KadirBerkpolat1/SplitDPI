@@ -3,11 +3,13 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -18,7 +20,11 @@ type statusPage struct{}
 
 type (
 	runDoneMsg struct{ err error }
-	probeMsg   struct {
+	bgDoneMsg  struct {
+		pid int
+		err error
+	}
+	probeMsg struct {
 		res map[string][]probe.Result
 		err error
 	}
@@ -30,6 +36,10 @@ func (statusPage) Open(m *Model) tea.Cmd                                      { 
 func (statusPage) Key(m Model, _ tea.KeyMsg, _ string) (Model, tea.Cmd, bool) { return m, nil, false }
 
 func (m Model) bypassOn() bool { return m.running || m.st.State == "running" }
+
+// canStart is whether the bypass can be started here: it is off and no
+// background start is under way.
+func (m Model) canStart() bool { return !m.bypassOn() && !m.bgStarting }
 
 // Actions offer the setup first while there is no strategy to run with.
 func (statusPage) Actions(m Model) []action {
@@ -43,10 +53,13 @@ func (statusPage) Actions(m Model) []action {
 			return m.openWizard()
 		}})
 	}
-	if m.bypassOn() {
+	switch {
+	case m.bypassOn():
 		acts = append(acts, action{Key: "s", Label: i18n.T("tui.act.stop"), CLI: "sudo splitdpi stop", Do: (*Model).stop})
-	} else {
-		acts = append(acts, action{Key: "r", Label: i18n.T("tui.act.run"), CLI: "sudo splitdpi run", Do: (*Model).runNow})
+	case m.canStart():
+		acts = append(acts,
+			action{Key: "r", Label: i18n.T("tui.act.run"), CLI: "sudo splitdpi run", Do: (*Model).runNow},
+			action{Key: "b", Label: i18n.T("background_tui.act"), CLI: "sudo splitdpi run --background", Do: (*Model).runBackground})
 	}
 	return append(acts, action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps})
 }
@@ -58,7 +71,25 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		if msg.err != nil {
 			m.note = errText(msg.err)
 		}
+		if m.quitting && m.toBackground {
+			m.toBackground = false
+			cmd := m.runBackground()
+			return m, cmd, true
+		}
 		if m.quitting {
+			return m, tea.Quit, true
+		}
+		return m, m.refresh(), true
+	case bgDoneMsg:
+		m.bgStarting = false
+		if msg.err != nil {
+			// A failed move to the background stays, so that the failure is seen.
+			m.note, m.quitting = errText(msg.err), false
+			return m, m.refresh(), true
+		}
+		m.note = i18n.T("background_tui.started", msg.pid)
+		if m.quitting {
+			m.bgPID = msg.pid
 			return m, tea.Quit, true
 		}
 		return m, m.refresh(), true
@@ -85,6 +116,28 @@ func (m *Model) runNow() tea.Cmd {
 	return func() tea.Msg {
 		defer close(finished)
 		return runDoneMsg{b.Run(ctx, false)}
+	}
+}
+
+// runBackground starts the bypass as its own process, like `splitdpi run
+// --background`: it outlives the TUI and its terminal, until reboot.
+func (m *Model) runBackground() tea.Cmd {
+	if m.bgStarting {
+		return nil
+	}
+	m.bgStarting, m.note = true, i18n.T("background_tui.starting")
+	b, ctx := m.b, m.ctx
+	return func() tea.Msg {
+		pid, err := b.Background(ctx)
+		return bgDoneMsg{pid, err}
+	}
+}
+
+// printBackground tells, once the screen is back to normal, that the bypass
+// still runs after quitting and how to stop it.
+func (m Model) printBackground(w io.Writer) {
+	if m.bgPID != 0 {
+		fmt.Fprintln(w, i18n.T("background.started", m.bgPID))
 	}
 }
 
@@ -179,6 +232,9 @@ func (statusPage) View(m Model, w, _ int) string {
 	}
 	if m.stErr != nil {
 		lines = append(lines, badStyle.Render(m.stErr.Error()))
+	}
+	if m.canStart() {
+		lines = append(lines, "", lipgloss.NewStyle().Width(w).Render(hint("b", i18n.T("background_tui.hint"))))
 	}
 	return strings.Join(lines, "\n")
 }

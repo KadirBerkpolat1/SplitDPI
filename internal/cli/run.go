@@ -24,24 +24,44 @@ func init() {
 }
 
 func runRun(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
-	service := false
+	flag := ""
 	switch {
 	case len(args) == 0:
-	case len(args) == 1 && args[0] == "--service":
-		service = true
+	case len(args) == 1 && (args[0] == "--service" || args[0] == "--background" || args[0] == ops.DetachedArg):
+		flag = args[0]
 	default:
 		return usageError(i18n.T("run.usage"))
 	}
+	if flag == "--background" {
+		pid, err := o.Background(ctx)
+		if err != nil {
+			return runError(w, err, false)
+		}
+		fmt.Fprintln(w, i18n.T("background.started", pid))
+		return nil
+	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	err := o.Run(ctx, service)
+	var err error
+	if flag == ops.DetachedArg {
+		err = o.RunDetached(ctx)
+	} else {
+		err = o.Run(ctx, flag == "--service")
+	}
+	return runError(w, err, flag == "--service")
+}
 
+// runError words an error of run, run --background or the detached run.
+func runError(w io.Writer, err error, service bool) error {
 	var conflict ops.ConflictError
 	var already supervisor.ErrAlreadyRunning
 	var bad ops.ConfigError
+	var notStarted ops.BackgroundNotStartedError
 	switch {
 	case err == nil:
 		return nil
+	case errors.As(err, &notStarted):
+		return errors.New(i18n.T("background.not_started", notStarted.Log))
 	case errors.As(err, &conflict):
 		printChecks(w, conflict.Checks)
 		return errors.New(i18n.T("run.conflict"))

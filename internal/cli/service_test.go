@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"testing/fstest"
@@ -26,6 +27,13 @@ const withStrategy = "[strategy]\nid = \"tt\"\ntcp_tls = \"--payload=tls_client_
 // the returned func releases it, like that supervisor exiting.
 func holdLock(t *testing.T, p paths.Paths, mode string) func() {
 	t.Helper()
+	// A PID that cannot exist: a wrong code path must fail, not signal this test.
+	return holdLockAs(t, p, mode, 999999999)
+}
+
+// holdLockAs is holdLock with pid recorded as the supervisor's.
+func holdLockAs(t *testing.T, p paths.Paths, mode string, pid int) func() {
+	t.Helper()
 	if err := os.MkdirAll(p.RunDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +41,6 @@ func holdLock(t *testing.T, p paths.Paths, mode string) func() {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A PID that cannot exist: a wrong code path must fail, not signal this test.
-	const pid = 999999999
 	fmt.Fprintf(f, `{"pid":%d,"mode":%q}`, pid, mode)
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		t.Fatal(err)
@@ -43,13 +49,8 @@ func holdLock(t *testing.T, p paths.Paths, mode string) func() {
 	if err := os.WriteFile(p.StatusFile, []byte(st), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	var once bool
-	release := func() {
-		if !once {
-			once = true
-			f.Close()
-		}
-	}
+	var once sync.Once
+	release := func() { once.Do(func() { f.Close() }) }
 	t.Cleanup(release)
 	return release
 }

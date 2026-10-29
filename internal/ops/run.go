@@ -45,6 +45,13 @@ var (
 // Run is `splitdpi run`: refuse on conflicting tools, then supervise nfqws2
 // until ctx is done.
 func (o *Ops) Run(ctx context.Context, service bool) error {
+	if service {
+		return o.run(ctx, "service")
+	}
+	return o.run(ctx, "foreground")
+}
+
+func (o *Ops) run(ctx context.Context, mode string) error {
 	if err := o.refuseConflicts(ctx); err != nil {
 		return err
 	}
@@ -52,17 +59,20 @@ func (o *Ops) Run(ctx context.Context, service bool) error {
 	if err != nil {
 		return err
 	}
-	mode, log := "foreground", o.log()
-	if service {
-		mode = "service"
-		// Without a journal, the service's output would be lost (OpenRC
-		// backgrounds it, runit has no log service): keep it in LogFile.
-		if sysinfo.DetectInit(o.Root) != sysinfo.Systemd {
-			f, err := supervisor.OpenLog(o.P.LogFile)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
+	log := o.log()
+	// Without a journal, the service's output would be lost (OpenRC
+	// backgrounds it, runit has no log service): keep it in LogFile. A
+	// background run's stderr already is LogFile, so it writes there only,
+	// through the rotation.
+	if mode == "background" || mode == "service" && sysinfo.DetectInit(o.Root) != sysinfo.Systemd {
+		f, err := supervisor.OpenLog(o.P.LogFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		if mode == "background" {
+			log = f
+		} else {
 			log = io.MultiWriter(log, f)
 		}
 	}
@@ -273,7 +283,8 @@ func (o *Ops) queueBound(qnum int) bool {
 }
 
 // Stop stops the running instance and waits up to 10 s for the lock to be
-// released. A service is stopped through its manager, so it is not restarted.
+// released. A service is stopped through its manager, so it is not restarted;
+// a foreground or background run gets SIGTERM.
 func (o *Ops) Stop() error {
 	pid, mode, held := supervisor.LockInfo(o.P)
 	if !held {
