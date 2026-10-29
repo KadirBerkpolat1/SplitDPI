@@ -24,18 +24,6 @@ import (
 
 var engineBlocker = doctor.Check{ID: "engine", Severity: doctor.Blocker, Msg: "the zapret2 engine is not installed", Fix: "sudo splitdpi engine install"}
 
-func (f *fake) count(s string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	n := 0
-	for _, c := range f.calls {
-		if c == s {
-			n++
-		}
-	}
-	return n
-}
-
 func TestScanPageOffersBothFlows(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
@@ -270,6 +258,8 @@ func TestScanDNSQuestion(t *testing.T) {
 	}{
 		{"recommended", []string{"enter"}, "cloudflare"},
 		{"yes key", []string{"y"}, "cloudflare"},
+		{"evet key", []string{"e"}, "cloudflare"},
+		{"hayır key", []string{"h"}, ""},
 		{"other provider", []string{"down", "enter", "down", "down", "down", "enter"}, "quad9"},
 		{"other then back", []string{"down", "enter", "esc", "down", "enter"}, ""},
 		{"no", []string{"n"}, ""},
@@ -311,11 +301,13 @@ func TestScanDNSQuestionProviderList(t *testing.T) {
 	m = press(t, press(t, waitAsk(t, m), "down"), "enter")
 	v := m.View()
 	has(t, v, i18n.T("scan_page.dns.pick"))
-	has(t, v, "▸ Automatic")
-	has(t, v, "First answer wins.")
+	has(t, v, "▸ "+i18n.T("dns2.auto_name"))
+	has(t, flat(v), strings.Fields(i18n.T("dns2.auto_note"))[0])
 	has(t, v, "AdGuard")
-	if strings.Contains(v, "Off") {
-		t.Error("off offered as a provider")
+	for _, p := range m.ask.providers {
+		if p.ID == "off" {
+			t.Error("off offered as a provider")
+		}
 	}
 	fits(t, "dns providers", v)
 	m = press(t, m, "enter")

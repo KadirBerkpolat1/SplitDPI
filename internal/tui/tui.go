@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
@@ -52,8 +53,16 @@ type Backend interface {
 	AcceptDisclaimer() error
 	SetLang(lang string) error
 
-	EngineInstall(ctx context.Context, from string) (engine.Engine, error)
+	SitesImport(path string) ([]string, []ops.ImportSkip, error)
+	DetectForeign(ctx context.Context) ([]ops.Foreign, error)
+	Takeover(ctx context.Context, f ops.Foreign) (ops.TakeoverReport, error)
+
 	DNSProviders() []ops.DNSProvider
+	SetDNS(provider string, proto dns.Protocol) (running bool, err error)
+	UninstallPlan() ops.UninstallPlan
+	Uninstall(ctx context.Context) (ops.UninstallReport, error)
+
+	EngineInstall(ctx context.Context, from string) (engine.Engine, error)
 }
 
 const statusEvery = 2 * time.Second
@@ -89,6 +98,9 @@ type Model struct {
 	note  string // result of the last action
 	probe map[string][]probe.Result
 
+	foreign   []ops.Foreign // other zapret installs that get in the way
+	takenOver []string      // what the last takeover did
+
 	logs       *ring
 	logCancel  context.CancelFunc
 	logTicking bool
@@ -118,14 +130,21 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx)).Run()
-	if fm, ok := final.(Model); ok && fm.runFinished != nil {
-		fm.runCancel()
-		<-fm.runFinished
+	if fm, ok := final.(Model); ok {
+		fm.stopRun()
 	}
 	return err
 }
 
-func (m Model) Init() tea.Cmd { return m.tick() }
+// stopRun stops the bypass this TUI still runs and waits until its rules are gone.
+func (m Model) stopRun() {
+	if m.runCancel != nil {
+		m.runCancel()
+		<-m.runFinished
+	}
+}
+
+func (m Model) Init() tea.Cmd { return tea.Batch(m.tick(), m.detectForeign()) }
 
 func (m Model) tick() tea.Cmd {
 	return m.every(statusEvery, func(time.Time) tea.Msg { return tickMsg{} })
@@ -172,6 +191,15 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s = "space"
 	}
 	switch {
+	case m.settings.uninstalled:
+		// The program is gone: any key leaves.
+		m.quitting = true
+		m.stopAll()
+		if m.running {
+			m.runCancel() // runDoneMsg quits
+			return m, nil
+		}
+		return m, tea.Quit
 	case m.confirmQuit:
 		switch s {
 		case "y", "enter":
@@ -281,7 +309,7 @@ func (m *Model) selectPage(i int) tea.Cmd {
 // mouse selects the menu entry under a left click.
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft ||
-		m.confirmQuit || m.dialog != nil || m.ask != nil || m.help || m.showDisclaimer() || m.tooSmall() {
+		m.confirmQuit || m.dialog != nil || m.ask != nil || m.help || m.showDisclaimer() || m.tooSmall() || m.settings.uninstalled {
 		return m, nil
 	}
 	i := msg.Y - menuTop

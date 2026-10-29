@@ -110,12 +110,12 @@ func (m Model) dnsAskKey(s string) (tea.Model, tea.Cmd) {
 		a.cursor = (a.cursor + rows - 1) % rows
 	case "down", "j":
 		a.cursor = (a.cursor + 1) % rows
-	case "y":
+	case "y", "e":
 		if !a.pick {
 			m.answerDNS(recommendedDNS)
 			return m, nil
 		}
-	case "n":
+	case "n", "h":
 		if !a.pick {
 			m.answerDNS("")
 			return m, nil
