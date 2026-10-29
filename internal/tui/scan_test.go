@@ -420,6 +420,30 @@ func TestSetupDuringScanKeepsIt(t *testing.T) {
 	has(t, m.View(), "cancelled")
 }
 
+// Durum's Setup during an engine download shows that download instead of
+// starting over, so a second download cannot be started next to it.
+func TestSetupDuringEngineInstallKeepsIt(t *testing.T) {
+	f := newFake()
+	f.checks = []doctor.Check{engineBlocker}
+	m := press(t, newModel(t, f), "w")
+	m, install := update(t, m, key("enter"))
+	if !m.wiz.installing || install == nil {
+		t.Fatalf("enter did not start the install: installing %v", m.wiz.installing)
+	}
+	m, _ = update(t, m, tea.MouseMsg{X: 5, Y: menuTop + pgStatus, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m = press(t, press(t, m, "w"), "enter")
+	if m.page != pgScan || !m.wiz.installing {
+		t.Fatalf("w during the install: page %d installing %v", m.page, m.wiz.installing)
+	}
+	m = settle(t, m, install)
+	if n := f.count("engine install "); n != 1 {
+		t.Errorf("%d engine installs, want 1: %q", n, f.calls)
+	}
+	if m.wiz.installing || m.wiz.step != wLookup {
+		t.Errorf("after the install: installing %v step %v", m.wiz.installing, m.wiz.step)
+	}
+}
+
 // fits checks a screen is exactly 80x24 with every key translated.
 func fits(t *testing.T, name, v string) {
 	t.Helper()
