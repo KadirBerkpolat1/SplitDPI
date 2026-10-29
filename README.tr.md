@@ -141,7 +141,7 @@ stratejiyi kaydeder.
 
 - **Tek bir site.** Hazır ayarları atlayıp tek bir site için strateji aramak
   isterseniz `sudo splitdpi scan --site pastebin.com` komutunu çalıştırın ya da
-  kurulumda "Bir siteyi blockcheck2 ile tara" seçeneğini seçin. blockcheck2 o
+  Tarama sayfasında "Tek siteyi blockcheck2 ile tara" seçeneğini seçin. blockcheck2 o
   siteyi IPv4 üzerinden, bilgisayarınızda IPv6 varsa IPv6 üzerinden de dener.
   Sonuçları, biri kaydedilmeden önce uygulamalarınızda ve sitelerinizde
   yeniden denenir: SplitDPI hepsini açan en basit stratejiyi, mümkünse hem
@@ -150,7 +150,8 @@ stratejiyi kaydeder.
 - **Zehirlenmiş DNS.** blockcheck2 çalışmadan önce `scan`, sağlayıcınızın
   DNS'inin onun alan adları için zehirlenmiş yanıt verip vermediğini denetler.
   Öyleyse şifreli DNS'in (otomatik) açılıp açık kalmasını isteyip
-  istemediğinizi sorar. Soruyu yanıtlayacak kimse yoksa açmak için
+  istemediğinizi sorar; terminal arayüzü Cloudflare'i, başka bir sağlayıcıyı
+  ya da hayır seçeneğini sunar. Soruyu yanıtlayacak kimse yoksa açmak için
   `--dns auto` (ya da bir sağlayıcı), onsuz devam etmek için `--dns keep`
   verin.
 - **Diğer seçenekler.** `--apps` yalnızca verilen uygulamaları dener, `--asn`
@@ -164,7 +165,9 @@ stratejiyi kaydeder.
 - **Sonucu paylaşma.** `scan` bir strateji kaydettiğinde,
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
   deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS
-  numaranız, sağlayıcınız, ülkeniz, strateji ve sürümler. Siz issue'yu
+  numaranız, sağlayıcınız, ülkeniz, strateji ve sürümler. Terminal arayüzü de
+  aynı bağlantıyı gösterir, `c` ile kopyalar ve çıkarken bir kez daha yazar.
+  Siz issue'yu
   göndermedikçe hiçbir şey gönderilmez; içinde IP adresiniz ya da kendi
   siteleriniz hiçbir zaman yer almaz.
 

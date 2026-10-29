@@ -126,6 +126,28 @@ func TestScanBlockcheckFallback(t *testing.T) {
 	}
 }
 
+// Options.Trial sees every trial as it ends; it replaces the blockcheck2
+// trial progress line.
+func TestScanTrialCallback(t *testing.T) {
+	env, _, _ := testEnv(t, testSet(), blockcheckOK)
+	var lines []string
+	env.Progress = func(l string) { lines = append(lines, l) }
+	var seen []string
+	opt := scan.Options{Apps: []string{"roblox"}, Trial: func(tr scan.Trial) { seen = append(seen, tr.Candidate.Strategy.ID) }}
+	rep, err := scan.Scan(context.Background(), env, opt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"fail-one", "win-two", "blockcheck-1"}; len(rep.Trials) != 3 || !slices.Equal(seen, want) {
+		t.Fatalf("trial callbacks %q, want %q", seen, want)
+	}
+	for _, l := range lines {
+		if strings.Contains(l, "blockcheck-1") {
+			t.Errorf("progress line %q duplicates the trial callback", l)
+		}
+	}
+}
+
 func TestScanNoBlockcheckAllFail(t *testing.T) {
 	set := testSet()
 	env, _, bc := testEnv(t, set, func(string) []probe.Result {

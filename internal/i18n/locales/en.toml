@@ -410,8 +410,6 @@ excluded = "excluded, never touched"
 
 [shell.scan]
 intro = "The setup checks this machine, finds your internet provider, then tries ready-made strategies or scans one site with blockcheck2."
-start = "Start the setup"
-
 [shell.settings]
 lang = "Language"
 lang_to = "Switch to %s"
@@ -524,6 +522,36 @@ still_running = "%s still runs outside a service: stop it yourself before starti
 done = "Done. Open splitdpi to set it up and start it: sudo splitdpi"
 restored = "Turned back on: %s"
 conflict = "%s is running (zapret, another DPI-bypass tool); splitdpi can switch it off and keep its sites"
+
+[scan_page]
+quick_note = "Known strategies for your ISP are tried one by one; this usually takes a few minutes."
+site_note = "For one site that will not open, blockcheck2 tries many strategies one by one; this can take long."
+last = "Last scan"
+last_won_one = "%d strategy tried; working: %s"
+last_won_many = "%d strategies tried; working: %s"
+last_none_one = "%d strategy tried; it did not work"
+last_none_many = "%d strategies tried; none worked"
+restart = "Start over"
+install = "Install the engine"
+install_offer = "SplitDPI can download and install the zapret2 %s engine, which does the bypassing, for you. The download is checked against its pinned SHA-256 sum."
+installing = "Downloading and installing zapret2 %s..."
+file = "FILE"
+share = "To share this result, open the link in a browser; nothing is sent automatically. c copies it, and it is printed again when you quit:"
+copy = "Copy the link"
+copied = "Copied (if your terminal supports it)."
+
+[scan_page.dns]
+title = "Turn on encrypted DNS?"
+poisoned = "The addresses of these domains look altered (DNS poisoning):"
+more_one = "and %d more"
+more_many = "and %d more"
+why = "Encrypted DNS turns on for this scan and stays on, so the right addresses are used."
+yes = "Yes, Cloudflare (DoH), recommended"
+other = "Another provider"
+no = "No"
+pick = "Which provider should be used?"
+move = "Choose"
+ok = "Confirm"
 
 [probe_tui]
 todo = "What to do"

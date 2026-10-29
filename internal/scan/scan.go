@@ -29,6 +29,9 @@ type Options struct {
 	// its domains look poisoned. It returns the dns_provider to turn on for
 	// the rest of the scan and keep, or "" to stay on the system resolver.
 	DNSCheck func(ctx context.Context, poisoned []probe.DNSResult) string
+	// Trial, when set, gets each finished trial, preset or blockcheck2, in
+	// place of the progress line a blockcheck2 trial otherwise prints.
+	Trial func(Trial)
 }
 
 type Env struct {
@@ -87,6 +90,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 			stop()
 			ok := allProbeOK(results)
 			rep.Trials = append(rep.Trials, Trial{Candidate: cand, Results: results, OK: ok})
+			if opt.Trial != nil {
+				opt.Trial(rep.Trials[len(rep.Trials)-1])
+			}
 			if ok {
 				rep.Winner = strategyFromCandidate(cand, info, env.EngineVer, env.Now())
 				return rep, nil
@@ -143,7 +149,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		stop()
 		ok := allProbeOK(results)
 		rep.Trials = append(rep.Trials, Trial{Candidate: presets.Candidate{Strategy: st, Source: BlockcheckSource}, Results: results, OK: ok})
-		if env.Progress != nil {
+		if opt.Trial != nil {
+			opt.Trial(rep.Trials[len(rep.Trials)-1])
+		} else if env.Progress != nil {
 			env.Progress(fmt.Sprintf("%s %s  %s", mark(ok), st.ID, args))
 		}
 		if ok {

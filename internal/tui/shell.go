@@ -57,6 +57,8 @@ func (m Model) View() string {
 	switch {
 	case m.dialog != nil:
 		body = overlay(body, m.dialogView(), menuWidth, m.width)
+	case m.ask != nil:
+		body = overlay(body, m.dnsAskView(), menuWidth, m.width)
 	case m.help:
 		body = overlay(body, m.helpView(), menuWidth, m.width)
 	}

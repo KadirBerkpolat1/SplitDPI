@@ -319,7 +319,7 @@ detected = "Sağlayıcınız: %s (AS%d, %s)"
 apps = "Hangi uygulamalar çalışsın?"
 no_apps = "En az bir uygulama seçin."
 scan = "Hazır stratejileri dene (hızlı)"
-scan_site = "Bir siteyi blockcheck2 ile tara"
+scan_site = "Tek siteyi blockcheck2 ile tara"
 scan_site_go = "Tara"
 which_site = "Hangi site açılsın? Tek bir adres girin; blockcheck2 onu açan en basit stratejiyi arar. Bu uzun sürebilir."
 ipv4 = "Bu bilgisayarda küresel IPv6 yok; yalnızca IPv4 denenecek."
@@ -415,8 +415,6 @@ excluded = "hariç tutulan, hiç dokunulmaz"
 
 [shell.scan]
 intro = "Kurulum bu bilgisayarı denetler, internet sağlayıcınızı bulur, sonra hazır stratejileri dener ya da blockcheck2 ile tek bir siteyi tarar."
-start = "Kurulumu başlat"
-
 [shell.settings]
 lang = "Dil"
 lang_to = "Dili değiştir: %s"
@@ -524,6 +522,36 @@ still_running = "%s bir servis dışında çalışmayı sürdürüyor: splitdpi'
 done = "Tamam. Kurmak ve başlatmak için splitdpi'yi açın: sudo splitdpi"
 restored = "Yeniden açıldı: %s"
 conflict = "%s çalışıyor (zapret, başka bir DPI engel aşma aracı); splitdpi onu kapatıp sitelerini devralabilir"
+
+[scan_page]
+quick_note = "Sağlayıcınız için bilinen stratejiler sırayla denenir; genellikle birkaç dakika sürer."
+site_note = "Açılmayan tek bir site için blockcheck2 birçok stratejiyi tek tek dener; uzun sürebilir."
+last = "Son tarama"
+last_won_one = "%d strateji denendi; çalışan: %s"
+last_won_many = "%d strateji denendi; çalışan: %s"
+last_none_one = "%d strateji denendi; çalışmadı"
+last_none_many = "%d strateji denendi; hiçbiri çalışmadı"
+restart = "Başa dön"
+install = "Motoru kur"
+install_offer = "SplitDPI, engeli aşan zapret2 %s motorunu sizin için indirip kurabilir. İndirilen dosya sabitlenmiş SHA-256 özetiyle doğrulanır."
+installing = "zapret2 %s indiriliyor ve kuruluyor..."
+file = "DOSYA"
+share = "Bu sonucu paylaşmak için linki tarayıcıda açın; hiçbir şey otomatik gönderilmez. c linki kopyalar; çıkarken link terminale bir kez daha yazılır:"
+copy = "Linki kopyala"
+copied = "Kopyalandı (terminaliniz destekliyorsa)."
+
+[scan_page.dns]
+title = "Şifreli DNS açılsın mı?"
+poisoned = "Şu alan adlarının adresleri değiştirilmiş görünüyor (DNS zehirlenmesi):"
+more_one = "ve %d tane daha"
+more_many = "ve %d tane daha"
+why = "Şifreli DNS bu tarama için açılır ve açık kalır; böylece doğru adresler kullanılır."
+yes = "Evet, Cloudflare (DoH) (önerilen)"
+other = "Başka sağlayıcı"
+no = "Hayır"
+pick = "Hangi sağlayıcı kullanılsın?"
+move = "Seç"
+ok = "Onayla"
 
 [probe_tui]
 todo = "Ne yapmalı"

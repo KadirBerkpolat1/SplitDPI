@@ -23,6 +23,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -68,6 +69,8 @@ type fake struct {
 	plan         ops.UninstallPlan
 	uninstallRep ops.UninstallReport
 	uninstallErr error
+
+	engineErr error
 }
 
 func newFake() *fake {
@@ -233,6 +236,18 @@ func (f *fake) UninstallPlan() ops.UninstallPlan { return f.plan }
 func (f *fake) Uninstall(ctx context.Context) (ops.UninstallReport, error) {
 	f.record("uninstall")
 	return f.uninstallRep, f.uninstallErr
+}
+
+// EngineInstall fails with engineErr, else installs: the engine check passes.
+func (f *fake) EngineInstall(ctx context.Context, from string) (engine.Engine, error) {
+	f.record("engine install " + from)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.engineErr != nil {
+		return engine.Engine{}, f.engineErr
+	}
+	f.checks = slices.DeleteFunc(f.checks, func(c doctor.Check) bool { return c.ID == "engine" })
+	return engine.Engine{Dir: "/opt/splitdpi/zapret2-" + engine.Version}, nil
 }
 
 func newModel(t *testing.T, f *fake) Model {

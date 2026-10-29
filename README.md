@@ -131,14 +131,15 @@ works.
 
 - **One site.** To skip the presets and search for a strategy for one site,
   run `sudo splitdpi scan --site pastebin.com`, or choose "Scan a site with
-  blockcheck2" in the setup. blockcheck2 tests that site over IPv4, and over
+  blockcheck2" on the Scan page. blockcheck2 tests that site over IPv4, and over
   IPv6 too if this machine has it. Its results are re-tested on your apps and
   sites before one is saved: SplitDPI keeps the simplest one that opens all of
   them, preferring those that work on both IPv4 and IPv6, and adds the site to
   your sites. This takes longer than the preset trials.
 - **Poisoned DNS.** Before blockcheck2 runs, `scan` checks whether your ISP's
   DNS answers for its domains are poisoned. If they are, it asks whether to
-  turn on encrypted DNS (automatic) and keep it on. When nobody can answer,
+  turn on encrypted DNS (automatic) and keep it on; the terminal UI offers
+  Cloudflare, another provider, or no. When nobody can answer,
   pass `--dns auto` (or a provider) to turn it on, or `--dns keep` to go on
   without it.
 - **Other options.** `--apps` tests only the given apps, `--asn` and `--country`
@@ -150,7 +151,9 @@ works.
 - **Sharing the result.** When `scan` saves a strategy, it prints a link that
   opens a prefilled issue in
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
-  your AS number, ISP, country, the strategy and the versions. Nothing is sent
+  your AS number, ISP, country, the strategy and the versions. The terminal UI
+  shows the same link, copies it with `c` and prints it again when you quit.
+  Nothing is sent
   until you submit the issue, and it never contains your IP address or your own
   sites.
 
