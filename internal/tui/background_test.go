@@ -29,7 +29,7 @@ func TestBackgroundAction(t *testing.T) {
 	}
 	has(t, m.View(), "Running in the background (pid 4343)")
 	body := flat(statusPage{}.View(m, 60, 18))
-	has(t, body, "background (stops at reboot), pid 4343")
+	has(t, body, "background, pid 4343, stops at reboot")
 	if strings.Contains(m.View(), "b Run in background") {
 		t.Error("b still offered while the background run is on")
 	}
@@ -46,6 +46,32 @@ func TestBackgroundActionFailure(t *testing.T) {
 	has(t, flat(m.View()), "did not start in the background")
 	has(t, flat(m.View()), "/var/log/splitdpi.log")
 	has(t, m.View(), "b Run in background")
+}
+
+// A log stream opened before the background run read the journal; starting
+// one replaces it, and the end of the old stream leaves the new one alone.
+func TestBackgroundRestartsLogStream(t *testing.T) {
+	f := newFake()
+	f.logsFollow = true
+	m := newModel(t, f)
+	m.page = pgLogs - 1
+	m, cmd := update(t, m, key("down"))
+	go cmd() // the first stream, until cancelled
+	m.page, m.inPage = pgStatus, false
+	m = press(t, m, "b")
+	if m.logCancel != nil {
+		t.Fatal("the stream from before the background run still runs")
+	}
+	m.page = pgLogs - 1
+	m, cmd = update(t, m, key("down"))
+	if cmd == nil || m.logCancel == nil {
+		t.Fatal("opening the logs again started no stream")
+	}
+	m, _ = update(t, m, logEndMsg{stream: 1})
+	if m.logCancel == nil {
+		t.Error("the old stream's end stopped the new one")
+	}
+	m.stopAll()
 }
 
 // runHere starts "Run now" and returns once the fake runs it; done delivers

@@ -267,7 +267,7 @@ failed = "failed"
 foreground = "foreground"
 service = "service"
 scan = "scan"
-background = "background (stops at reboot)"
+background = "background"
 
 [tui]
 process = "%s, pid %d"
@@ -626,9 +626,11 @@ bypass_only = "It only affects programs that send DNS queries straight to a serv
 [background]
 started = "SplitDPI is running in the background (pid %d). You can close this terminal; it stops when the computer restarts. To stop it sooner: sudo splitdpi stop"
 not_started = "SplitDPI did not start in the background. The reason is in its log: %s"
+until_reboot = "It stops when the computer restarts; to start it at every boot instead: sudo splitdpi enable"
 
 [background_tui]
 act = "Run in background"
+until_reboot = "stops at reboot"
 hint = "Keeps running when the terminal closes; stops when the computer restarts."
 starting = "Starting in the background..."
 started = "Running in the background (pid %d). You can close this window."

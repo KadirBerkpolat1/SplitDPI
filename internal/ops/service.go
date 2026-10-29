@@ -112,9 +112,11 @@ func removeService(ctx context.Context, m initsys.Manager) error {
 }
 
 // Logs writes the service log to w: the journal on systemd, else LogFile
-// (after LogFile.1). follow keeps writing new lines until ctx is done.
+// (after LogFile.1). A background run writes LogFile on every init, so while
+// it is the current or last run, Logs reads LogFile. follow keeps writing new
+// lines until ctx is done.
 func (o *Ops) Logs(ctx context.Context, follow bool, w io.Writer) error {
-	if m, err := o.manager(); err == nil {
+	if m, err := o.manager(); err == nil && o.lastMode() != "background" {
 		if cmd := m.LogsCmd(follow); cmd != nil {
 			if !follow {
 				out, err := o.Exec(ctx, "", cmd[0], cmd[1:]...)
@@ -140,6 +142,16 @@ func (o *Ops) Logs(ctx context.Context, follow bool, w io.Writer) error {
 		return nil
 	}
 	return tailLog(ctx, o.P.LogFile, w)
+}
+
+// lastMode is the mode of the supervisor holding the lock, else of the last
+// one that wrote status.
+func (o *Ops) lastMode() string {
+	if _, mode, held := supervisor.LockInfo(o.P); held {
+		return mode
+	}
+	st, _ := supervisor.ReadStatus(o.P)
+	return st.Mode
 }
 
 // tailLog writes what is appended to path until ctx is done, starting over

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -10,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -142,7 +145,7 @@ func TestBackgroundBlocksRunAndEnable(t *testing.T) {
 	for _, cmd := range []string{"run", "enable"} {
 		out, code := runOps(t, o, cmd)
 		eq(t, code, 1)
-		has(t, out, "already running (background (stops at reboot))")
+		has(t, out, "already running (background).")
 		has(t, out, "splitdpi stop")
 	}
 	o2, f := runOpsFor(t, systemdRoot())
@@ -161,7 +164,63 @@ func TestStatusBackground(t *testing.T) {
 	out, code := runOps(t, o, "status")
 	eq(t, code, 0)
 	has(t, out, "State: running")
-	has(t, out, "Mode: background (stops at reboot), pid 999999999")
+	has(t, out, "Mode: background, pid 999999999")
+	has(t, out, "It stops when the computer restarts")
+}
+
+// A background run writes LogFile on every init, so logs reads it there, not
+// the journal, while it runs and after it ended; a service still has the journal.
+func TestLogsByMode(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode string
+		held, file bool
+	}{
+		{"background running", "background", true, true},
+		{"background ended", "background", false, true},
+		{"service running", "service", true, false},
+		{"service ended", "service", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o, f := runOpsFor(t, systemdRoot())
+			f.out = map[string]string{"journalctl -u splitdpi --no-pager": "journal line\n"}
+			os.MkdirAll(filepath.Dir(o.P.LogFile), 0o755)
+			os.WriteFile(o.P.LogFile, []byte("file line\n"), 0o644)
+			if tc.held {
+				holdLock(t, o.P, tc.mode)
+			} else {
+				os.MkdirAll(o.P.RunDir, 0o755)
+				os.WriteFile(o.P.StatusFile, []byte(`{"state":"failed","mode":"`+tc.mode+`"}`), 0o644)
+			}
+			out, code := runOps(t, o, "logs")
+			eq(t, code, 0)
+			want, not := "file line", "journal line"
+			if !tc.file {
+				want, not = not, want
+			}
+			has(t, out, want)
+			if strings.Contains(out, not) {
+				t.Errorf("%q also has %q", out, not)
+			}
+		})
+	}
+}
+
+// The TUI's log stream is logs -f: for a background run it follows LogFile.
+func TestLogsFollowBackground(t *testing.T) {
+	o, f := runOpsFor(t, systemdRoot())
+	os.MkdirAll(filepath.Dir(o.P.LogFile), 0o755)
+	os.WriteFile(o.P.LogFile, []byte("file line\n"), 0o644)
+	holdLock(t, o.P, "background")
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	var out bytes.Buffer
+	if err := o.Logs(ctx, true, &out); err != nil {
+		t.Fatal(err)
+	}
+	has(t, out.String(), "file line")
+	if len(f.calls) > 0 {
+		t.Errorf("journal read: %q", f.calls)
+	}
 }
 
 // sleeper stands in for a background supervisor: it holds the lock under the

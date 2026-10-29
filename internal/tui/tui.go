@@ -106,6 +106,7 @@ type Model struct {
 
 	logs       *ring
 	logCancel  context.CancelFunc
+	logStream  int // numbers the streams, so that the end of a replaced one is ignored
 	logTicking bool
 
 	wiz      wizard

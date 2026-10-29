@@ -272,7 +272,7 @@ failed = "hata verdi"
 foreground = "ön plan"
 service = "servis"
 scan = "tarama"
-background = "arka plan (yeniden başlatınca kapanır)"
+background = "arka plan"
 
 [tui]
 process = "%s, pid %d"
@@ -626,9 +626,11 @@ bypass_only = "Yalnızca DNS sorgularını yerel çözümleyiciden geçirmeden d
 [background]
 started = "SplitDPI arka planda çalışıyor (pid %d). Terminali kapatabilirsiniz; bilgisayar yeniden başlayınca durur. Daha önce durdurmak için: sudo splitdpi stop"
 not_started = "SplitDPI arka planda başlamadı. Nedeni günlüğünde: %s"
+until_reboot = "Bilgisayar yeniden başlayınca durur; bunun yerine her açılışta başlaması için: sudo splitdpi enable"
 
 [background_tui]
 act = "Arka planda çalıştır"
+until_reboot = "yeniden başlatınca kapanır"
 hint = "Terminal kapansın da çalışmaya devam eder; bilgisayar yeniden başlayınca kapanır."
 starting = "Arka planda başlatılıyor..."
 started = "Arka planda çalışıyor (pid %d). Bu pencereyi kapatabilirsiniz."

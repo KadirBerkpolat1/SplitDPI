@@ -92,7 +92,8 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.bgPID = msg.pid
 			return m, tea.Quit, true
 		}
-		return m, m.refresh(), true
+		cmd := batch(m.refresh(), m.restartLogs())
+		return m, cmd, true
 	case probeMsg:
 		m.probe, m.note = msg.res, ""
 		if msg.err != nil {
@@ -189,7 +190,11 @@ func (statusPage) View(m Model, w, _ int) string {
 	case m.running:
 		state = goodStyle.Render(i18n.T("tui.running_here"))
 	case m.st.State == "running":
-		state = goodStyle.Render(state) + mutedStyle.Render("  "+i18n.T("tui.process", i18n.Enum("mode", m.st.Mode), m.st.PID))
+		proc := i18n.T("tui.process", i18n.Enum("mode", m.st.Mode), m.st.PID)
+		if m.st.Mode == "background" {
+			proc += ", " + i18n.T("background_tui.until_reboot")
+		}
+		state = goodStyle.Render(state) + mutedStyle.Render("  "+proc)
 	case m.st.State == "failed":
 		state = badStyle.Render(state)
 	default:
