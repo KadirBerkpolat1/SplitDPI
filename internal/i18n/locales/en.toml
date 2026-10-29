@@ -44,7 +44,7 @@ help = "List the preset strategies or choose one (list | set ID)."
 help = "Test HTTPS reachability of enabled app probe URLs and your sites."
 
 [probe]
-usage = "Usage: splitdpi probe [--apps id,id]"
+usage = "Usage: splitdpi probe [--apps id,id] [-v]"
 no_apps = "No apps enabled and no sites added. Run: sudo splitdpi apps enable discord  or: sudo splitdpi sites add DOMAIN"
 failed = "One or more probes failed."
 dns.mismatch = "system and DoH disagree"
@@ -53,7 +53,7 @@ dns.mismatch = "system and DoH disagree"
 help = "Find a working DPI strategy for your ISP (preset trials, then blockcheck2), or for one site (--site DOMAIN)."
 
 [scan]
-usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck]"
+usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck] [-v]"
 site_ipv4 = "Scanning %s with blockcheck2 over IPv4 only: this machine has no global IPv6."
 site_ipv46 = "Scanning %s with blockcheck2 over IPv4 and IPv6."
 verify = "Re-testing %d blockcheck2 strategies on your apps and sites; the first that opens all of them is saved."
@@ -359,3 +359,33 @@ crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving u
 install = "Engine install failed: %v"
 checksum = "SHA-256 mismatch: the archive is not zapret2 %s (corrupted or wrong file). The installed engine was not changed."
 arch = "Unsupported architecture %s (supported: amd64, arm64)."
+
+[probeerr.reset]
+what = "Your provider is blocking this site: the connection was cut."
+todo = "Try another strategy with a scan: sudo splitdpi scan"
+
+[probeerr.timeout]
+what = "The site did not answer in time."
+todo = "Your provider may be dropping the traffic, or the site may be down. Try a scan: sudo splitdpi scan. If every site is slow, check your internet connection."
+
+[probeerr.dns]
+what = "The site's address could not be looked up: DNS failed or was tampered with."
+todo = "Send DNS through encrypted DNS-over-HTTPS, then restart splitdpi: sudo splitdpi dns on"
+
+[probeerr.tls]
+what = "The secure connection failed: the certificate did not match the site, or the handshake broke."
+todo = "Your provider may be redirecting the site. Turn on encrypted DNS (sudo splitdpi dns on), then try a scan: sudo splitdpi scan"
+
+[probeerr.http]
+what = "Something other than the site answered, probably your provider's block page."
+todo = "Try a scan: sudo splitdpi scan. If it keeps happening, turn on encrypted DNS: sudo splitdpi dns on"
+
+[probeerr.other]
+what = "The connection failed for another reason."
+todo = "Run the command again with -v to see the error, and check that the site opens at all."
+
+[share]
+scan = "Help others on your provider: share this result with the preset repository. The link opens a prefilled GitHub issue; nothing is sent until you submit it:\n%s"
+
+[appnote]
+telegram = "Telegram's direct connections to IP addresses (MTProto) are not covered."

@@ -3,10 +3,8 @@ package probe
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -15,7 +13,8 @@ const DefaultTimeout = 8 * time.Second
 type Result struct {
 	URL     string
 	OK      bool
-	Err     string
+	Err     string // the raw error text
+	Cause   error  // the raw error, for Classify
 	Elapsed time.Duration
 }
 
@@ -59,7 +58,7 @@ func (p Prober) probeOne(ctx context.Context, rawURL string) Result {
 
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		r.Err = err.Error()
+		r.Err, r.Cause = err.Error(), err
 		r.Elapsed = time.Since(start)
 		return r
 	}
@@ -68,10 +67,7 @@ func (p Prober) probeOne(ctx context.Context, rawURL string) Result {
 	resp, err := c.Do(req)
 	r.Elapsed = time.Since(start)
 	if err != nil {
-		r.Err = err.Error()
-		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") {
-			r.Err = "timeout"
-		}
+		r.Err, r.Cause = err.Error(), err
 		return r
 	}
 	defer resp.Body.Close()

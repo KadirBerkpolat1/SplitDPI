@@ -12,6 +12,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
 
@@ -20,7 +21,7 @@ func init() {
 }
 
 func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
-	opt, err := parseScanArgs(args)
+	opt, verbose, err := parseScanArgs(args)
 	if err != nil {
 		return usageError(i18n.T("scan.usage"))
 	}
@@ -44,11 +45,30 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 			}
 		}
 		if errors.Is(err, scan.ErrNoStrategy) {
+			printTrials(w, rep.Trials, verbose)
 			return errors.New(i18n.T("scan.no_strategy"))
 		}
 		return err
 	}
-	for _, tr := range rep.Trials {
+	printTrials(w, rep.Trials, verbose)
+	if rep.Winner != nil {
+		fmt.Fprintln(w, i18n.T("scan.winner", rep.Winner.ID, rep.Winner.Source))
+		if opt.Site != "" {
+			fmt.Fprintln(w, i18n.T("sites.added", opt.Site))
+		}
+		fmt.Fprintln(w, i18n.T("share.scan", ops.ShareURL(rep, Version)))
+	}
+	if rep.VoiceUnverified {
+		fmt.Fprintln(w, i18n.T("scan.voice"))
+	}
+	suggestPresetsUpdate(w, o)
+	fmt.Fprintln(w, i18n.T("scan.next"))
+	return nil
+}
+
+// printTrials lists each trial and, for a failed one, why each probe failed.
+func printTrials(w io.Writer, trials []scan.Trial, verbose bool) {
+	for _, tr := range trials {
 		mark := "✗"
 		if tr.OK {
 			mark = "✓"
@@ -58,19 +78,13 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 			line += "  " + tr.Candidate.Strategy.TCPTLS
 		}
 		fmt.Fprintln(w, line)
-	}
-	if rep.Winner != nil {
-		fmt.Fprintln(w, i18n.T("scan.winner", rep.Winner.ID, rep.Winner.Source))
-		if opt.Site != "" {
-			fmt.Fprintln(w, i18n.T("sites.added", opt.Site))
+		for _, r := range tr.Results {
+			if !r.OK {
+				fmt.Fprintf(w, "    %s  %s\n", r.URL, probe.Classify(r).What())
+				printRawErr(w, r, verbose)
+			}
 		}
 	}
-	if rep.VoiceUnverified {
-		fmt.Fprintln(w, i18n.T("scan.voice"))
-	}
-	suggestPresetsUpdate(w, o)
-	fmt.Fprintln(w, i18n.T("scan.next"))
-	return nil
 }
 
 // siteScanText says which IP versions a site scan tests.
@@ -95,29 +109,30 @@ func suggestPresetsUpdate(w io.Writer, o *ops.Ops) {
 	}
 }
 
-func parseScanArgs(args []string) (scan.Options, error) {
-	var opt scan.Options
+func parseScanArgs(args []string) (opt scan.Options, verbose bool, err error) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "-v", "--verbose":
+			verbose = true
 		case "--asn":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, false, fmt.Errorf("missing")
 			}
 			n, err := strconv.Atoi(args[i+1])
 			if err != nil || n <= 0 {
-				return opt, fmt.Errorf("bad asn")
+				return opt, false, fmt.Errorf("bad asn")
 			}
 			opt.ASN = n
 			i++
 		case "--country":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, false, fmt.Errorf("missing")
 			}
 			opt.Country = strings.ToUpper(args[i+1])
 			i++
 		case "--apps":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, false, fmt.Errorf("missing")
 			}
 			for _, a := range strings.Split(args[i+1], ",") {
 				a = strings.TrimSpace(a)
@@ -128,7 +143,7 @@ func parseScanArgs(args []string) (scan.Options, error) {
 			i++
 		case "--site":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, false, fmt.Errorf("missing")
 			}
 			opt.Site = args[i+1]
 			i++
@@ -137,11 +152,11 @@ func parseScanArgs(args []string) (scan.Options, error) {
 		case "--no-blockcheck":
 			opt.NoBlockcheck = true
 		default:
-			return opt, fmt.Errorf("unknown")
+			return opt, false, fmt.Errorf("unknown")
 		}
 	}
 	if opt.Site != "" && opt.NoBlockcheck {
-		return opt, fmt.Errorf("--site needs blockcheck2")
+		return opt, false, fmt.Errorf("--site needs blockcheck2")
 	}
-	return opt, nil
+	return opt, verbose, nil
 }
