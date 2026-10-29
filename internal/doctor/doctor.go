@@ -297,7 +297,7 @@ func lsm(ctx context.Context, env Env) Check {
 	case err != nil:
 		return Check{ID: "lsm", Severity: Warn, Msg: i18n.T("doctor.lsm.enforcing_nolog", err)}
 	case n > 0:
-		return Check{ID: "lsm", Severity: Warn, Msg: i18n.T("doctor.lsm.enforcing", n, src)}
+		return Check{ID: "lsm", Severity: Warn, Msg: i18n.N("doctor.lsm.enforcing", n, src)}
 	}
 	return Check{ID: "lsm", Msg: i18n.T("doctor.lsm.enforcing_clean", src)}
 }

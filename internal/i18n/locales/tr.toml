@@ -61,7 +61,8 @@ help = "Sağlayıcınızda ya da tek bir sitede (--site ALAN) çalışan bir DPI
 usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|SAĞLAYICI] [-v]"
 site_ipv4 = "%s blockcheck2 ile yalnızca IPv4 üzerinden taranıyor; bu bilgisayarda küresel IPv6 yok."
 site_ipv46 = "%s blockcheck2 ile IPv4 ve IPv6 üzerinden taranıyor."
-verify = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
+verify_one = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açarsa kaydedilecek."
+verify_many = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
 locked = "splitdpi zaten çalışıyor. Önce durdurun: sudo splitdpi stop"
 no_strategy = "Çalışan bir strateji bulunamadı."
 winner = "Seçilen strateji: %s (kaynak: %s)"
@@ -84,7 +85,8 @@ usage = "Kullanım: splitdpi presets list | update | check DİZİN"
 update.usage = "Kullanım: splitdpi presets update"
 check.usage = "Kullanım: splitdpi presets check DİZİN"
 check.no_dir = "%s bir dizin değil."
-check.bad = "%d dosya atlanırdı; bunları düzeltin."
+check.bad_one = "%d dosya atlanırdı; onu düzeltin."
+check.bad_many = "%d dosya atlanırdı; bunları düzeltin."
 check.empty = "Uygulama dosyası bulunamadı; bu bir hazır ayar dizini değil."
 check.ok = "Hazır ayarlar sorunsuz: sürüm %s, %d sağlayıcı, %d uygulama."
 update.fetching = "İndiriliyor: %s"
@@ -132,7 +134,8 @@ help = "Bu bilgisayarda splitdpi'nin ihtiyaç duyduğu her şeyi denetler."
 [doctor]
 usage = "Kullanım: splitdpi doctor"
 fix = "çözüm: %s"
-blockers = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce bunları giderin."
+blockers_one = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce onu giderin."
+blockers_many = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce bunları giderin."
 
 [doctor.root]
 ok = "root olarak çalışıyor"
@@ -163,7 +166,8 @@ old = "kayıtlı strateji %s motoruyla bulundu; sabitlenmiş motor %s"
 
 [doctor.lsm]
 ok = "SELinux %s, AppArmor açık: %t"
-enforcing = "SELinux zorlayıcı modda; nfqws2/splitdpi için %d engelleme var (kaynak: %s)"
+enforcing_one = "SELinux zorlayıcı modda; nfqws2/splitdpi için %d engelleme var (kaynak: %s)"
+enforcing_many = "SELinux zorlayıcı modda; nfqws2/splitdpi için %d engelleme var (kaynak: %s)"
 enforcing_clean = "SELinux zorlayıcı modda; nfqws2/splitdpi için 0 engelleme (kaynak: %s)"
 enforcing_nolog = "SELinux zorlayıcı modda; engellemeleri saymak için ne audit günlüğü ne dmesg okunabildi: %v"
 
@@ -489,7 +493,8 @@ telegram = "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kaps
 help = "Başka bir zapret kurulumundan splitdpi'ye geçer: sitelerini devralır ve onu kapatır (takeover [--yes])."
 
 [sites_import]
-added = "Sitelerinize %d yeni site eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+added_one = "Sitelerinize %d yeni site eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+added_many = "Sitelerinize %d yeni site eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
 skipped = "%d. satır atlandı, alan adı değil: %s"
 
 [takeover]
@@ -511,7 +516,8 @@ plan_manual = "%s durdurulamayacak: bir servis dışında çalışıyor, onu ken
 plan_nothing = "hiçbir şeyi değiştirmeyecek: çalışmıyor, açılışta başlamıyor ve site listesi yok"
 untouched = "Diğer aracın hiçbir dosyası silinmez ya da değiştirilmez; sudo splitdpi revert onu yeniden açar."
 confirm = "Bunu yapmak için çalıştırın: %s"
-imported = "%d yeni site eklendi (kaynak: %s)"
+imported_one = "%d yeni site eklendi (kaynak: %s)"
+imported_many = "%d yeni site eklendi (kaynak: %s)"
 did_stop = "%s servisi durduruldu"
 did_disable = "%s artık açılışta başlamayacak"
 still_running = "%s bir servis dışında çalışmayı sürdürüyor: splitdpi'yi başlatmadan önce onu kendiniz durdurun"
@@ -547,8 +553,6 @@ import = "%s dosyasındaki siteler sitelerinize eklenecek."
 stop = "%s servisi (%s) durdurulacak."
 boot = "%s servisinin açılışta başlaması kapatılacak."
 untouched = "Onun dosyalarına dokunulmayacak: hiçbir şey silinmeyecek ya da değiştirilmeyecek."
-imported_one = "%d yeni site eklendi (kaynak: %s)"
-imported_many = "%d yeni site eklendi (kaynak: %s)"
 skipped_one = "Listesindeki %d satır alan adı olmadığı için atlandı; Günlük'te listelendi."
 skipped_many = "Listesindeki %d satır alan adı olmadığı için atlandı; Günlük'te listelendi."
 report = "SplitDPI'ye geçildi:"

@@ -176,17 +176,6 @@ func (m *Model) importTyped() tea.Cmd {
 	}
 }
 
-// plural is the message key_one when n is 1, else key_many, formatted with n
-// and then args.
-func plural(key string, n int, args ...any) string {
-	if n == 1 {
-		key += "_one"
-	} else {
-		key += "_many"
-	}
-	return i18n.T(key, append([]any{n}, args...)...)
-}
-
 // expandHome turns a leading ~/ into the home of the user who ran sudo, or
 // else of this user.
 func expandHome(p string) string {
@@ -306,9 +295,9 @@ func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		a := &m.apps
 		a.sites, a.skipped = msg.list, msg.skipped
 		a.cursor = max(min(a.cursor, a.rows()-1), 0)
-		note := []string{plural("sites_import_tui.added", msg.added)}
+		note := []string{i18n.N("sites_import_tui.added", msg.added)}
 		if n := len(msg.skipped); n > 0 {
-			note = append(note, plural("sites_import_tui.skipped", n))
+			note = append(note, i18n.N("sites_import_tui.skipped", n))
 		}
 		if msg.added > 0 {
 			note = append(note, i18n.T("sites_import_tui.restart"))

@@ -69,7 +69,7 @@ func TestSitesImport(t *testing.T) {
 	out, code := runOps(t, o, "sites", "import", file)
 	eq(t, code, 0)
 	has(t, out, "Line 3 skipped, not a domain: http://")
-	has(t, out, "Added 1 new sites")
+	has(t, out, "Added 1 new site to your sites.")
 	out, _ = runOps(t, o, "sites", "list")
 	eq(t, out, "pastebin.com\n")
 }

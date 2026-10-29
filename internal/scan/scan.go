@@ -131,7 +131,7 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 	urls = probeURLs(env.Set, opt.Apps, sites)
 	tls := bc.TLSCandidates[:min(len(bc.TLSCandidates), MaxBlockcheckTrials)]
 	if len(tls) > 0 && env.Progress != nil {
-		env.Progress(i18n.T("scan.verify", len(tls)))
+		env.Progress(i18n.N("scan.verify", len(tls)))
 	}
 	for i, args := range tls {
 		st := presets.Strategy{ID: fmt.Sprintf("blockcheck-%d", i+1), TCPTLS: args, QUIC: bc.QUIC}

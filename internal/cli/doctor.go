@@ -28,7 +28,7 @@ func runDoctor(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 				n++
 			}
 		}
-		return errors.New(i18n.T("doctor.blockers", n))
+		return errors.New(i18n.N("doctor.blockers", n))
 	}
 	return nil
 }
