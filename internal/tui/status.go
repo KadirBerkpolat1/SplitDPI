@@ -99,7 +99,7 @@ func (m Model) statusView() string {
 		apps = strings.Join(m.cfg.Apps, ", ")
 	}
 	lines = append(lines, m.row(i18n.T("tui.apps"), apps))
-	if m.cfg.DNS {
+	if m.cfg.DNSOn() {
 		lines = append(lines, m.row(i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
 	}
 	for _, id := range slices.Sorted(maps.Keys(m.probe)) {

@@ -70,7 +70,7 @@ betik yazabilirsiniz.
 | `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da birini seçer. |
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
-| `splitdpi dns on\|off` | DNS'i yerleşik DNS-over-HTTPS ileticisinden geçirir. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | DNS'i yerleşik şifreli DNS ileticisinden geçirir (DoH ya da `--dot` ile DoT); argüman verilmezse geçerli seçimi gösterir. |
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
 
 `--help`, `version` ve `presets list` dışındaki tüm komutlar root ister. Dili
@@ -130,10 +130,13 @@ nfqws2 durursa trafik değiştirilmeden geçer.
   görüşmede doğrulanmadı. `scan` bunu belirtir; sizde çalışıp çalışmadığını
   bildirin.
 - **DNS.** Bazı sağlayıcılar DNS yanıtlarını zehirler. `doctor` ve `probe`
-  bunu tespit eder. `splitdpi dns on`, 53. porttaki trafiği SplitDPI içindeki
-  bir DNS-over-HTTPS ileticisine yönlendirir; hiçbir çözümleyici ayarını
-  değiştirmez ve tabloyla birlikte kaybolur. Açıkken VPN'in ayrık DNS'i ve
-  yerel ağ adları çözülemeyebilir.
+  bunu tespit eder. `splitdpi dns auto` (ya da bir sağlayıcı: `cloudflare`,
+  `google`, `quad9`, reklamları ve izleyicileri de engelleyen `adguard`),
+  53. porttaki trafiği SplitDPI içindeki şifreli bir DNS ileticisine
+  yönlendirir; hiçbir çözümleyici ayarını değiştirmez ve tabloyla birlikte
+  kaybolur. Açıkken VPN'in ayrık DNS'i ve yerel ağ adları çözülemeyebilir.
+  `scan` önce blockcheck2'nin alan adlarını denetler; zehirlenmişlerse şifreli
+  DNS'i açmayı önerir (etkileşimsiz kullanımda `--dns auto`).
 
 ## Geri alma güvencesi
 

@@ -53,7 +53,7 @@ dns.mismatch = "system and DoH disagree"
 help = "Find a working DPI strategy for your ISP (preset trials, then blockcheck2), or for one site (--site DOMAIN)."
 
 [scan]
-usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck]"
+usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|PROVIDER]"
 site_ipv4 = "Scanning %s with blockcheck2 over IPv4 only: this machine has no global IPv6."
 site_ipv46 = "Scanning %s with blockcheck2 over IPv4 and IPv6."
 verify = "Re-testing %d blockcheck2 strategies on your apps and sites; the first that opens all of them is saved."
@@ -219,11 +219,10 @@ last_error = "Last error: %s"
 dns = "DNS redirect is on: VPN split-DNS and LAN hostnames may break. Turn it off with `sudo splitdpi dns off`."
 
 [cmd.dns]
-help = "Send DNS (port 53) through the built-in DNS-over-HTTPS forwarder (on | off)."
+help = "Encrypt DNS (port 53) while splitdpi runs: off | auto | cloudflare | google | quad9 | adguard, over DoH or with --dot DoT. Without an argument, show the current choice."
 
 [dns]
-usage = "Usage: splitdpi dns on | off"
-on = "DNS redirect is on. It applies on the next start."
+usage = "Usage: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS redirect is off. It applies on the next start."
 restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
 
@@ -359,3 +358,23 @@ crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving u
 install = "Engine install failed: %v"
 checksum = "SHA-256 mismatch: the archive is not zapret2 %s (corrupted or wrong file). The installed engine was not changed."
 arch = "Unsupported architecture %s (supported: amd64, arm64)."
+
+[dns2]
+set = "Encrypted DNS is on: %s over %s. It applies on the next start."
+current = "Encrypted DNS: %s over %s."
+current_off = "Encrypted DNS is off: DNS goes to the system resolver as usual."
+unknown = "Unknown DNS choice %q."
+off_name = "Off"
+off_note = "DNS goes to the system resolver as usual."
+auto_name = "Automatic"
+auto_note = "Cloudflare, then Google, then Quad9: the first one that answers."
+note_cloudflare = "No filtering."
+note_google = "No filtering."
+note_quad9 = "Also blocks known malware and phishing domains."
+note_adguard = "Also blocks ads and trackers."
+scan_poisoned = "DNS poisoning: %s resolves to %s here, but to %s over encrypted DNS."
+scan_ask = "Use encrypted DNS (automatic) for this scan and keep it on? [y/N]"
+scan_hint = "To scan with encrypted DNS and keep it on, run the scan again with --dns auto."
+scan_kept = "Keeping the system resolver: results for the poisoned domains may be wrong."
+scan_on = "Encrypted DNS (%s) is on for this scan and stays on."
+yes = "y,yes"

@@ -98,7 +98,7 @@ func runStatus(_ context.Context, o *ops.Ops, w io.Writer, args []string) error 
 		fmt.Fprintln(w, i18n.T("status.engine", st.Engine))
 	}
 	fmt.Fprintln(w, i18n.T("status.apps", strings.Join(cfg.Apps, ", ")))
-	if cfg.DNS {
+	if cfg.DNSOn() {
 		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if st.LastError != "" {

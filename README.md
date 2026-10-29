@@ -67,7 +67,7 @@ shows the command that does the same thing, so you can script it.
 | `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
-| `splitdpi dns on\|off` | Sends DNS through a built-in DNS-over-HTTPS forwarder. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Sends DNS through a built-in encrypted DNS forwarder (DoH, or DoT with `--dot`); without an argument, shows the current choice. |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
 
 All commands except `--help`, `version` and `presets list` need root. Add
@@ -122,9 +122,13 @@ unmodified.
 - **Discord voice.** The voice preset is applied but not verified on a real
   call yet. `scan` says so; report whether it works for you.
 - **DNS.** Some ISPs poison DNS answers. `doctor` and `probe` detect it.
-  `splitdpi dns on` sends port 53 through a DNS-over-HTTPS forwarder inside
-  SplitDPI; it changes no resolver settings and disappears with the table.
-  While it is on, VPN split DNS and local hostnames may stop resolving.
+  `splitdpi dns auto` (or a provider: `cloudflare`, `google`, `quad9`,
+  `adguard`, which also blocks ads and trackers) sends port 53 through an
+  encrypted DNS forwarder inside SplitDPI; it changes no resolver settings and
+  disappears with the table. While it is on, VPN split DNS and local
+  hostnames may stop resolving. `scan` checks blockcheck2's domains first
+  and, if they are poisoned, offers to turn it on (`--dns auto` when not
+  interactive).
 
 ## Revert guarantee
 

@@ -43,6 +43,15 @@ func TestBlockcheckEnv(t *testing.T) {
 	}
 }
 
+func TestBlockcheckEnvDoH(t *testing.T) {
+	got := envMap(t, scan.BlockcheckEnv(scan.BlockcheckParams{
+		DoH: []string{"https://1.1.1.1/dns-query", "https://1.0.0.1/dns-query"},
+	}))
+	if got["SECURE_DNS"] != "1" || got["DOH_SERVERS"] != "https://1.1.1.1/dns-query https://1.0.0.1/dns-query" {
+		t.Errorf("env %v", got)
+	}
+}
+
 func envMap(t *testing.T, env []string) map[string]string {
 	t.Helper()
 	m := make(map[string]string, len(env))

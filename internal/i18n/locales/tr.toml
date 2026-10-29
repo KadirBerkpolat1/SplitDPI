@@ -58,7 +58,7 @@ dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
 help = "Sağlayıcınızda ya da tek bir sitede (--site ALAN) çalışan bir DPI stratejisi bulur (önce hazır ayarlar, sonra blockcheck2)."
 
 [scan]
-usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck]"
+usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|SAĞLAYICI]"
 site_ipv4 = "%s blockcheck2 ile yalnızca IPv4 üzerinden taranıyor; bu bilgisayarda küresel IPv6 yok."
 site_ipv46 = "%s blockcheck2 ile IPv4 ve IPv6 üzerinden taranıyor."
 verify = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
@@ -224,11 +224,10 @@ last_error = "Son hata: %s"
 dns = "DNS yönlendirmesi açık: VPN'in ayrık DNS'i ve yerel ağ adları çalışmayabilir. Kapatmak için: `sudo splitdpi dns off`."
 
 [cmd.dns]
-help = "DNS'i (53. port) yerleşik DNS-over-HTTPS ileticisinden geçirir (on | off)."
+help = "splitdpi çalışırken DNS'i (53. port) şifreler: off | auto | cloudflare | google | quad9 | adguard; DoH ile ya da --dot ile DoT üzerinden. Argüman verilmezse geçerli seçimi gösterir."
 
 [dns]
-usage = "Kullanım: splitdpi dns on | off"
-on = "DNS yönlendirmesi açıldı. Bir sonraki başlatmada geçerli olur."
+usage = "Kullanım: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS yönlendirmesi kapatıldı. Bir sonraki başlatmada geçerli olur."
 restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
 
@@ -359,3 +358,23 @@ body = "SplitDPI, bu bilgisayarın bazı ağ trafiğini derin paket incelemesind
 started = "nfqws2 başladı (pid %d)"
 restarting = "nfqws2 durdu (%v); %s sonra yeniden başlatılıyor"
 crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralları kaldırıldı, vazgeçildi"
+
+[dns2]
+set = "Şifreli DNS açıldı: %s (%s). Bir sonraki başlatmada geçerli olur."
+current = "Şifreli DNS: %s (%s)."
+current_off = "Şifreli DNS kapalı: DNS her zamanki gibi sistemin DNS çözümleyicisine gider."
+unknown = "Bilinmeyen DNS seçimi: %q."
+off_name = "Kapalı"
+off_note = "DNS her zamanki gibi sistemin DNS çözümleyicisine gider."
+auto_name = "Otomatik"
+auto_note = "Sırayla Cloudflare, Google ve Quad9 denenir; ilk yanıt veren kullanılır."
+note_cloudflare = "Filtreleme yapmaz."
+note_google = "Filtreleme yapmaz."
+note_quad9 = "Bilinen zararlı yazılım ve oltalama alan adlarını da engeller."
+note_adguard = "Reklamları ve izleyicileri de engeller."
+scan_poisoned = "DNS zehirlenmesi: %s burada %s olarak çözülüyor, şifreli DNS'te ise %s."
+scan_ask = "Bu tarama için şifreli DNS (otomatik) açılsın ve açık kalsın mı? [e/H]"
+scan_hint = "Şifreli DNS ile taramak ve onu açık bırakmak için taramayı --dns auto ile yeniden çalıştırın."
+scan_kept = "Sistemin DNS çözümleyicisiyle devam ediliyor: zehirlenen alan adlarının sonuçları yanlış olabilir."
+scan_on = "Şifreli DNS (%s) bu tarama için açıldı ve açık kalacak."
+yes = "e,evet,y,yes"

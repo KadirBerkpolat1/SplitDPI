@@ -1,17 +1,25 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
+	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
 
@@ -20,9 +28,12 @@ func init() {
 }
 
 func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
-	opt, err := parseScanArgs(args)
+	opt, dnsFlag, err := parseScanArgs(args)
 	if err != nil {
 		return usageError(i18n.T("scan.usage"))
+	}
+	opt.DNSCheck = func(_ context.Context, poisoned []probe.DNSResult) string {
+		return scanDNSChoice(o, w, dnsFlag, poisoned)
 	}
 	if opt.Site != "" {
 		if opt.Site, err = domain.Normalize(opt.Site); err != nil {
@@ -95,29 +106,80 @@ func suggestPresetsUpdate(w io.Writer, o *ops.Ops) {
 	}
 }
 
-func parseScanArgs(args []string) (scan.Options, error) {
+// Before blockcheck2 tests poisoned domains, the scan asks a terminal user
+// whether to turn on encrypted DNS; these are the prompt's input.
+var (
+	dnsPromptIn  io.Reader = os.Stdin
+	dnsPromptTTY           = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
+)
+
+// scanDNSChoice answers ops' DNS question: dnsFlag is --dns ("" when not given).
+func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) string {
+	for _, r := range poisoned {
+		fmt.Fprintln(w, i18n.T("dns2.scan_poisoned", r.Domain, joinAddrs(r.System), joinAddrs(r.DoH)))
+	}
+	choice := dnsFlag
+	switch {
+	case dnsFlag != "":
+	case dnsPromptTTY():
+		fmt.Fprint(w, i18n.T("dns2.scan_ask")+" ")
+		line, _ := bufio.NewReader(dnsPromptIn).ReadString('\n')
+		if slices.Contains(strings.Split(i18n.T("dns2.yes"), ","), strings.ToLower(strings.TrimSpace(line))) {
+			choice = dns.Auto
+		}
+	default:
+		fmt.Fprintln(w, i18n.T("dns2.scan_hint"))
+	}
+	if choice == "" || choice == "keep" {
+		fmt.Fprintln(w, i18n.T("dns2.scan_kept"))
+		return ""
+	}
+	fmt.Fprintln(w, i18n.T("dns2.scan_on", dnsChoice(o, choice).Name))
+	return choice
+}
+
+func joinAddrs(addrs []netip.Addr) string {
+	s := make([]string, len(addrs))
+	for i, a := range addrs {
+		s[i] = a.String()
+	}
+	return strings.Join(s, ", ")
+}
+
+// parseScanArgs also returns --dns: "keep" or a provider, "" when not given.
+func parseScanArgs(args []string) (scan.Options, string, error) {
 	var opt scan.Options
+	var dnsFlag string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "--dns":
+			if i+1 >= len(args) {
+				return opt, "", fmt.Errorf("missing")
+			}
+			dnsFlag = args[i+1]
+			if dnsFlag != "keep" && (!dns.Valid(dnsFlag) || dnsFlag == dns.Off) {
+				return opt, "", fmt.Errorf("bad dns")
+			}
+			i++
 		case "--asn":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, "", fmt.Errorf("missing")
 			}
 			n, err := strconv.Atoi(args[i+1])
 			if err != nil || n <= 0 {
-				return opt, fmt.Errorf("bad asn")
+				return opt, "", fmt.Errorf("bad asn")
 			}
 			opt.ASN = n
 			i++
 		case "--country":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, "", fmt.Errorf("missing")
 			}
 			opt.Country = strings.ToUpper(args[i+1])
 			i++
 		case "--apps":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, "", fmt.Errorf("missing")
 			}
 			for _, a := range strings.Split(args[i+1], ",") {
 				a = strings.TrimSpace(a)
@@ -128,7 +190,7 @@ func parseScanArgs(args []string) (scan.Options, error) {
 			i++
 		case "--site":
 			if i+1 >= len(args) {
-				return opt, fmt.Errorf("missing")
+				return opt, "", fmt.Errorf("missing")
 			}
 			opt.Site = args[i+1]
 			i++
@@ -137,11 +199,11 @@ func parseScanArgs(args []string) (scan.Options, error) {
 		case "--no-blockcheck":
 			opt.NoBlockcheck = true
 		default:
-			return opt, fmt.Errorf("unknown")
+			return opt, "", fmt.Errorf("unknown")
 		}
 	}
 	if opt.Site != "" && opt.NoBlockcheck {
-		return opt, fmt.Errorf("--site needs blockcheck2")
+		return opt, "", fmt.Errorf("--site needs blockcheck2")
 	}
-	return opt, nil
+	return opt, dnsFlag, nil
 }

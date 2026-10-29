@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
@@ -14,22 +15,77 @@ func init() {
 }
 
 func runDNS(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
-	if len(args) != 1 || (args[0] != "on" && args[0] != "off") {
+	if len(args) == 0 {
+		return printDNS(o, w)
+	}
+	provider, proto, err := parseDNSArgs(args)
+	if err != nil {
 		return usageError(i18n.T("dns.usage"))
 	}
-	on := args[0] == "on"
-	running, err := o.DNS(on)
+	running, err := o.SetDNS(provider, proto)
 	if err != nil {
 		return err
 	}
-	if on {
-		fmt.Fprintln(w, i18n.T("dns.on"))
-		fmt.Fprintln(w, i18n.T("status.dns"))
-	} else {
+	if provider == dns.Off {
 		fmt.Fprintln(w, i18n.T("dns.off"))
+	} else {
+		p := dnsChoice(o, provider)
+		fmt.Fprintln(w, i18n.T("dns2.set", p.Name, proto.Name()))
+		if p.Note != "" {
+			fmt.Fprintln(w, p.Note)
+		}
+		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if running {
 		fmt.Fprintln(w, i18n.T("dns.restart"))
 	}
 	return nil
+}
+
+// parseDNSArgs reads `PROVIDER [--dot]`; `on` is auto, as in v0.1.
+func parseDNSArgs(args []string) (string, dns.Protocol, error) {
+	provider, proto := "", dns.DoH
+	for _, a := range args {
+		switch {
+		case a == "--dot":
+			proto = dns.DoT
+		case a == "on" && provider == "":
+			provider = dns.Auto
+		case dns.Valid(a) && provider == "":
+			provider = a
+		default:
+			return "", "", fmt.Errorf("bad argument %q", a)
+		}
+	}
+	if provider == "" || provider == dns.Off && proto == dns.DoT {
+		return "", "", fmt.Errorf("no provider")
+	}
+	return provider, proto, nil
+}
+
+func printDNS(o *ops.Ops, w io.Writer) error {
+	s, err := o.DNSSetting()
+	if err != nil {
+		return err
+	}
+	if s.Provider == dns.Off {
+		fmt.Fprintln(w, i18n.T("dns2.current_off"))
+	} else {
+		p := dnsChoice(o, s.Provider)
+		fmt.Fprintln(w, i18n.T("dns2.current", p.Name, s.Protocol.Name()))
+		if p.Note != "" {
+			fmt.Fprintln(w, p.Note)
+		}
+	}
+	fmt.Fprintln(w, i18n.T("dns.usage"))
+	return nil
+}
+
+func dnsChoice(o *ops.Ops, id string) ops.DNSProvider {
+	for _, p := range o.DNSProviders() {
+		if p.ID == id {
+			return p
+		}
+	}
+	return ops.DNSProvider{ID: id, Name: id}
 }

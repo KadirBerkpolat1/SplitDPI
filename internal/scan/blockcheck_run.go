@@ -26,6 +26,9 @@ type BlockcheckParams struct {
 	IPVS     string // "4" or "46"
 	HTTP3    bool
 	MarkFile string // optional; fake engine writes on SIGINT (tests)
+	// DoH makes blockcheck2 resolve through these DoH URLs instead of the
+	// system resolver; empty leaves it to blockcheck2's own spoofing check.
+	DoH []string
 }
 
 // BlockcheckNFTables returns nft table specs (family + name) for a blockcheck2 PID.
@@ -40,13 +43,14 @@ func BlockcheckNFTables(pid int) []string {
 	}
 }
 
-// BlockcheckEnv returns blockcheck2 batch environment entries (eight vars).
+// BlockcheckEnv returns blockcheck2 batch environment entries (eight vars,
+// ten with DoH).
 func BlockcheckEnv(p BlockcheckParams) []string {
 	http3 := "0"
 	if p.HTTP3 {
 		http3 = "1"
 	}
-	return []string{
+	env := []string{
 		"BATCH=1",
 		"SCANLEVEL=quick",
 		"DOMAINS=" + strings.Join(p.Domains, " "),
@@ -56,6 +60,11 @@ func BlockcheckEnv(p BlockcheckParams) []string {
 		"ENABLE_HTTPS_TLS13=0",
 		"ENABLE_HTTP3=" + http3,
 	}
+	if len(p.DoH) > 0 {
+		// blockcheck2 then picks the first of DOH_SERVERS that resolves.
+		env = append(env, "SECURE_DNS=1", "DOH_SERVERS="+strings.Join(p.DoH, " "))
+	}
+	return env
 }
 
 func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) []string {

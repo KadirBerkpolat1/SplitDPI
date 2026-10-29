@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
@@ -61,6 +62,7 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 	if opt.Site != "" {
 		trialHosts = []string{opt.Site}
 	}
+	var dnsErr error
 	env := scan.Env{
 		Set: set,
 		Lookup: func(ctx context.Context) (scan.ASNInfo, error) {
@@ -73,7 +75,16 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		Probe: func(ctx context.Context, urls []string) []probe.Result {
 			return probe.Prober{Client: o.HTTP, Timeout: probe.DefaultTimeout}.Probe(ctx, urls)
 		},
+		// Trials after this see c, so a DNS turned on here serves them too.
 		Blockcheck: func(ctx context.Context, p scan.BlockcheckParams, prog func(string)) (string, error) {
+			if dnsErr = o.scanDNS(ctx, &c, opt.DNSCheck, p.Domains); dnsErr != nil {
+				return "", dnsErr
+			}
+			if c.DNSOn() {
+				for _, u := range dns.Upstreams(c.DNSProvider, dns.DoH) {
+					p.DoH = append(p.DoH, u.URL())
+				}
+			}
 			return scan.RunBlockcheck(ctx, eng, o.Exec, p, prog)
 		},
 		IPv6:      o.HasIPv6(ctx),
@@ -82,6 +93,9 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		EngineVer: engine.Version,
 	}
 	rep, err := scan.Scan(ctx, env, opt)
+	if dnsErr != nil {
+		return rep, dnsErr
+	}
 	if err != nil {
 		return rep, err
 	}
@@ -97,6 +111,32 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		}
 	}
 	return rep, nil
+}
+
+// scanDNS runs opt.DNSCheck when DNS is off and some of domains look
+// poisoned, and turns on the provider it returns, in c and in config.
+func (o *Ops) scanDNS(ctx context.Context, c *config.Config, ask func(context.Context, []probe.DNSResult) string, domains []string) error {
+	if ask == nil || c.DNSOn() {
+		return nil
+	}
+	var poisoned []probe.DNSResult
+	for _, r := range o.CheckDNS(ctx, domains) {
+		if r.Poisoned {
+			poisoned = append(poisoned, r)
+		}
+	}
+	if len(poisoned) == 0 {
+		return nil
+	}
+	provider := ask(ctx, poisoned)
+	if provider == "" || provider == dns.Off {
+		return nil
+	}
+	if _, err := o.SetDNS(provider, dns.DoH); err != nil {
+		return err
+	}
+	c.DNSProvider, c.DNSProtocol = provider, dns.DoH
+	return nil
 }
 
 // HasIPv6 reports whether scans test IPv6 as well as IPv4.

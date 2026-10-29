@@ -1,4 +1,4 @@
-// Package dns is the opt-in local DNS-over-HTTPS forwarder.
+// Package dns is the opt-in local encrypted DNS forwarder and its providers.
 // nft redirects outbound port 53 to it; it never touches resolver config.
 package dns
 
@@ -8,27 +8,22 @@ import (
 	"errors"
 	"io"
 	"net"
-	"net/http"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
-
-	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
 // Port is where the nft redirect sends port-53 traffic.
 const Port = 5453
 
 const (
-	upstreamTimeout = 2 * time.Second
-	tcpIdle         = 10 * time.Second
-	plainUDPLimit   = 512 // RFC 1035, for clients without EDNS
+	tcpIdle       = 10 * time.Second
+	plainUDPLimit = 512 // RFC 1035, for clients without EDNS
 )
 
 type Forwarder struct {
-	Upstreams []string // DoH URLs, tried in order
-	Client    *http.Client
-	Port      int // 0 picks a free port and records it here
+	DNS  *Client
+	Port int // 0 picks a free port and records it here
 }
 
 // Start listens on UDP and TCP at 127.0.0.1:Port and, if IPv6 is up,
@@ -56,6 +51,7 @@ func (f *Forwarder) Start(ctx context.Context) error {
 		for _, l := range tcps {
 			l.Close()
 		}
+		f.DNS.CloseIdle()
 	}()
 	for _, c := range udps {
 		go f.serveUDP(ctx, c)
@@ -151,17 +147,7 @@ func (f *Forwarder) answer(ctx context.Context, q []byte) []byte {
 	if err != nil || h.Response {
 		return nil
 	}
-	for _, up := range f.Upstreams {
-		uctx, cancel := context.WithTimeout(ctx, upstreamTimeout)
-		resp, err := probe.DoHExchange(uctx, f.Client, up, q)
-		cancel()
-		var rp dnsmessage.Parser
-		if err != nil {
-			continue
-		}
-		if _, err := rp.Start(resp); err != nil {
-			continue
-		}
+	if resp, err := f.DNS.Exchange(ctx, q); err == nil {
 		// DoH servers may zero the ID (RFC 8484 4.1); the client needs its own back.
 		binary.BigEndian.PutUint16(resp, h.ID)
 		return resp

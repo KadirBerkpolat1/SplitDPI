@@ -22,7 +22,6 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/nft"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
-	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/render"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
@@ -111,8 +110,8 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 	}
 	var startDNS func(context.Context) error
 	dnsPort := 0
-	if cfg.DNS {
-		f := &dns.Forwarder{Upstreams: probe.DoHUpstreams, Client: o.HTTP, Port: dns.Port}
+	if cfg.DNSOn() {
+		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Port: dns.Port}
 		startDNS, dnsPort = f.Start, dns.Port
 	}
 	ruleset, err := nft.Ruleset(nft.RulesetInput{
@@ -157,7 +156,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 // its forwarder dies with the supervisor, and no rule of ours may block
 // traffic after a crash or kill -9. The queue chains fail open on their own.
 func guardOptions(cfg config.Config, p paths.Paths) []string {
-	if !cfg.DNS {
+	if !cfg.DNSOn() {
 		return nil
 	}
 	return []string{supervisor.DropChainOpt(p.NftTable, nft.DNSChain)}

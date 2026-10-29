@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
-	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
 // The next three tests share one run: start, kill -9, revert. They run in file order.
@@ -77,8 +77,8 @@ func TestRevertClean(t *testing.T) {
 // to the forwarder, which answers it over DoH from the fake upstream in
 // sdpi-srv. revert removes the redirect with the table.
 func TestDNSRedirectViaForwarder(t *testing.T) {
-	if want := "https://" + dohIP + "/dns-query"; probe.DoHUpstreams[0] != want {
-		t.Fatalf("first DoH upstream is %s; the fake upstream serves %s", probe.DoHUpstreams[0], want)
+	if got, want := dns.Upstreams(dns.Auto, dns.DoH)[0].URL(), "https://"+dohIP+"/dns-query"; got != want {
+		t.Fatalf("first DoH upstream is %s; the fake upstream serves %s", got, want)
 	}
 	if _, err := dig("9.9.9.9", "discord.com"); err == nil {
 		t.Fatal("9.9.9.9 answered before splitdpi ran; the test network is not isolated")

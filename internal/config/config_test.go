@@ -47,6 +47,71 @@ func TestConfigBadTOML(t *testing.T) {
 	}
 }
 
+func loadText(t *testing.T, text string) (config.Config, error) {
+	t.Helper()
+	p := paths.Under(t.TempDir())
+	if err := os.MkdirAll(p.ConfigDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p.ConfigFile, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return config.Load(p)
+}
+
+// v0.1's `dns = true` was auto over DoH; anything else means off.
+func TestDNSMigration(t *testing.T) {
+	for text, want := range map[string]string{
+		"dns = true\n":                         "auto/doh",
+		"dns = false\n":                        "off/doh",
+		"mode = \"broad\"\n":                   "off/doh",
+		"dns = true\ndns_provider = \"off\"\n": "off/doh",
+		"dns_provider = \"adguard\"\ndns_protocol = \"dot\"\n": "adguard/dot",
+	} {
+		c, err := loadText(t, text)
+		if err != nil {
+			t.Fatalf("%q: %v", text, err)
+		}
+		if got := c.DNSProvider + "/" + string(c.DNSProtocol); got != want {
+			t.Errorf("%q: %s, want %s", text, got, want)
+		}
+		if c.DNSOn() != (c.DNSProvider != "off") {
+			t.Errorf("%q: DNSOn %v", text, c.DNSOn())
+		}
+	}
+	if c, _ := loadText(t, ""); c.DNSOn() {
+		t.Error("missing config has DNS on")
+	}
+}
+
+func TestDNSInvalid(t *testing.T) {
+	for _, text := range []string{"dns_provider = \"on\"\n", "dns_protocol = \"doq\"\n"} {
+		if _, err := loadText(t, text); err == nil || !strings.Contains(err.Error(), "config.toml") {
+			t.Errorf("%q: %v", text, err)
+		}
+	}
+}
+
+// Saving a migrated config writes the new keys and drops `dns`.
+func TestDNSSaveDropsOldKey(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	if err := os.MkdirAll(p.ConfigDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(p.ConfigFile, []byte("dns = true\n"), 0o644)
+	c, err := config.Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Save(p, c); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(p.ConfigFile)
+	if s := string(b); strings.Contains(s, "dns =") || !strings.Contains(s, `dns_provider = "auto"`) || !strings.Contains(s, `dns_protocol = "doh"`) {
+		t.Errorf("saved:\n%s", s)
+	}
+}
+
 func TestListAddRemove(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "exclude.txt")
 	if err := os.WriteFile(path, []byte("# keep\n\nfoo.com\n"), 0o644); err != nil {

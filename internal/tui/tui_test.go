@@ -605,7 +605,7 @@ func TestLocalesFit80x24(t *testing.T) {
 		f.sites = []string{"pastebin.com"}
 		f.strategies = testStrategies()
 		f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder", Source: "isp/tr/as9121-turk-telekom.toml"}
-		f.cfg.DNS = true
+		f.cfg.DNSProvider = "auto"
 		f.st = supervisor.Status{State: "running", Mode: "service", PID: 4242, Engine: "v1.0.6", LastError: "nfqws2 stopped (exit status 1)"}
 		f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
 		views := map[string]string{}

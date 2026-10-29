@@ -25,18 +25,22 @@ type Options struct {
 	Site           string   // one normalized domain: blockcheck2 tests only it, no preset trials
 	BlockcheckOnly bool
 	NoBlockcheck   bool
+	// DNSCheck is asked before blockcheck2 runs, when DNS is off and some of
+	// its domains look poisoned. It returns the dns_provider to turn on for
+	// the rest of the scan and keep, or "" to stay on the system resolver.
+	DNSCheck func(ctx context.Context, poisoned []probe.DNSResult) string
 }
 
 type Env struct {
-	Set          presets.Set
-	Lookup       func(context.Context) (ASNInfo, error)
-	StartTrial   func(context.Context, presets.Strategy) (stop func(), err error)
-	Probe        func(context.Context, []string) []probe.Result
-	Blockcheck   func(context.Context, BlockcheckParams, func(string)) (string, error)
-	IPv6         bool
-	Now          func() time.Time
-	Progress     func(string)
-	EngineVer    string
+	Set        presets.Set
+	Lookup     func(context.Context) (ASNInfo, error)
+	StartTrial func(context.Context, presets.Strategy) (stop func(), err error)
+	Probe      func(context.Context, []string) []probe.Result
+	Blockcheck func(context.Context, BlockcheckParams, func(string)) (string, error)
+	IPv6       bool
+	Now        func() time.Time
+	Progress   func(string)
+	EngineVer  string
 }
 
 type Trial struct {
@@ -46,11 +50,11 @@ type Trial struct {
 }
 
 type Report struct {
-	ASN                  ASNInfo
-	Trials               []Trial
-	Blockcheck           *BlockcheckResult
-	Winner               *config.Strategy
-	VoiceUnverified      bool
+	ASN             ASNInfo
+	Trials          []Trial
+	Blockcheck      *BlockcheckResult
+	Winner          *config.Strategy
+	VoiceUnverified bool
 }
 
 // Scan tries ISP preset candidates, then blockcheck2 unless disabled.
