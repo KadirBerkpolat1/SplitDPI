@@ -16,6 +16,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
@@ -47,6 +48,8 @@ type fake struct {
 	sites      []string
 	strategies []ops.StrategyChoice
 	ipv6       bool
+
+	engineErr error
 }
 
 func newFake() *fake {
@@ -159,6 +162,25 @@ func (f *fake) AcceptDisclaimer() error {
 	return nil
 }
 func (f *fake) SetLang(lang string) error { f.record("lang " + lang); return nil }
+
+// EngineInstall fails with engineErr, else installs: the engine check passes.
+func (f *fake) EngineInstall(ctx context.Context, from string) (engine.Engine, error) {
+	f.record("engine install " + from)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.engineErr != nil {
+		return engine.Engine{}, f.engineErr
+	}
+	f.checks = slices.DeleteFunc(f.checks, func(c doctor.Check) bool { return c.ID == "engine" })
+	return engine.Engine{Dir: "/opt/splitdpi/zapret2-" + engine.Version}, nil
+}
+func (f *fake) DNSProviders() []ops.DNSProvider {
+	return []ops.DNSProvider{
+		{ID: "off", Name: "Off"}, {ID: "auto", Name: "Automatic", Note: "First answer wins."},
+		{ID: "cloudflare", Name: "Cloudflare"}, {ID: "google", Name: "Google"},
+		{ID: "quad9", Name: "Quad9"}, {ID: "adguard", Name: "AdGuard", Note: "Blocks ads too."},
+	}
+}
 
 func newModel(t *testing.T, f *fake) Model {
 	t.Helper()

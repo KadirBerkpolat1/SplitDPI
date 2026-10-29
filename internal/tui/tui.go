@@ -16,6 +16,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
@@ -50,6 +51,9 @@ type Backend interface {
 	Enable(ctx context.Context) error
 	AcceptDisclaimer() error
 	SetLang(lang string) error
+
+	EngineInstall(ctx context.Context, from string) (engine.Engine, error)
+	DNSProviders() []ops.DNSProvider
 }
 
 const statusEvery = 2 * time.Second
@@ -77,6 +81,7 @@ type Model struct {
 	focus  int  // the page action the footer highlights
 	help   bool
 	dialog *confirm
+	ask    *dnsAsk // the scan's encrypted DNS question
 
 	st    supervisor.Status
 	cfg   config.Config
@@ -182,6 +187,8 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case m.dialog != nil:
 		return m.dialogKey(s)
+	case m.ask != nil:
+		return m.dnsAskKey(s)
 	case m.help:
 		if s == "esc" || s == "?" {
 			m.help = false
@@ -274,7 +281,7 @@ func (m *Model) selectPage(i int) tea.Cmd {
 // mouse selects the menu entry under a left click.
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft ||
-		m.confirmQuit || m.dialog != nil || m.help || m.showDisclaimer() || m.tooSmall() {
+		m.confirmQuit || m.dialog != nil || m.ask != nil || m.help || m.showDisclaimer() || m.tooSmall() {
 		return m, nil
 	}
 	i := msg.Y - menuTop

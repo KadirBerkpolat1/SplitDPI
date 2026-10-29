@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
+	"net/url"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,16 +16,21 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
 
-// The scan page is the setup wizard:
-// doctor → detect → apps → [one site] → scan → run or enable.
+// The scan page offers two flows, both run as the setup wizard:
+// doctor → detect → apps (preset trials) or one site (blockcheck2) → scan →
+// run or enable.
 type scanPage struct{}
 
 type wizStep int
@@ -48,16 +56,29 @@ type wizard struct {
 	chosen map[string]bool
 
 	// A site scan: blockcheck2 on one domain instead of the preset trials.
-	input textinput.Model
-	site  string // normalized; empty for the preset trials
-	ipv6  bool
+	input    textinput.Model
+	site     string // normalized; empty for the preset trials
+	ipv6     bool
+	siteFlow bool // chosen on the page: the site follows the ISP, no apps step
+
+	installing bool
+	installErr error
+	installed  string // the note once the engine is in, shown after the checks rerun
 
 	progress   *ring
 	scanCancel context.CancelFunc
 	scanning   bool
 	cancelled  bool
+	asks       chan dnsQuestion // polled on each scan tick
 	report     *scan.Report
 	err        error
+
+	last *lastScan // the last finished scan; a new setup keeps it
+}
+
+type lastScan struct {
+	rep  scan.Report
+	site string
 }
 
 type (
@@ -73,6 +94,10 @@ type (
 	}
 	scanTickMsg struct{}
 	enableMsg   struct{ err error }
+	engineMsg   struct {
+		eng engine.Engine
+		err error
+	}
 )
 
 func (scanPage) Title() string                                              { return i18n.T("shell.menu.scan") }
@@ -83,16 +108,29 @@ func (scanPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool)         { re
 func (scanPage) Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool) { return m.wizardKey(k, s) }
 func (scanPage) View(m Model, w, h int) string                              { return m.wizardView(w, h) }
 
-func (m *Model) openWizard() tea.Cmd {
-	m.focus, m.note = 0, ""
-	m.wiz = wizard{step: wDoctor, progress: &ring{max: 200}}
+// openWizard starts the setup for the preset trials.
+func (m *Model) openWizard() tea.Cmd { return m.startWizard(false) }
+
+// openSiteWizard starts the setup for a blockcheck2 scan of one site.
+func (m *Model) openSiteWizard() tea.Cmd { return m.startWizard(true) }
+
+func (m *Model) startWizard(site bool) tea.Cmd {
+	m.focus, m.note, m.inPage = 0, "", true
+	m.wiz = wizard{step: wDoctor, siteFlow: site, progress: &ring{max: 200}, last: m.wiz.last}
 	return m.runDoctor()
+}
+
+// resetWizard goes back to the page's choice of flows.
+func (m *Model) resetWizard() tea.Cmd {
+	m.wiz = wizard{last: m.wiz.last}
+	m.focus = 0
+	return nil
 }
 
 // finishWizard leaves the finished wizard for the status page.
 func (m *Model) finishWizard() {
-	m.wiz = wizard{}
-	m.page, m.inPage, m.focus = pgStatus, false, 0
+	m.resetWizard()
+	m.page, m.inPage = pgStatus, false
 }
 
 func (m *Model) runDoctor() tea.Cmd {
@@ -111,11 +149,47 @@ func blockers(cs []doctor.Check) []doctor.Check {
 	return out
 }
 
+// engineMissing reports whether the checks block on the engine, which the
+// wizard can install itself.
+func engineMissing(cs []doctor.Check) bool {
+	return slices.ContainsFunc(cs, func(c doctor.Check) bool { return c.ID == "engine" && c.Severity == doctor.Blocker })
+}
+
+// installEngine downloads and installs the pinned engine, then the checks rerun.
+func (m *Model) installEngine() tea.Cmd {
+	w := &m.wiz
+	if w.installing {
+		return nil
+	}
+	w.installing, w.installErr, m.note = true, nil, ""
+	b, ctx, logs := m.b, m.ctx, m.logs
+	return func() tea.Msg {
+		fmt.Fprintln(logs, i18n.T("engine.downloading", engine.URL))
+		e, err := b.EngineInstall(ctx, "")
+		return engineMsg{e, err}
+	}
+}
+
+// installFromCLI, then a file name, installs the engine from an archive
+// fetched another way.
+const installFromCLI = "sudo splitdpi engine install --from "
+
+// installErrText words an engine install error as `engine install` does.
+func installErrText(err error) string {
+	switch {
+	case errors.Is(err, engine.ErrChecksum):
+		return i18n.T("engine.err.checksum", engine.Version)
+	case errors.Is(err, engine.ErrArch):
+		return i18n.T("engine.err.arch", runtime.GOARCH)
+	}
+	return i18n.T("engine.err.install", err)
+}
+
 func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 	w := &m.wiz
 	switch msg := msg.(type) {
 	case doctorMsg:
-		w.checks, m.note = msg.checks, ""
+		w.checks, m.note, w.installed = msg.checks, w.installed, ""
 		if len(blockers(msg.checks)) == 0 {
 			w.step, m.focus = wLookup, 0
 			host, err := m.b.IPInfoHost()
@@ -133,8 +207,18 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		w.info = msg.info
-		m.chooseApps()
-		return m, nil, true
+		cmd := m.afterISP()
+		return m, cmd, true
+	case engineMsg:
+		w.installing = false
+		if msg.err != nil {
+			w.installErr = msg.err
+			fmt.Fprintln(m.logs, msg.err)
+			return m, nil, true
+		}
+		w.installed = i18n.T("engine.installed", engine.Version, msg.eng.Dir)
+		cmd := m.runDoctor()
+		return m, cmd, true
 	case appsAppliedMsg:
 		if msg.err != nil {
 			m.note = errText(msg.err)
@@ -144,11 +228,22 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		return m, cmd, true
 	case scanTickMsg:
 		if w.scanning {
+			if m.ask == nil {
+				select {
+				case q := <-w.asks:
+					m.openDNSAsk(q)
+				default:
+				}
+			}
 			return m, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }), true
 		}
 		return m, nil, true
 	case scanDoneMsg:
-		w.scanning = false
+		w.scanning, m.ask = false, nil
+		w.scanCancel()
+		if !w.cancelled && (msg.err == nil || errors.Is(msg.err, scan.ErrNoStrategy)) {
+			w.last = &lastScan{rep: msg.rep, site: w.site}
+		}
 		switch {
 		case w.cancelled:
 		case msg.err != nil:
@@ -184,6 +279,16 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 func (m Model) withCmd(f func(*Model) tea.Cmd) (Model, tea.Cmd) {
 	cmd := f(&m)
 	return m, cmd
+}
+
+// afterISP moves on once the ISP is known: to the apps for the preset
+// trials, or straight to the site for a site scan.
+func (m *Model) afterISP() tea.Cmd {
+	if m.wiz.siteFlow {
+		return m.askSite()
+	}
+	m.chooseApps()
+	return nil
 }
 
 // chooseApps moves to the apps step, preselecting the configured apps or
@@ -239,9 +344,20 @@ func (m Model) wizardActions() []action {
 	w := m.wiz
 	switch w.step {
 	case wIntro:
-		return []action{{Key: "w", Label: i18n.T("shell.scan.start"), CLI: "sudo splitdpi scan", Do: (*Model).openWizard}}
+		return []action{
+			{Key: "w", Label: i18n.T("tui.wiz.scan"), CLI: "sudo splitdpi scan", Do: (*Model).openWizard},
+			{Key: "s", Label: i18n.T("tui.wiz.scan_site"), CLI: "sudo splitdpi scan --site DOMAIN", Do: (*Model).openSiteWizard},
+		}
 	case wDoctor:
-		return []action{{Key: "enter", Label: i18n.T("tui.wiz.check_again"), CLI: "sudo splitdpi doctor", Do: (*Model).runDoctor}}
+		again := action{Key: "enter", Label: i18n.T("tui.wiz.check_again"), CLI: "sudo splitdpi doctor", Do: (*Model).runDoctor}
+		switch {
+		case w.installing:
+			return nil
+		case engineMissing(w.checks):
+			again.Key = "r"
+			return []action{{Key: "enter", Label: i18n.T("scan_page.install"), CLI: "sudo splitdpi engine install", Do: (*Model).installEngine}, again}
+		}
+		return []action{again}
 	case wLookup:
 		return []action{
 			{Key: "y", Label: i18n.T("tui.wiz.look_up"), CLI: "sudo splitdpi detect", Do: (*Model).detect},
@@ -279,7 +395,10 @@ func (m Model) wizardActions() []action {
 		if w.scanning {
 			return []action{{Key: "esc", Label: i18n.T("tui.wiz.cancel"), CLI: w.scanCLI(), Do: (*Model).cancelScan}}
 		}
-		return []action{{Key: "enter", Label: i18n.T("tui.wiz.scan_again"), CLI: w.scanCLI(), Do: (*Model).startScan}}
+		return []action{
+			{Key: "enter", Label: i18n.T("tui.wiz.scan_again"), CLI: w.scanCLI(), Do: (*Model).startScan},
+			{Key: "b", Label: i18n.T("scan_page.restart"), Do: (*Model).resetWizard},
+		}
 	case wDone:
 		return []action{
 			{Key: "r", Label: i18n.T("tui.wiz.run_now"), CLI: "sudo splitdpi run", Do: func(m *Model) tea.Cmd { m.finishWizard(); return m.runNow() }},
@@ -315,8 +434,7 @@ func (m *Model) pickISP() tea.Cmd {
 	if c := m.wiz.cursor; c < len(rows) && len(rows[c].ASN) > 0 {
 		m.wiz.info = scan.ASNInfo{ASN: rows[c].ASN[0], Country: rows[c].Country, Org: rows[c].Name}
 	}
-	m.chooseApps()
-	return nil
+	return m.afterISP()
 }
 
 func (m *Model) toggleWizApp() tea.Cmd {
@@ -392,15 +510,41 @@ func (m *Model) startScan() tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &m.wiz
 	w.step, w.scanning, w.cancelled, w.err, w.report, w.scanCancel = wScan, true, false, nil, nil, cancel
-	w.progress = &ring{max: 200}
+	w.progress, w.asks = &ring{max: 200}, make(chan dnsQuestion)
 	m.focus, m.note = 0, ""
-	opt := scan.Options{ASN: w.info.ASN, Country: w.info.Country, Apps: w.chosenList(), Site: w.site}
-	b, prog := m.b, w.progress
+	b, prog, logs, asks, g := m.b, w.progress, m.logs, w.asks, m.g
+	opt := scan.Options{
+		ASN: w.info.ASN, Country: w.info.Country, Apps: w.chosenList(), Site: w.site,
+		DNSCheck: func(ctx context.Context, poisoned []probe.DNSResult) string { return askDNS(ctx, asks, poisoned) },
+		Trial:    func(tr scan.Trial) { writeTrial(prog, logs, g, tr) },
+	}
 	run := func() tea.Msg {
 		rep, err := b.Scan(ctx, opt, func(l string) { prog.Write([]byte(l + "\n")) })
 		return scanDoneMsg{rep, err}
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))
+}
+
+// writeTrial lists a finished trial and why each probe failed in plain
+// words; the raw errors go to the log.
+func writeTrial(prog, logs io.Writer, g glyphs, tr scan.Trial) {
+	mark := g.fail
+	if tr.OK {
+		mark = g.on
+	}
+	id := tr.Candidate.Strategy.ID
+	fmt.Fprintf(prog, "%s %s\n", mark, id)
+	for _, r := range tr.Results {
+		if r.OK {
+			continue
+		}
+		host := r.URL
+		if u, err := url.Parse(r.URL); err == nil && u.Hostname() != "" {
+			host = u.Hostname()
+		}
+		fmt.Fprintf(prog, "    %s: %s\n", host, probe.Classify(r).What())
+		fmt.Fprintf(logs, "%s  %s  %s\n", id, r.URL, r.Err)
+	}
 }
 
 func (m *Model) cancelScan() tea.Cmd {
@@ -423,11 +567,20 @@ func (m Model) wizardKey(k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
 	w := &m.wiz
 	rows := 0
 	switch w.step {
+	case wIntro:
+		switch s {
+		case "up", "k", "down", "j":
+			m.focus = 1 - m.focus // the two flows
+			return m, nil, true
+		}
 	case wSite:
 		switch s {
 		case "enter":
 			return m, nil, false // the scan action submits
 		case "esc":
+			if w.siteFlow {
+				return m, m.resetWizard(), true
+			}
 			w.step, m.focus = wApps, 0
 			w.input.Blur()
 			return m, nil, true
@@ -467,7 +620,21 @@ func (m Model) wizardView(width, h int) string {
 	cursor := w.cursor
 	switch w.step {
 	case wIntro:
-		head = append(head, i18n.T("shell.scan.intro"))
+		head = append(head, i18n.T("shell.scan.intro"), "")
+		notes := []string{i18n.T("scan_page.quick_note"), i18n.T("scan_page.site_note")}
+		for i, a := range m.wizardActions() {
+			head = append(head, m.cursorMark(m.inPage && i == m.focus)+a.Label)
+			head = append(head, wrapIndented("    "+mutedStyle.Render(notes[i]), width)...)
+		}
+		if m.cfg.Strategy != nil || w.last != nil {
+			head = append(head, "")
+		}
+		if s := m.cfg.Strategy; s != nil {
+			head = append(head, row(width, i18n.T("tui.strategy"), s.ID+mutedStyle.Render("  "+s.Source)))
+		}
+		if l := w.last; l != nil {
+			head = append(head, row(width, i18n.T("scan_page.last"), l.summary()))
+		}
 	case wDoctor:
 		head = append(head, i18n.T("tui.wiz.doctor"))
 		for _, c := range w.checks {
@@ -481,6 +648,17 @@ func (m Model) wizardView(width, h int) string {
 			head = append(head, mark+" "+c.Msg)
 			if c.Fix != "" {
 				head = append(head, "    "+mutedStyle.Render("$ ")+commandStyle.Render(c.Fix))
+			}
+		}
+		if engineMissing(w.checks) {
+			switch {
+			case w.installing:
+				head = append(head, "", i18n.T("scan_page.installing", engine.Version))
+			case w.installErr != nil:
+				head = append(head, "", badStyle.Render(installErrText(w.installErr)), i18n.T("engine.download_hint", engine.URL),
+					"    "+mutedStyle.Render("$ ")+commandStyle.Render(installFromCLI+i18n.T("scan_page.file")))
+			default:
+				head = append(head, "", i18n.T("scan_page.install_offer", engine.Version))
 			}
 		}
 	case wLookup:
@@ -520,7 +698,9 @@ func (m Model) wizardView(width, h int) string {
 		case w.err != nil:
 			head = append(head, badStyle.Render(errText(w.err)))
 		}
-		list = w.progress.Last(h)
+		for _, l := range w.progress.Last(h) {
+			list = append(list, wrapIndented(l, width)...)
+		}
 		cursor = len(list) - 1
 	case wDone:
 		r := w.report
@@ -528,13 +708,43 @@ func (m Model) wizardView(width, h int) string {
 		if r.VoiceUnverified {
 			head = append(head, warnStyle.Render(i18n.T("scan.voice")))
 		}
-		head = append(head, "", i18n.T("tui.wiz.how"))
+		// The link stays whole, on lines of its own, for copying.
+		if u := ops.ShareURL(*r, m.version); u != "" {
+			head = append(head, "", i18n.T("scan_page.share"), ansi.Hardwrap(u, width, false))
+		}
+		// The question repeats the footer keys; it gives way to the link.
+		how := append(slices.Clone(head), "", i18n.T("tui.wiz.how"))
+		if lipgloss.Height(lipgloss.NewStyle().Width(width).Render(strings.Join(how, "\n"))) <= h {
+			head = how
+		}
 	}
 	text := lipgloss.NewStyle().Width(width).Render(strings.Join(head, "\n"))
 	if len(list) == 0 {
 		return text
 	}
 	return text + "\n" + strings.Join(scroll(list, cursor, h-lipgloss.Height(text), width), "\n")
+}
+
+// wrapIndented wraps s to width, continuing under its leading spaces.
+func wrapIndented(s string, width int) []string {
+	text := strings.TrimLeft(s, " ")
+	pad := strings.Repeat(" ", len(s)-len(text))
+	lines := strings.Split(ansi.Wrap(text, max(width-len(pad), 10), ""), "\n")
+	for i := range lines {
+		lines[i] = pad + lines[i]
+	}
+	return lines
+}
+
+func (l lastScan) summary() string {
+	s := i18n.T("scan_page.last_none", len(l.rep.Trials))
+	if l.rep.Winner != nil {
+		s = i18n.T("scan_page.last_won", len(l.rep.Trials), l.rep.Winner.ID)
+	}
+	if l.site != "" {
+		s += mutedStyle.Render("  " + l.site)
+	}
+	return s
 }
 
 func asns(a []int) string {
