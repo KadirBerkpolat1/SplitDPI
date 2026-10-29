@@ -56,6 +56,14 @@ zapret2 motorunu kendisi kurar, sağlayıcınızı bulur, hangi uygulamaların
 çalışması gerektiğini sorar, stratejileri dener ve SplitDPI'yi hemen ya da her
 açılışta çalıştırır.
 
+Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
+`splitdpi run`) çalışırsa pencere kapanınca durur. Bu oturum için arka planda
+(`b` ya da `sudo splitdpi run --background`) çalışırsa terminal kapansa da
+sürer, bilgisayar yeniden başlayınca kapanır; arayüz engel aşmayı kendisi
+çalıştırırken çıkarsanız onu arka plana almayı önerir. Her açılışta
+(`sudo splitdpi enable`) servis olarak çalışır. Hangisi olursa olsun
+`sudo splitdpi stop` durdurur.
+
 ## Terminal arayüzü
 
 - **Üstte:** adı ve sürümü, sağda da engel aşmanın çalışıp çalışmadığını ya
@@ -86,6 +94,7 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 | `splitdpi probe [--apps ID,ID] [-v]` | Açık uygulamaların sitelerine ve kendi sitelerinize erişilip erişilemediğini dener; erişilemeyenin nedenini söyler. |
 | `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da tarama yapmadan birini seçer. |
 | `splitdpi run` | Bu terminalde çalışır; Ctrl-C durdurur ve kurallarını kaldırır. |
+| `splitdpi run --background` | Terminal kapansa da bilgisayar yeniden başlayana kadar çalışır; çıktısı `/var/log/splitdpi.log` dosyasına yazılır. |
 | `splitdpi enable` / `disable` | Servisi kurup başlatır ya da durdurup kaldırır. |
 | `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ya da günlüğünü gösterir. |
 | `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |

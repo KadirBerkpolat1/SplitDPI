@@ -186,7 +186,7 @@ ok = "no DNS poisoning detected for enabled apps"
 poisoned = "DNS poisoning for %s: %s"
 
 [cmd.run]
-help = "Run the bypass in the foreground (Ctrl-C stops it and removes the rules)."
+help = "Run the bypass in the foreground (Ctrl-C stops it and removes the rules); --background keeps it running after the terminal closes, until reboot."
 
 [cmd.stop]
 help = "Stop the running bypass."
@@ -198,7 +198,7 @@ help = "Show whether the bypass runs, with strategy, engine, apps and the last e
 help = "Remove every splitdpi firewall rule and run file ([--purge] also config and data)."
 
 [run]
-usage = "Usage: splitdpi run [--service]"
+usage = "Usage: splitdpi run [--background | --service]"
 conflict = "Another DPI-bypass tool is running. Stop it first, then run splitdpi again."
 no_strategy = "No strategy configured yet. Run `splitdpi scan` first."
 already = "splitdpi is already running (%s). Use `splitdpi stop` first."
@@ -267,6 +267,7 @@ failed = "failed"
 foreground = "foreground"
 service = "service"
 scan = "scan"
+background = "background (stops at reboot)"
 
 [tui]
 process = "%s, pid %d"
@@ -282,7 +283,6 @@ last_error = "Last error"
 none = "none"
 running_here = "running in this window"
 probing = "Checking the apps' sites..."
-confirm_quit = "Stop bypass and quit? [y] yes  [n] no"
 logs_empty = "Nothing logged yet."
 
 [tui.act]
@@ -650,3 +650,17 @@ tls = "Your provider may be redirecting the site. Turn on encrypted DNS on the S
 http = "Try the Scan page. If it keeps happening, turn on encrypted DNS on the Settings page."
 other = "The technical detail is on the Logs page. Also check that the site opens at all."
 noaddress = "Nothing to do: this is not a block. If you use the site, add the address you actually open, such as its www. subdomain."
+
+[background]
+started = "SplitDPI is running in the background (pid %d). You can close this terminal; it stops when the computer restarts. To stop it sooner: sudo splitdpi stop"
+not_started = "SplitDPI did not start in the background. The reason is in its log: %s"
+
+[background_tui]
+act = "Run in background"
+hint = "Keeps running when the terminal closes; stops when the computer restarts."
+starting = "Starting in the background..."
+started = "Running in the background (pid %d). You can close this window."
+quit = "The bypass runs in this window. What should happen to it?"
+quit_stop = "stop and quit"
+quit_background = "keep it in the background, quit"
+quit_cancel = "cancel"

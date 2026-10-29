@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"runtime"
 	"time"
 
@@ -27,6 +28,9 @@ type Ops struct {
 	Spawn func(argv []string) (supervisor.Child, error)
 	// Log receives nfqws2 output and supervisor messages; nil discards them.
 	Log io.Writer
+	// Detach starts the process of `run --background` and reports when it
+	// exits; nil means c.Start.
+	Detach func(c *exec.Cmd) (exited <-chan error, err error)
 }
 
 // New returns Ops wired to the real system. Our own files live under p;

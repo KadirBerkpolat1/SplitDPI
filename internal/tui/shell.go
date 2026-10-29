@@ -149,7 +149,10 @@ func (m Model) footer() string {
 	note := lipgloss.NewStyle().Width(m.width).MaxHeight(3)
 	switch {
 	case m.confirmQuit:
-		lines = append(lines, note.Render(warnStyle.Render(i18n.T("tui.confirm_quit"))))
+		lines = append(lines, note.Render(warnStyle.Render(i18n.T("background_tui.quit"))+"\n"+
+			hint(i18n.T("confirm_keys.yes"), i18n.T("background_tui.quit_stop"))+"   "+
+			hint("b", i18n.T("background_tui.quit_background"))+"   "+
+			hint(i18n.T("confirm_keys.no"), i18n.T("background_tui.quit_cancel"))))
 	case m.note != "":
 		lines = append(lines, note.Render(m.note))
 	}

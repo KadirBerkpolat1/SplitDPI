@@ -46,6 +46,7 @@ type fake struct {
 	cfg        config.Config
 	runCtx     context.Context
 	runStart   chan struct{}
+	bgErr      error
 	logs       string
 	logsFollow bool // Logs blocks until cancelled, like a real follow
 	logsErr    error
@@ -106,7 +107,18 @@ func (f *fake) Run(ctx context.Context, service bool) error {
 	f.mu.Unlock()
 	f.runStart <- struct{}{}
 	<-ctx.Done()
+	f.record("run ended")
 	return nil
+}
+func (f *fake) Background(ctx context.Context) (int, error) {
+	f.record("background")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.bgErr != nil {
+		return 0, f.bgErr
+	}
+	f.st = supervisor.Status{State: "running", Mode: "background", PID: 4343}
+	return 4343, nil
 }
 func (f *fake) Stop() error { f.record("stop"); return nil }
 func (f *fake) Logs(ctx context.Context, follow bool, w io.Writer) error {
@@ -407,6 +419,8 @@ func TestFocusMovesFooterCommand(t *testing.T) {
 	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
 	m := press(t, newModel(t, f), "enter")
 	has(t, m.View(), "$ sudo splitdpi run")
+	m = press(t, m, "tab")
+	has(t, m.View(), "$ sudo splitdpi run --background")
 	m = press(t, m, "tab")
 	has(t, m.View(), "$ sudo splitdpi probe")
 }
@@ -750,7 +764,7 @@ func TestRunNowAsksBeforeQuit(t *testing.T) {
 			t.Fatal("quit without asking while the bypass runs")
 		}
 	}
-	has(t, m.View(), "Stop bypass and quit?")
+	has(t, m.View(), "The bypass runs in this window")
 	m, cmd = update(t, m, key("y"))
 	if f.runCtx.Err() == nil {
 		t.Error("run not cancelled")
@@ -1144,6 +1158,14 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 	f.cfg.DisclaimerAccepted = false
 	views["disclaimer"] = prep(newModel(t, f)).View()
 	f.cfg.DisclaimerAccepted = true
+
+	f.st = supervisor.Status{State: "stopped"}
+	views["status stopped"] = prep(newModel(t, f)).View()
+	q := prep(newModel(t, f))
+	q.running, q.confirmQuit = true, true
+	views["quit prompt"] = q.View()
+	f.st = supervisor.Status{State: "running", Mode: "background", PID: 4242}
+	views["status background"] = prep(newModel(t, f)).View()
 	return views
 }
 

@@ -31,6 +31,7 @@ import (
 type Backend interface {
 	Status() (supervisor.Status, config.Config, error)
 	Run(ctx context.Context, service bool) error
+	Background(ctx context.Context) (int, error)
 	Stop() error
 	Logs(ctx context.Context, follow bool, w io.Writer) error
 	Probe(ctx context.Context, apps []string) (map[string][]probe.Result, error)
@@ -119,6 +120,11 @@ type Model struct {
 	runFinished chan struct{}
 	confirmQuit bool
 	quitting    bool
+
+	// The bypass this TUI starts in the background (run --background).
+	bgStarting   bool
+	toBackground bool // quitting moves the bypass run here to the background
+	bgPID        int  // the background run quitting left behind
 }
 
 func New(ctx context.Context, b Backend, version string) Model {
@@ -129,7 +135,8 @@ func New(ctx context.Context, b Backend, version string) Model {
 
 // Run opens the TUI on the terminal. The bypass it may run is stopped (and
 // its rules removed) before Run returns; then the share link of a strategy
-// saved in this session is printed where the scrollback keeps it.
+// saved in this session, and the background run quitting left, are printed
+// where the scrollback keeps them.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
@@ -137,6 +144,7 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 	if fm, ok := final.(Model); ok {
 		fm.stopRun()
 		fm.printShare(m.out)
+		fm.printBackground(m.out)
 	}
 	return err
 }
@@ -207,11 +215,12 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case m.confirmQuit:
 		switch s {
-		case "y", "enter":
-			m.confirmQuit, m.quitting = false, true
+		case "y", "e", "enter", "b":
+			// runDoneMsg quits, or first starts the background run for "b".
+			m.confirmQuit, m.quitting, m.toBackground = false, true, s == "b"
 			m.stopAll()
 			m.runCancel()
-		case "n", "esc":
+		case "n", "h", "esc":
 			m.confirmQuit = false
 		}
 		return m, nil
@@ -351,7 +360,13 @@ func (m *Model) stopAll() {
 // errText words an ops error for the note line, as the CLI does.
 func errText(err error) string {
 	var conflict ops.ConflictError
+	var already supervisor.ErrAlreadyRunning
+	var notStarted ops.BackgroundNotStartedError
 	switch {
+	case errors.As(err, &notStarted):
+		return i18n.T("background.not_started", notStarted.Log)
+	case errors.As(err, &already):
+		return i18n.T("run.already", i18n.Enum("mode", already.Mode))
 	case errors.As(err, &conflict):
 		msgs := []string{i18n.T("run.conflict")}
 		for _, c := range conflict.Checks {

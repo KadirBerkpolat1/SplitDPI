@@ -191,7 +191,7 @@ ok = "açık uygulamalarda DNS zehirlenmesi bulunmadı"
 poisoned = "%s için DNS zehirlenmesi: %s"
 
 [cmd.run]
-help = "Engel aşmayı ön planda çalıştırır (Ctrl-C durdurur ve kuralları kaldırır)."
+help = "Engel aşmayı ön planda çalıştırır (Ctrl-C durdurur ve kuralları kaldırır); --background ile terminal kapansa da bilgisayar yeniden başlayana kadar çalışır."
 
 [cmd.stop]
 help = "Çalışan engel aşmayı durdurur."
@@ -203,7 +203,7 @@ help = "Engel aşmanın çalışıp çalışmadığını, stratejiyi, motoru, uy
 help = "splitdpi'nin tüm güvenlik duvarı kurallarını ve çalışma dosyalarını kaldırır ([--purge] ayarları ve verileri de)."
 
 [run]
-usage = "Kullanım: splitdpi run [--service]"
+usage = "Kullanım: splitdpi run [--background | --service]"
 conflict = "Başka bir DPI engel aşma aracı çalışıyor. Önce onu durdurun, sonra splitdpi'yi yeniden çalıştırın."
 no_strategy = "Henüz strateji yok. Önce `splitdpi scan` çalıştırın."
 already = "splitdpi zaten çalışıyor (%s). Önce `splitdpi stop` kullanın."
@@ -272,6 +272,7 @@ failed = "hata verdi"
 foreground = "ön plan"
 service = "servis"
 scan = "tarama"
+background = "arka plan (yeniden başlatınca kapanır)"
 
 [tui]
 process = "%s, pid %d"
@@ -287,7 +288,6 @@ last_error = "Son hata"
 none = "yok"
 running_here = "bu pencerede çalışıyor"
 probing = "Uygulamaların sitelerine erişim deneniyor..."
-confirm_quit = "Engel aşma durdurulup çıkılsın mı? [y] evet  [n] hayır"
 logs_empty = "Henüz kayıt yok."
 
 [tui.act]
@@ -650,3 +650,17 @@ tls = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Ayarlar sayf
 http = "Tarama sayfasını deneyin. Sorun sürerse Ayarlar sayfasından şifreli DNS'i açın."
 other = "Teknik ayrıntı Günlük sayfasında. Sitenin hiç açılıp açılmadığını da kontrol edin."
 noaddress = "Yapmanız gereken bir şey yok: bu bir engel değil. Siteyi kullanıyorsanız gerçekten açtığınız adresi, örneğin www. ile başlayanı ekleyin."
+
+[background]
+started = "SplitDPI arka planda çalışıyor (pid %d). Terminali kapatabilirsiniz; bilgisayar yeniden başlayınca durur. Daha önce durdurmak için: sudo splitdpi stop"
+not_started = "SplitDPI arka planda başlamadı. Nedeni günlüğünde: %s"
+
+[background_tui]
+act = "Arka planda çalıştır"
+hint = "Terminal kapansın da çalışmaya devam eder; bilgisayar yeniden başlayınca kapanır."
+starting = "Arka planda başlatılıyor..."
+started = "Arka planda çalışıyor (pid %d). Bu pencereyi kapatabilirsiniz."
+quit = "Engel aşma bu pencerede çalışıyor. Çıkarken ne yapılsın?"
+quit_stop = "durdur ve çık"
+quit_background = "arka planda sürsün, çık"
+quit_cancel = "vazgeç"

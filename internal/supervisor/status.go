@@ -15,7 +15,7 @@ import (
 // Status is written to StatusFile on every state change.
 type Status struct {
 	State      string    `json:"state"` // running|stopped|failed
-	Mode       string    `json:"mode"`  // foreground|service
+	Mode       string    `json:"mode"`  // foreground|background|service|scan
 	PID        int       `json:"pid"`   // the supervisor
 	ChildPID   int       `json:"child_pid,omitempty"`
 	Strategy   string    `json:"strategy"`
