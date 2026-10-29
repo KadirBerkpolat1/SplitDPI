@@ -69,6 +69,7 @@ shows the command that does the same thing, so you can script it.
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
 | `splitdpi dns on\|off` | Sends DNS through a built-in DNS-over-HTTPS forwarder. |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
+| `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
 
 All commands except `--help`, `version` and `presets list` need root. Add
 `--lang tr` or `--lang en` to pick a language; otherwise SplitDPI
@@ -134,6 +135,12 @@ and its runtime files, and then checks that nothing is left. It prints
 Revert never reads the configuration, so a broken config cannot block it. If
 SplitDPI is killed, its queue rules stay in place but let all traffic through
 until you run `revert` or start it again.
+
+## Removing SplitDPI
+
+`sudo splitdpi uninstall` lists what it would remove and changes nothing.
+`sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
+the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove.
 
 ## Reporting a strategy
 

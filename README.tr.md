@@ -72,6 +72,7 @@ betik yazabilirsiniz.
 | `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
 | `splitdpi dns on\|off` | DNS'i yerleşik DNS-over-HTTPS ileticisinden geçirir. |
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
+| `splitdpi uninstall [--yes]` | SplitDPI'yi, dosyalarını ve programını kaldırır. |
 
 `--help`, `version` ve `presets list` dışındaki tüm komutlar root ister. Dili
 seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz
@@ -144,6 +145,13 @@ de siler. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar dosyası onu
 engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları yerinde kalır
 ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar tüm trafiği
 geçirir.
+
+## SplitDPI'yi kaldırma
+
+`sudo splitdpi uninstall` neleri sileceğini listeler, hiçbir şeyi değiştirmez.
+`sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
+günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
+kalırsa onu listeler.
 
 ## Strateji bildirme
 

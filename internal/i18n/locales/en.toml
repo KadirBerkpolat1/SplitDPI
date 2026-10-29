@@ -359,3 +359,17 @@ crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving u
 install = "Engine install failed: %v"
 checksum = "SHA-256 mismatch: the archive is not zapret2 %s (corrupted or wrong file). The installed engine was not changed."
 arch = "Unsupported architecture %s (supported: amd64, arm64)."
+
+[cmd.uninstall]
+help = "Remove SplitDPI completely: service, rules, settings, data, log and the program ([--yes] confirms)."
+
+[uninstall]
+usage = "Usage: splitdpi uninstall [--yes]"
+nothing = "SplitDPI has no service or files to remove here."
+plan = "Uninstalling stops SplitDPI, removes its firewall rules and deletes:"
+item = "  %s"
+confirm = "Nothing was changed. To uninstall, run: sudo splitdpi uninstall --yes"
+removed = "Removed %s"
+leftover = "Still present: %s"
+done = "SplitDPI is uninstalled."
+not_clean = "Uninstall did not finish; the items above are still present. Fix them, then run `sudo splitdpi uninstall --yes` again."

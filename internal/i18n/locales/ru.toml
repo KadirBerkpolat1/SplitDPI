@@ -359,3 +359,17 @@ body = "SplitDPI меняет то, как этот компьютер отпр�
 started = "nfqws2 запущен (pid %d)"
 restarting = "nfqws2 остановился (%v); перезапуск через %s"
 crash_loop = "nfqws2 упал %d раз за %s; правила брандмауэра удалены, перезапусков больше не будет"
+
+[cmd.uninstall]
+help = "Полностью удалить SplitDPI: службу, правила, настройки, данные, журнал и саму программу ([--yes] подтверждает)."
+
+[uninstall]
+usage = "Использование: splitdpi uninstall [--yes]"
+nothing = "Здесь нет службы или файлов SplitDPI для удаления."
+plan = "Удаление остановит SplitDPI, уберёт его правила брандмауэра и удалит:"
+item = "  %s"
+confirm = "Ничего не изменено. Чтобы удалить, выполните: sudo splitdpi uninstall --yes"
+removed = "Удалено: %s"
+leftover = "Осталось: %s"
+done = "SplitDPI удалён."
+not_clean = "Удаление не завершено; перечисленное выше всё ещё на месте. Исправьте это и снова выполните `sudo splitdpi uninstall --yes`."

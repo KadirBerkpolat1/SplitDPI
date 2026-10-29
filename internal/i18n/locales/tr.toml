@@ -359,3 +359,17 @@ body = "SplitDPI, bu bilgisayarın bazı ağ trafiğini derin paket incelemesind
 started = "nfqws2 başladı (pid %d)"
 restarting = "nfqws2 durdu (%v); %s sonra yeniden başlatılıyor"
 crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralları kaldırıldı, vazgeçildi"
+
+[cmd.uninstall]
+help = "SplitDPI'yi tamamen kaldırır: servis, kurallar, ayarlar, veriler, günlük ve program ([--yes] onaylar)."
+
+[uninstall]
+usage = "Kullanım: splitdpi uninstall [--yes]"
+nothing = "Burada kaldırılacak bir SplitDPI servisi ya da dosyası yok."
+plan = "Kaldırma, SplitDPI'yi durdurur, güvenlik duvarı kurallarını kaldırır ve şunları siler:"
+item = "  %s"
+confirm = "Hiçbir şey değiştirilmedi. Kaldırmak için şunu çalıştırın: sudo splitdpi uninstall --yes"
+removed = "Kaldırıldı: %s"
+leftover = "Hâlâ duruyor: %s"
+done = "SplitDPI kaldırıldı."
+not_clean = "Kaldırma tamamlanmadı; yukarıdakiler hâlâ duruyor. Sorunu giderip `sudo splitdpi uninstall --yes` komutunu yeniden çalıştırın."
