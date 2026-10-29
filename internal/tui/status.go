@@ -136,7 +136,7 @@ func (statusPage) View(m Model, w, _ int) string {
 		apps = strings.Join(m.cfg.Apps, ", ")
 	}
 	lines = append(lines, row(w, i18n.T("tui.apps"), apps))
-	if m.cfg.DNS {
+	if m.cfg.DNSOn() {
 		lines = append(lines, row(w, i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
 	}
 	for _, id := range slices.Sorted(maps.Keys(m.probe)) {

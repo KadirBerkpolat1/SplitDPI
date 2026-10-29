@@ -12,9 +12,9 @@ import (
 	"testing/fstest"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
-	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
 func TestMain(m *testing.M) {
@@ -39,7 +39,7 @@ func newFake(t *testing.T) *fake {
 	}
 	f := &fake{
 		root: fstest.MapFS{
-			"etc/os-release":           {Data: osr},
+			"etc/os-release":            {Data: osr},
 			"proc/sys/kernel/osrelease": {Data: []byte("6.12.48+deb13-amd64\n")},
 			"run/systemd/system":        {Mode: os.ModeDir},
 		},
@@ -218,7 +218,11 @@ func TestConflictProcess(t *testing.T) {
 		f := newFake(t)
 		f.root["opt/zapret2"] = &fstest.MapFile{Mode: os.ModeDir}
 		f.env.Procs = func() ([]doctor.Proc, error) { return procs("bash", name), nil }
-		has(t, one(t, doctor.Conflicts(context.Background(), f.env), "conflict", doctor.Blocker).Msg, name)
+		c := one(t, doctor.Conflicts(context.Background(), f.env), "conflict", doctor.Blocker)
+		has(t, c.Msg, name)
+		if want := "sudo splitdpi takeover"; name == "ciadpi" && c.Fix == want || name != "ciadpi" && c.Fix != want {
+			t.Errorf("%s: fix %q", name, c.Fix)
+		}
 	}
 }
 
@@ -230,7 +234,7 @@ func TestOwnChildNotConflict(t *testing.T) {
 	f.env.Procs = func() ([]doctor.Proc, error) {
 		return []doctor.Proc{
 			{PID: sup, PPID: 1, Comm: "splitdpi"},
-			{PID: 4242, PPID: 1, Comm: "nfqws2"},  // recorded child, e.g. reparented
+			{PID: 4242, PPID: 1, Comm: "nfqws2"},   // recorded child, e.g. reparented
 			{PID: 4300, PPID: sup, Comm: "nfqws2"}, // a child of the lock holder
 			{PID: 4400, PPID: sup, Comm: "splitdpi"},
 			{PID: 4401, PPID: 4400, Comm: "nfqws2"}, // under the guard: a grandchild

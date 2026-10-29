@@ -928,7 +928,7 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 	f.excluded = []string{"bank.example"}
 	f.strategies = testStrategies()
 	f.logs = "nfqws2 started (pid 42)\n"
-	f.cfg.DNS = true
+	f.cfg.DNSProvider = "auto"
 	f.st = supervisor.Status{State: "running", Mode: "service", PID: 4242, Engine: "v1.0.6", LastError: "nfqws2 stopped (exit status 1)"}
 	f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
 	f.checks = []doctor.Check{{ID: "nft", Severity: doctor.Blocker, Msg: "nft is not installed", Fix: "sudo apt install nftables"}}
@@ -998,7 +998,7 @@ func TestPagesFit80x24(t *testing.T) {
 		}
 		// A wrapped value continues under the value column, not under the labels.
 		f := newFake()
-		f.cfg.DNS = true
+		f.cfg.DNSProvider = "auto"
 		lines := strings.Split((statusPage{}).View(newModel(t, f), 60, 18), "\n")
 		for i, l := range lines {
 			if strings.HasPrefix(l, i18n.T("tui.dns")+" ") && i+1 < len(lines) && strings.TrimSpace(lines[i+1]) != "" {

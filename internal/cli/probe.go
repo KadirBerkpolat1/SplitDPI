@@ -10,6 +10,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
 func init() {
@@ -17,7 +18,7 @@ func init() {
 }
 
 func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
-	apps, err := parseProbeArgs(args)
+	apps, verbose, err := parseProbeArgs(args)
 	if err != nil {
 		return usageError(i18n.T("probe.usage"))
 	}
@@ -48,17 +49,15 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 	var failed bool
 	for app, rs := range results {
 		for _, r := range rs {
-			mark := "✗"
 			if r.OK {
-				mark = "✓"
-			} else {
-				failed = true
+				fmt.Fprintf(w, "%s  %s  ✓\n", app, r.URL)
+				continue
 			}
-			line := fmt.Sprintf("%s  %s  %s", app, r.URL, mark)
-			if !r.OK && r.Err != "" {
-				line += "  (" + r.Err + ")"
-			}
-			fmt.Fprintln(w, line)
+			failed = true
+			cat := probe.Classify(r)
+			fmt.Fprintf(w, "%s  %s  ✗  %s\n", app, r.URL, cat.What())
+			fmt.Fprintln(w, "    "+cat.Todo())
+			printRawErr(w, r, verbose)
 		}
 	}
 	if failed {
@@ -67,28 +66,36 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 	return nil
 }
 
-func parseProbeArgs(args []string) ([]string, error) {
-	if len(args) == 0 {
-		return nil, nil
+// printRawErr shows the error behind a failed probe, only when asked for.
+func printRawErr(w io.Writer, r probe.Result, verbose bool) {
+	if verbose && r.Err != "" {
+		fmt.Fprintln(w, "    "+r.Err)
 	}
-	if len(args) == 1 && args[0] == "--apps" {
-		return nil, fmt.Errorf("missing value")
-	}
-	if len(args) == 2 && args[0] == "--apps" {
-		var apps []string
-		for _, a := range strings.Split(args[1], ",") {
-			a = strings.TrimSpace(a)
-			if a == "" {
-				continue
+}
+
+func parseProbeArgs(args []string) (apps []string, verbose bool, err error) {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-v", "--verbose":
+			verbose = true
+		case "--apps":
+			if i+1 >= len(args) || apps != nil {
+				return nil, false, fmt.Errorf("usage")
 			}
-			apps = append(apps, a)
+			i++
+			for _, a := range strings.Split(args[i], ",") {
+				if a = strings.TrimSpace(a); a != "" {
+					apps = append(apps, a)
+				}
+			}
+			if len(apps) == 0 {
+				return nil, false, fmt.Errorf("empty")
+			}
+		default:
+			return nil, false, fmt.Errorf("usage")
 		}
-		if len(apps) == 0 {
-			return nil, fmt.Errorf("empty")
-		}
-		return apps, nil
 	}
-	return nil, fmt.Errorf("usage")
+	return apps, verbose, nil
 }
 
 func appsForProbe(o *ops.Ops, apps []string) ([]string, error) {

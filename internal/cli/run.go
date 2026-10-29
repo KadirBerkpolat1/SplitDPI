@@ -98,7 +98,7 @@ func runStatus(_ context.Context, o *ops.Ops, w io.Writer, args []string) error 
 		fmt.Fprintln(w, i18n.T("status.engine", st.Engine))
 	}
 	fmt.Fprintln(w, i18n.T("status.apps", strings.Join(cfg.Apps, ", ")))
-	if cfg.DNS {
+	if cfg.DNSOn() {
 		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if st.LastError != "" {
@@ -125,6 +125,9 @@ func runRevert(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	r := o.Revert(ctx, rulesOnly, purge)
 	for _, d := range r.Removed {
 		fmt.Fprintln(w, i18n.T("revert.removed", d))
+	}
+	for _, s := range r.Restored {
+		fmt.Fprintln(w, i18n.T("takeover.restored", s))
 	}
 	if len(r.Leftover) == 0 {
 		fmt.Fprintln(w, i18n.T("revert.clean"))

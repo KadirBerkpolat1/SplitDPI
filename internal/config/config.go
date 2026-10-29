@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/BurntSushi/toml"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
@@ -32,25 +33,31 @@ type Strategy struct {
 }
 
 type Config struct {
-	Lang               string    `toml:"lang"`
-	Mode               Mode      `toml:"mode"`
-	Apps               []string  `toml:"apps"`
-	Strategy           *Strategy `toml:"strategy"`
-	QNum               int       `toml:"qnum"`
-	SkipIfaces         []string  `toml:"skip_ifaces"`
-	DNS                bool      `toml:"dns"`
-	IPInfoURL          string    `toml:"ipinfo_url"`
-	DisclaimerAccepted bool      `toml:"disclaimer_accepted"`
+	Lang               string       `toml:"lang"`
+	Mode               Mode         `toml:"mode"`
+	Apps               []string     `toml:"apps"`
+	Strategy           *Strategy    `toml:"strategy"`
+	QNum               int          `toml:"qnum"`
+	SkipIfaces         []string     `toml:"skip_ifaces"`
+	DNSProvider        string       `toml:"dns_provider"`
+	DNSProtocol        dns.Protocol `toml:"dns_protocol"`
+	IPInfoURL          string       `toml:"ipinfo_url"`
+	DisclaimerAccepted bool         `toml:"disclaimer_accepted"`
 }
 
 func Default() Config {
 	return Config{
-		Mode:       ModeBroad,
-		QNum:       200,
-		SkipIfaces: []string{"wg*", "tun*", "tailscale*"},
-		IPInfoURL:  "https://ipinfo.io/json",
+		Mode:        ModeBroad,
+		QNum:        200,
+		SkipIfaces:  []string{"wg*", "tun*", "tailscale*"},
+		DNSProvider: dns.Off,
+		DNSProtocol: dns.DoH,
+		IPInfoURL:   "https://ipinfo.io/json",
 	}
 }
+
+// DNSOn reports whether port-53 traffic goes to the encrypted DNS forwarder.
+func (c Config) DNSOn() bool { return c.DNSProvider != "" && c.DNSProvider != dns.Off }
 
 func Load(p paths.Paths) (Config, error) {
 	b, err := os.ReadFile(p.ConfigFile)
@@ -79,6 +86,26 @@ func Load(p paths.Paths) (Config, error) {
 	}
 	if !meta.IsDefined("ipinfo_url") {
 		c.IPInfoURL = "https://ipinfo.io/json"
+	}
+	if !meta.IsDefined("dns_provider") {
+		// v0.1 had `dns = true|false`, which meant today's auto over DoH.
+		var old struct {
+			DNS bool `toml:"dns"`
+		}
+		toml.Decode(string(b), &old)
+		c.DNSProvider = dns.Off
+		if old.DNS {
+			c.DNSProvider = dns.Auto
+		}
+	}
+	if !meta.IsDefined("dns_protocol") {
+		c.DNSProtocol = dns.DoH
+	}
+	if !dns.Valid(c.DNSProvider) {
+		return Config{}, fmt.Errorf("%s: invalid dns_provider %q", filepath.Base(p.ConfigFile), c.DNSProvider)
+	}
+	if c.DNSProtocol != dns.DoH && c.DNSProtocol != dns.DoT {
+		return Config{}, fmt.Errorf("%s: invalid dns_protocol %q", filepath.Base(p.ConfigFile), c.DNSProtocol)
 	}
 	return c, nil
 }
@@ -142,15 +169,25 @@ func ReadList(path string) ([]string, error) {
 	return out, sc.Err()
 }
 
-func AddToList(path string, d string) error {
+// AddToList appends the entries of ds that the list does not have yet.
+func AddToList(path string, ds ...string) error {
 	lines, err := ReadList(path)
 	if err != nil {
 		return err
 	}
-	for _, existing := range lines {
-		if existing == d {
-			return nil
+	have := make(map[string]bool, len(lines)+len(ds))
+	for _, l := range lines {
+		have[l] = true
+	}
+	var add strings.Builder
+	for _, d := range ds {
+		if !have[d] {
+			have[d] = true
+			add.WriteString(d + "\n")
 		}
+	}
+	if add.Len() == 0 {
+		return nil
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
@@ -161,7 +198,7 @@ func AddToList(path string, d string) error {
 	if err != nil {
 		return err
 	}
-	line := d + "\n"
+	line := add.String()
 	if fi.Size() > 0 {
 		last := make([]byte, 1)
 		if _, err := f.ReadAt(last, fi.Size()-1); err != nil {

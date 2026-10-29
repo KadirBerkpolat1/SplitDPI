@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,11 +43,25 @@ func doh(t *testing.T, n int) *httptest.Server {
 	return srv
 }
 
-func start(t *testing.T, client *http.Client, upstreams ...string) *dns.Forwarder {
+// dohUpstreams turns httptest URLs (https://127.0.0.1:port) into upstreams.
+func dohUpstreams(t *testing.T, urls ...string) []dns.Upstream {
+	t.Helper()
+	var out []dns.Upstream
+	for _, u := range urls {
+		a, err := netip.ParseAddrPort(strings.TrimPrefix(u, "https://"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, dns.Upstream{Protocol: dns.DoH, Addr: a})
+	}
+	return out
+}
+
+func start(t *testing.T, client *http.Client, urls ...string) *dns.Forwarder {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	f := &dns.Forwarder{Upstreams: upstreams, Client: client, Port: 0}
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, urls...), HTTP: client}, Port: 0}
 	if err := f.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +201,7 @@ func TestTruncatesLargeUDPAnswer(t *testing.T) {
 func TestStopsOnCancel(t *testing.T) {
 	up := doh(t, 1)
 	ctx, cancel := context.WithCancel(context.Background())
-	f := &dns.Forwarder{Upstreams: []string{up.URL}, Client: up.Client()}
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}}
 	if err := f.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

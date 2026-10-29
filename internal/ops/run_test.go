@@ -160,7 +160,7 @@ func TestPrepareDNS(t *testing.T) {
 	if j.sup.StartDNS != nil || strings.Contains(j.ruleset, "redirect") {
 		t.Error("DNS forwarder or redirect without dns = true")
 	}
-	cfg.DNS = true
+	cfg.DNSProvider = "auto"
 	if j, err = o.prepare(cfg, "foreground", nil, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestGuardOptions(t *testing.T) {
 	if opts := guardOptions(cfg, p); len(opts) != 0 {
 		t.Errorf("dns off: %q", opts)
 	}
-	cfg.DNS = true
+	cfg.DNSProvider = "auto"
 	if opts := guardOptions(cfg, p); !slices.Equal(opts, []string{supervisor.DropChainOpt("splitdpi", "dns")}) {
 		t.Errorf("dns on: %q", opts)
 	}

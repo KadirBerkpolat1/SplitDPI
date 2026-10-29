@@ -40,7 +40,7 @@ help = "Uygulama profillerini listeler, açar veya kapatır (list | enable ID | 
 help = "Engel aşmanın hiç dokunmayacağı alan adlarını yönetir (list | add ALAN | remove ALAN)."
 
 [cmd.sites]
-help = "Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir (list | add ALAN | remove ALAN)."
+help = "Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir (list | add ALAN | remove ALAN | import DOSYA)."
 
 [cmd.strategy]
 help = "Hazır stratejileri listeler ya da birini seçer (list | set ID)."
@@ -49,7 +49,7 @@ help = "Hazır stratejileri listeler ya da birini seçer (list | set ID)."
 help = "Açık uygulamaların test adreslerine ve sitelerinize HTTPS ile erişilip erişilemediğini dener."
 
 [probe]
-usage = "Kullanım: splitdpi probe [--apps id,id]"
+usage = "Kullanım: splitdpi probe [--apps id,id] [-v]"
 no_apps = "Açık uygulama ya da eklenmiş site yok. Şunu çalıştırın: sudo splitdpi apps enable discord  ya da: sudo splitdpi sites add ALAN"
 failed = "Bir veya daha fazla test başarısız oldu."
 dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
@@ -58,7 +58,7 @@ dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
 help = "Sağlayıcınızda ya da tek bir sitede (--site ALAN) çalışan bir DPI stratejisi bulur (önce hazır ayarlar, sonra blockcheck2)."
 
 [scan]
-usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck]"
+usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|SAĞLAYICI] [-v]"
 site_ipv4 = "%s blockcheck2 ile yalnızca IPv4 üzerinden taranıyor; bu bilgisayarda küresel IPv6 yok."
 site_ipv46 = "%s blockcheck2 ile IPv4 ve IPv6 üzerinden taranıyor."
 verify = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
@@ -113,7 +113,7 @@ empty = "Alan adı verilmedi."
 invalid = "%q geçerli bir alan adı değil."
 
 [sites]
-usage = "Kullanım: splitdpi sites list | add ALAN | remove ALAN"
+usage = "Kullanım: splitdpi sites list | add ALAN | remove ALAN | import DOSYA"
 added = "%s sitelerinize eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
 removed = "%s sitelerinizden çıkarıldı. Uygulamak için splitdpi'yi yeniden başlatın."
 
@@ -224,11 +224,10 @@ last_error = "Son hata: %s"
 dns = "DNS yönlendirmesi açık: VPN'in ayrık DNS'i ve yerel ağ adları çalışmayabilir. Kapatmak için: `sudo splitdpi dns off`."
 
 [cmd.dns]
-help = "DNS'i (53. port) yerleşik DNS-over-HTTPS ileticisinden geçirir (on | off)."
+help = "splitdpi çalışırken DNS'i (53. port) şifreler: off | auto | cloudflare | google | quad9 | adguard; DoH ile ya da --dot ile DoT üzerinden. Argüman verilmezse geçerli seçimi gösterir."
 
 [dns]
-usage = "Kullanım: splitdpi dns on | off"
-on = "DNS yönlendirmesi açıldı. Bir sonraki başlatmada geçerli olur."
+usage = "Kullanım: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS yönlendirmesi kapatıldı. Bir sonraki başlatmada geçerli olur."
 restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
 
@@ -424,3 +423,99 @@ lang_saved = "Dil kaydedildi."
 en = "English"
 tr = "Türkçe"
 ru = "Русский"
+
+[dns2]
+set = "Şifreli DNS açıldı: %s (%s). Bir sonraki başlatmada geçerli olur."
+current = "Şifreli DNS: %s (%s)."
+current_off = "Şifreli DNS kapalı: DNS her zamanki gibi sistemin DNS çözümleyicisine gider."
+unknown = "Bilinmeyen DNS seçimi: %q."
+off_name = "Kapalı"
+off_note = "DNS her zamanki gibi sistemin DNS çözümleyicisine gider."
+auto_name = "Otomatik"
+auto_note = "Sırayla Cloudflare, Google ve Quad9 denenir; ilk yanıt veren kullanılır."
+note_cloudflare = "Filtreleme yapmaz."
+note_google = "Filtreleme yapmaz."
+note_quad9 = "Bilinen zararlı yazılım ve oltalama alan adlarını da engeller."
+note_adguard = "Reklamları ve izleyicileri de engeller."
+scan_poisoned = "DNS zehirlenmesi: %s burada %s olarak çözülüyor, şifreli DNS'te ise %s."
+scan_ask = "Bu tarama için şifreli DNS (otomatik) açılsın ve açık kalsın mı? [e/H]"
+scan_hint = "Şifreli DNS ile taramak ve onu açık bırakmak için taramayı --dns auto ile yeniden çalıştırın."
+scan_kept = "Sistemin DNS çözümleyicisiyle devam ediliyor: zehirlenen alan adlarının sonuçları yanlış olabilir."
+scan_on = "Şifreli DNS (%s) bu tarama için açıldı ve açık kalacak."
+yes = "e,evet,y,yes"
+
+[cmd.uninstall]
+help = "SplitDPI'yi tamamen kaldırır: servis, kurallar, ayarlar, veriler, günlük ve program ([--yes] onaylar)."
+
+[uninstall]
+usage = "Kullanım: splitdpi uninstall [--yes]"
+nothing = "Burada kaldırılacak bir SplitDPI servisi ya da dosyası yok."
+plan = "Kaldırma, SplitDPI'yi durdurur, güvenlik duvarı kurallarını kaldırır ve şunları siler:"
+item = "  %s"
+confirm = "Hiçbir şey değiştirilmedi. Kaldırmak için şunu çalıştırın: sudo splitdpi uninstall --yes"
+removed = "Kaldırıldı: %s"
+leftover = "Hâlâ duruyor: %s"
+done = "SplitDPI kaldırıldı."
+not_clean = "Kaldırma tamamlanmadı; yukarıdakiler hâlâ duruyor. Sorunu giderip `sudo splitdpi uninstall --yes` komutunu yeniden çalıştırın."
+[probeerr.reset]
+what = "Sağlayıcı bu siteyi engelliyor: bağlantı kesildi."
+todo = "Tarama ile başka bir strateji deneyin: sudo splitdpi scan"
+
+[probeerr.timeout]
+what = "Site zamanında yanıt vermedi."
+todo = "Sağlayıcı trafiği sessizce düşürüyor ya da site çalışmıyor olabilir. Tarama deneyin: sudo splitdpi scan. Bütün siteler yavaşsa internet bağlantınızı kontrol edin."
+
+[probeerr.dns]
+what = "Sitenin adresi bulunamadı: DNS yanıt vermedi ya da yanıtı değiştirildi."
+todo = "DNS'i şifreli DNS-over-HTTPS üzerinden geçirin, sonra splitdpi'yi yeniden başlatın: sudo splitdpi dns on"
+
+[probeerr.tls]
+what = "Güvenli bağlantı kurulamadı: sertifika siteyle eşleşmedi ya da el sıkışma yarıda kaldı."
+todo = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Şifreli DNS'i açın (sudo splitdpi dns on), sonra tarama deneyin: sudo splitdpi scan"
+
+[probeerr.http]
+what = "Site yerine başka bir şey yanıt verdi; büyük olasılıkla sağlayıcının engelleme sayfası."
+todo = "Tarama deneyin: sudo splitdpi scan. Sorun sürerse şifreli DNS'i açın: sudo splitdpi dns on"
+
+[probeerr.other]
+what = "Bağlantı başka bir nedenle kurulamadı."
+todo = "Hatayı görmek için komutu -v ile yeniden çalıştırın ve sitenin hiç açılıp açılmadığını kontrol edin."
+
+[share]
+scan = "Aynı sağlayıcıyı kullananlara yardım edin: bu sonucu hazır ayar deposuyla paylaşın. Bağlantı önceden doldurulmuş bir GitHub issue'su açar; siz göndermedikçe hiçbir şey gönderilmez:\n%s"
+
+[appnote]
+telegram = "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor."
+[cmd.takeover]
+help = "Başka bir zapret kurulumundan splitdpi'ye geçer: sitelerini devralır ve onu kapatır (takeover [--yes])."
+
+[sites_import]
+added = "Sitelerinize %d yeni site eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+skipped = "%d. satır atlandı, alan adı değil: %s"
+
+[takeover]
+usage = "Kullanım: splitdpi takeover [--yes]"
+none = "Bu bilgisayarda başka bir zapret kurulumu bulunamadı."
+found = "%s bulundu:"
+dir = "kurulu olduğu yer: %s"
+service = "servis: %s (%s)"
+no_service = "servisi yok"
+boot = "açılışta başlıyor"
+running = "şu an çalışıyor"
+not_running = "çalışmıyor"
+hostlist = "site listesi: %s"
+plan = "splitdpi takeover --yes şunları yapacak:"
+plan_import = "%s içindeki siteleri sitelerinize ekleyecek"
+plan_stop = "%s servisini durduracak"
+plan_disable = "%s servisinin açılışta başlamasını kapatacak"
+plan_manual = "%s durdurulamayacak: bir servis dışında çalışıyor, onu kendiniz durdurun"
+plan_nothing = "hiçbir şeyi değiştirmeyecek: çalışmıyor, açılışta başlamıyor ve site listesi yok"
+untouched = "Diğer aracın hiçbir dosyası silinmez ya da değiştirilmez; sudo splitdpi revert onu yeniden açar."
+confirm = "Bunu yapmak için çalıştırın: %s"
+imported = "%d yeni site eklendi (kaynak: %s)"
+did_stop = "%s servisi durduruldu"
+did_disable = "%s artık açılışta başlamayacak"
+still_running = "%s bir servis dışında çalışmayı sürdürüyor: splitdpi'yi başlatmadan önce onu kendiniz durdurun"
+done = "Tamam. Kurmak ve başlatmak için splitdpi'yi açın: sudo splitdpi"
+restored = "Yeniden açıldı: %s"
+conflict = "%s çalışıyor (zapret, başka bir DPI engel aşma aracı); splitdpi onu kapatıp sitelerini devralabilir"

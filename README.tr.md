@@ -68,12 +68,14 @@ betik yazabilirsiniz.
 | `splitdpi enable` / `disable` | Servisi kurup başlatır ya da durdurup kaldırır. |
 | `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ya da günlüğünü gösterir. |
 | `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
-| `splitdpi sites list\|add ALAN\|remove ALAN` | Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir. |
+| `splitdpi sites list\|add ALAN\|remove ALAN\|import DOSYA` | Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir; `import`, her satırda bir alan adı olan bir metin dosyasındaki tüm alan adlarını ekler. |
+| `splitdpi takeover [--yes]` | Başka bir zapret ya da zapret2 kurulumunu bulur ve SplitDPI'ye geçişin neyi değiştireceğini gösterir; `--yes` sitelerini alır, servisini durdurur ve açılışta başlamasını kapatır. |
 | `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da birini seçer. |
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
-| `splitdpi dns on\|off` | DNS'i yerleşik DNS-over-HTTPS ileticisinden geçirir. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | DNS'i yerleşik şifreli DNS ileticisinden geçirir (DoH ya da `--dot` ile DoT); argüman verilmezse geçerli seçimi gösterir. |
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
+| `splitdpi uninstall [--yes]` | SplitDPI'yi, dosyalarını ve programını kaldırır. |
 
 `--help`, `version` ve `presets list` dışındaki tüm komutlar root ister. Dili
 seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz SplitDPI
@@ -135,20 +137,46 @@ nfqws2 durursa trafik değiştirilmeden geçer.
   görüşmede doğrulanmadı. `scan` bunu belirtir; sizde çalışıp çalışmadığını
   bildirin.
 - **DNS.** Bazı sağlayıcılar DNS yanıtlarını zehirler. `doctor` ve `probe`
-  bunu tespit eder. `splitdpi dns on`, 53. porttaki trafiği SplitDPI içindeki
-  bir DNS-over-HTTPS ileticisine yönlendirir; hiçbir çözümleyici ayarını
-  değiştirmez ve tabloyla birlikte kaybolur. Açıkken VPN'in ayrık DNS'i ve
-  yerel ağ adları çözülemeyebilir.
+  bunu tespit eder. `splitdpi dns auto` (ya da bir sağlayıcı: `cloudflare`,
+  `google`, `quad9`, reklamları ve izleyicileri de engelleyen `adguard`),
+  53. porttaki trafiği SplitDPI içindeki şifreli bir DNS ileticisine
+  yönlendirir; hiçbir çözümleyici ayarını değiştirmez ve tabloyla birlikte
+  kaybolur. Açıkken VPN'in ayrık DNS'i ve yerel ağ adları çözülemeyebilir.
+  `scan` önce blockcheck2'nin alan adlarını denetler; zehirlenmişlerse şifreli
+  DNS'i açmayı önerir (etkileşimsiz kullanımda `--dns auto`).
 
 ## Geri alma güvencesi
 
 `sudo splitdpi revert`, SplitDPI'yi durdurur, servisini kaldırır, tablosunu ve
 çalışma dosyalarını siler, sonra geride bir şey kalmadığını denetler. Sonunda
 temiz olduğunu yazar ya da kalanları listeler. `--purge` ayarları ve verileri
-de siler. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar dosyası onu
+de siler. `takeover` başka bir zapret kurulumunu kapattıysa geri alma onun
+servisini yeniden açar; `takeover` o kurulumun dosyalarını asla silmez ya da
+değiştirmez. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar dosyası onu
 engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları yerinde kalır
 ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar tüm trafiği
 geçirir.
+
+## SplitDPI'yi kaldırma
+
+`sudo splitdpi uninstall` neleri sileceğini listeler, hiçbir şeyi değiştirmez.
+`sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
+günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
+kalırsa onu listeler.
+
+## Hazır ayarlar nereden geliyor
+
+Sağlayıcı stratejilerinin çıkış noktası Çağrı Taşkın'ın
+[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) projesidir
+(MIT). [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs)
+gibi MIT lisanslı başka derlemeler de stratejileri karşılaştırmak için
+kullanılır. Her sağlayıcı dosyası, stratejilerinin gerçek bir bağlantıda en son
+ne zaman çalıştığını `reported` alanında tutar. `scan` çalışan bir stratejiyi
+kaydettiğinde, [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
+deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS numaranız,
+sağlayıcınız, ülkeniz, strateji ve sürümler. Siz issue'yu göndermedikçe hiçbir
+şey gönderilmez; içinde IP adresiniz ya da kendi siteleriniz hiçbir zaman
+yer almaz.
 
 ## Strateji bildirme
 
