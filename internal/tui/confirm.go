@@ -1,0 +1,50 @@
+package tui
+
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+)
+
+// confirm asks before an action that changes the system, saying what will
+// change and how to undo it.
+type confirm struct {
+	title   string
+	changes []string
+	undo    string
+	yes     func(m *Model) tea.Cmd
+}
+
+func (m Model) dialogKey(s string) (tea.Model, tea.Cmd) {
+	switch s {
+	case "y", "enter":
+		yes := m.dialog.yes
+		m.dialog = nil
+		cmd := yes(&m)
+		return m, cmd
+	case "n", "esc":
+		m.dialog = nil
+	}
+	return m, nil
+}
+
+func (m Model) dialogView() string {
+	c := m.dialog
+	item := lipgloss.NewStyle().Width(m.popupText() - 3)
+	lines := []string{titleStyle.Render(c.title), "", i18n.T("shell.confirm.changes")}
+	for _, ch := range c.changes {
+		for i, l := range strings.Split(item.Render(ch), "\n") {
+			prefix := "   "
+			if i == 0 {
+				prefix = " " + m.g.bullet + " "
+			}
+			lines = append(lines, prefix+l)
+		}
+	}
+	lines = append(lines, "", i18n.T("shell.confirm.undo"), "   "+commandStyle.Render(c.undo), "",
+		hint("y", i18n.T("shell.confirm.yes"))+"   "+hint("n", i18n.T("shell.confirm.no")))
+	return m.popup(strings.Join(lines, "\n"))
+}

@@ -287,27 +287,22 @@ none = "yok"
 running_here = "bu pencerede çalışıyor"
 probing = "Uygulamaların sitelerine erişim deneniyor..."
 confirm_quit = "Engel aşma durdurulup çıkılsın mı? [y] evet  [n] hayır"
-logs = "Günlük"
 logs_empty = "Henüz kayıt yok."
 
 [tui.act]
 run = "Çalıştır"
 stop = "Durdur"
 setup = "Kurulum"
-apps = "Uygulamalar"
 probe = "Dene"
-logs = "Günlük"
 back = "Geri"
 quit = "Çık"
 toggle = "Aç/kapat"
 cancel = "Vazgeç"
-strategy = "Strateji"
 choose = "Seç"
 add_site = "Site ekle"
 remove = "Kaldır"
 
 [tui.wiz]
-title = "Kurulum"
 checking = "Bilgisayar denetleniyor..."
 doctor = "Önce şu sorunlar giderilmeli:"
 check_again = "Yeniden denetle"
@@ -337,17 +332,13 @@ at_boot = "Açılışta başlat"
 enabling = "Servis kuruluyor..."
 
 [tui.apps_screen]
-title = "Uygulamalar, siteler ve hariç tutulanlar"
 site_broke = "Bir site bozuldu"
 which_site = "Hangi site bozuldu? Adresini yapıştırın; splitdpi ona dokunmayacak."
 exclude = "Hariç tut"
-excluded = "Engel aşmanın dokunmadığı siteler:"
-sites = "Engeli her zaman aşılacak siteleriniz:"
 which_add = "Hangi site açılmıyor? Adresini yapıştırın; splitdpi bu sitede engeli her zaman aşmaya çalışacak."
 add = "Ekle"
 
 [tui.strategy_screen]
-title = "Strateji"
 pick = "splitdpi'nin kullanacağı stratejiyi seçin. Bir sonraki başlatmada geçerli olur."
 
 [disclaimer]
@@ -359,3 +350,77 @@ body = "SplitDPI, bu bilgisayarın bazı ağ trafiğini derin paket incelemesind
 started = "nfqws2 başladı (pid %d)"
 restarting = "nfqws2 durdu (%v); %s sonra yeniden başlatılıyor"
 crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralları kaldırıldı, vazgeçildi"
+
+[shell]
+too_small = "Terminali en az %dx%d boyutuna büyütün."
+to_menu = "Menü"
+
+[shell.menu]
+status = "Durum"
+sites = "Siteler"
+strategy = "Strateji"
+scan = "Tarama"
+logs = "Günlük"
+settings = "Ayarlar"
+
+[shell.hint]
+status = "engel aşma çalışıyor mu, nasıl"
+sites = "engel aşmanın her zaman uygulandığı siteler"
+strategy = "paketlerin filtreden nasıl geçirileceği"
+scan = "hattınızda çalışan bir strateji bulun"
+logs = "engel aşmanın son kayıtları"
+settings = "SplitDPI'nin nasıl çalışacağı"
+
+[shell.pill]
+running = "ÇALIŞIYOR"
+stopped = "DURDU"
+failed = "HATA"
+
+[shell.key]
+enter = "Enter"
+esc = "Esc"
+space = "Boşluk"
+tab = "Tab"
+
+[shell.help]
+key = "Yardım"
+page = "%s tuşları"
+global = "Her yerde"
+arrows = "Menüde ya da sayfadaki listede gezinir"
+open = "Menüden sayfaya geçer; sayfada Tab bir eylem seçer, Enter onu çalıştırır"
+back = "Menüye döner"
+click = "Tıklama"
+click_does = "Menüdeki bir sayfayı açar"
+toggle = "Bu yardımı açar ya da kapatır"
+close = "Esc ya da ? bu yardımı kapatır."
+
+[shell.confirm]
+changes = "Şunlar yapılacak:"
+undo = "Sonradan geri almak için şunu çalıştırın:"
+yes = "Evet, devam et"
+no = "Vazgeç"
+
+[shell.enable]
+title = "SplitDPI açılışta başlasın mı?"
+service = "Bu sistemin init'i (systemd, OpenRC ya da runit) için splitdpi servisi kurulur."
+boot = "Engel aşma hemen ve her yeniden başlatmadan sonra başlar."
+rules = "Çalıştığı sürece, eşleşen trafiği nfqws2'ye gönderen güvenlik duvarı (nftables) kuralları eklenir."
+
+[shell.sites]
+app = "uygulama"
+yours = "sizin eklediğiniz"
+excluded = "hariç tutulan, hiç dokunulmaz"
+
+[shell.scan]
+intro = "Kurulum bu bilgisayarı denetler, internet sağlayıcınızı bulur, sonra hazır stratejileri dener ya da blockcheck2 ile tek bir siteyi tarar."
+start = "Kurulumu başlat"
+
+[shell.settings]
+lang = "Dil"
+lang_to = "Dili değiştir: %s"
+lang_saved = "Dil kaydedildi."
+
+[shell.lang]
+en = "English"
+tr = "Türkçe"
+ru = "Русский"

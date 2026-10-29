@@ -19,6 +19,20 @@ func TestAcceptDisclaimer(t *testing.T) {
 	}
 }
 
+func TestSetLang(t *testing.T) {
+	o := &Ops{P: paths.Under(t.TempDir())}
+	if err := o.AcceptDisclaimer(); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.SetLang("tr"); err != nil {
+		t.Fatal(err)
+	}
+	c, err := config.Load(o.P)
+	if err != nil || c.Lang != "tr" || !c.DisclaimerAccepted {
+		t.Errorf("got %+v, %v", c, err)
+	}
+}
+
 func TestSites(t *testing.T) {
 	o := &Ops{P: paths.Under(t.TempDir())}
 	if list, err := o.SitesList(); err != nil || len(list) != 0 {

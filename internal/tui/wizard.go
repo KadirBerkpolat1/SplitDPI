@@ -12,6 +12,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
@@ -20,11 +21,15 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
 
-// The setup wizard: doctor → detect → apps → [one site] → scan → run or enable.
+// The scan page is the setup wizard:
+// doctor → detect → apps → [one site] → scan → run or enable.
+type scanPage struct{}
+
 type wizStep int
 
 const (
-	wDoctor wizStep = iota
+	wIntro wizStep = iota // not started
+	wDoctor
 	wLookup
 	wPick
 	wApps
@@ -56,8 +61,8 @@ type wizard struct {
 }
 
 type (
-	doctorMsg      struct{ checks []doctor.Check }
-	detectMsg      struct {
+	doctorMsg struct{ checks []doctor.Check }
+	detectMsg struct {
 		info scan.ASNInfo
 		err  error
 	}
@@ -70,10 +75,24 @@ type (
 	enableMsg   struct{ err error }
 )
 
+func (scanPage) Title() string                                              { return i18n.T("shell.menu.scan") }
+func (scanPage) Hint() string                                               { return i18n.T("shell.hint.scan") }
+func (scanPage) Open(*Model) tea.Cmd                                        { return nil }
+func (scanPage) Actions(m Model) []action                                   { return m.wizardActions() }
+func (scanPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool)         { return m.wizardUpdate(msg) }
+func (scanPage) Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool) { return m.wizardKey(k, s) }
+func (scanPage) View(m Model, w, h int) string                              { return m.wizardView(w, h) }
+
 func (m *Model) openWizard() tea.Cmd {
-	m.scr, m.focus, m.note = scrWizard, 0, ""
+	m.focus, m.note = 0, ""
 	m.wiz = wizard{step: wDoctor, progress: &ring{max: 200}}
 	return m.runDoctor()
+}
+
+// finishWizard leaves the finished wizard for the status page.
+func (m *Model) finishWizard() {
+	m.wiz = wizard{}
+	m.page, m.inPage, m.focus = pgStatus, false, 0
 }
 
 func (m *Model) runDoctor() tea.Cmd {
@@ -155,7 +174,7 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.note = errText(msg.err)
 			return m, nil, true
 		}
-		m = m.leave()
+		m.finishWizard()
 		m.note = i18n.T("service.enabled")
 		return m, m.refresh(), true
 	}
@@ -218,16 +237,15 @@ func (m Model) pickRows() []presets.ISP { return m.b.PresetsList().ISPs }
 
 func (m Model) wizardActions() []action {
 	w := m.wiz
-	back := action{Key: "esc", Label: i18n.T("tui.act.back"), Do: func(m *Model) tea.Cmd { *m = m.leave(); return nil }}
-	quit := action{Key: "q", Label: i18n.T("tui.act.quit"), Do: (*Model).quit}
 	switch w.step {
+	case wIntro:
+		return []action{{Key: "w", Label: i18n.T("shell.scan.start"), CLI: "sudo splitdpi scan", Do: (*Model).openWizard}}
 	case wDoctor:
-		return []action{{Key: "enter", Label: i18n.T("tui.wiz.check_again"), CLI: "sudo splitdpi doctor", Do: (*Model).runDoctor}, back, quit}
+		return []action{{Key: "enter", Label: i18n.T("tui.wiz.check_again"), CLI: "sudo splitdpi doctor", Do: (*Model).runDoctor}}
 	case wLookup:
 		return []action{
 			{Key: "y", Label: i18n.T("tui.wiz.look_up"), CLI: "sudo splitdpi detect", Do: (*Model).detect},
 			{Key: "n", Label: i18n.T("tui.wiz.pick_isp"), Do: func(m *Model) tea.Cmd { m.wiz.step, m.wiz.cursor, m.focus = wPick, 0, 0; return nil }},
-			back, quit,
 		}
 	case wPick:
 		cli := ""
@@ -235,7 +253,7 @@ func (m Model) wizardActions() []action {
 			isp := rows[w.cursor]
 			cli = fmt.Sprintf("sudo splitdpi detect --asn %d --country %s", isp.ASN[0], isp.Country)
 		}
-		return []action{{Key: "enter", Label: i18n.T("tui.wiz.choose"), CLI: cli, Do: (*Model).pickISP}, back, quit}
+		return []action{{Key: "enter", Label: i18n.T("tui.wiz.choose"), CLI: cli, Do: (*Model).pickISP}}
 	case wApps:
 		cli := ""
 		if w.cursor < len(w.apps) {
@@ -249,7 +267,6 @@ func (m Model) wizardActions() []action {
 			{Key: "space", Label: i18n.T("tui.act.toggle"), CLI: cli, Do: (*Model).toggleWizApp},
 			{Key: "enter", Label: i18n.T("tui.wiz.scan"), CLI: w.scanCLI(), Do: (*Model).applyApps},
 			{Key: "s", Label: i18n.T("tui.wiz.scan_site"), CLI: "sudo splitdpi scan --site DOMAIN", Do: (*Model).askSite},
-			back, quit,
 		}
 	case wSite:
 		typed := w
@@ -260,17 +277,27 @@ func (m Model) wizardActions() []action {
 		}
 	case wScan:
 		if w.scanning {
-			return []action{{Key: "esc", Label: i18n.T("tui.wiz.cancel"), CLI: w.scanCLI(), Do: (*Model).cancelScan}, quit}
+			return []action{{Key: "esc", Label: i18n.T("tui.wiz.cancel"), CLI: w.scanCLI(), Do: (*Model).cancelScan}}
 		}
-		return []action{{Key: "enter", Label: i18n.T("tui.wiz.scan_again"), CLI: w.scanCLI(), Do: (*Model).startScan}, back, quit}
+		return []action{{Key: "enter", Label: i18n.T("tui.wiz.scan_again"), CLI: w.scanCLI(), Do: (*Model).startScan}}
 	case wDone:
 		return []action{
-			{Key: "r", Label: i18n.T("tui.wiz.run_now"), CLI: "sudo splitdpi run", Do: func(m *Model) tea.Cmd { *m = m.leave(); return m.runNow() }},
-			{Key: "b", Label: i18n.T("tui.wiz.at_boot"), CLI: "sudo splitdpi enable", Do: (*Model).enable},
-			back, quit,
+			{Key: "r", Label: i18n.T("tui.wiz.run_now"), CLI: "sudo splitdpi run", Do: func(m *Model) tea.Cmd { m.finishWizard(); return m.runNow() }},
+			{Key: "b", Label: i18n.T("tui.wiz.at_boot"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable},
 		}
 	}
-	return []action{back, quit}
+	return nil
+}
+
+// confirmEnable asks before the service is installed and started.
+func (m *Model) confirmEnable() tea.Cmd {
+	m.dialog = &confirm{
+		title:   i18n.T("shell.enable.title"),
+		changes: []string{i18n.T("shell.enable.service"), i18n.T("shell.enable.boot"), i18n.T("shell.enable.rules")},
+		undo:    "sudo splitdpi disable",
+		yes:     (*Model).enable,
+	}
+	return nil
 }
 
 func (m *Model) detect() tea.Cmd {
@@ -313,7 +340,7 @@ func (m *Model) applyApps() tea.Cmd {
 // askSite asks for the one site a blockcheck2 scan should open.
 func (m *Model) askSite() tea.Cmd {
 	w := &m.wiz
-	w.step, w.site, m.focus, m.note = wSite, "", 0, ""
+	w.step, w.site, m.focus, m.note, m.inPage = wSite, "", 0, "", true
 	w.ipv6 = m.b.HasIPv6(m.ctx)
 	w.input = textinput.New()
 	w.input.Placeholder = "example.com"
@@ -432,73 +459,82 @@ func (m Model) wizardKey(k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m Model) wizardView() string {
+// wizardView is the step's text, then its list (ISPs, apps or scan
+// progress) scrolled to fit.
+func (m Model) wizardView(width, h int) string {
 	w := m.wiz
-	lines := []string{titleStyle.Render(i18n.T("tui.wiz.title")), ""}
+	var head, list []string
+	cursor := w.cursor
 	switch w.step {
+	case wIntro:
+		head = append(head, i18n.T("shell.scan.intro"))
 	case wDoctor:
-		lines = append(lines, i18n.T("tui.wiz.doctor"))
+		head = append(head, i18n.T("tui.wiz.doctor"))
 		for _, c := range w.checks {
 			if c.Severity == doctor.OK {
 				continue
 			}
 			mark := warnStyle.Render("!")
 			if c.Severity == doctor.Blocker {
-				mark = badStyle.Render("✗")
+				mark = badStyle.Render(m.g.fail)
 			}
-			lines = append(lines, mark+" "+c.Msg)
+			head = append(head, mark+" "+c.Msg)
 			if c.Fix != "" {
-				lines = append(lines, "    "+mutedStyle.Render("$ ")+commandStyle.Render(c.Fix))
+				head = append(head, "    "+mutedStyle.Render("$ ")+commandStyle.Render(c.Fix))
 			}
 		}
 	case wLookup:
-		lines = append(lines, i18n.T("tui.wiz.lookup_ask", w.host))
+		head = append(head, i18n.T("tui.wiz.lookup_ask", w.host))
 	case wPick:
-		lines = append(lines, i18n.T("tui.wiz.pick"))
+		head = append(head, i18n.T("tui.wiz.pick"))
 		rows := m.pickRows()
-		for i := 0; i <= len(rows); i++ {
+		for i := range len(rows) + 1 {
 			label := i18n.T("tui.wiz.not_listed")
 			if i < len(rows) {
 				label = fmt.Sprintf("%s  %s", rows[i].Name, mutedStyle.Render(rows[i].Country+" AS"+asns(rows[i].ASN)))
 			}
-			lines = append(lines, cursorMark(i == w.cursor)+label)
+			list = append(list, m.cursorMark(i == w.cursor)+label)
 		}
 	case wApps:
 		if w.info.ASN != 0 {
-			lines = append(lines, i18n.T("tui.wiz.detected", w.info.Org, w.info.ASN, w.info.Country), "")
+			head = append(head, i18n.T("tui.wiz.detected", w.info.Org, w.info.ASN, w.info.Country), "")
 		}
-		lines = append(lines, i18n.T("tui.wiz.apps"))
+		head = append(head, i18n.T("tui.wiz.apps"))
 		for i, a := range w.apps {
-			lines = append(lines, cursorMark(i == w.cursor)+checkbox(w.chosen[a.ID])+" "+a.Name)
+			list = append(list, m.cursorMark(i == w.cursor)+m.mark(w.chosen[a.ID])+" "+a.Name)
 		}
 	case wSite:
 		ipv := i18n.T("tui.wiz.ipv4")
 		if w.ipv6 {
 			ipv = i18n.T("tui.wiz.ipv46")
 		}
-		lines = append(lines, i18n.T("tui.wiz.which_site"), w.input.View(), "", mutedStyle.Render(ipv))
+		head = append(head, i18n.T("tui.wiz.which_site"), w.input.View(), "", mutedStyle.Render(ipv))
 	case wScan:
 		switch {
 		case w.scanning:
-			lines = append(lines, i18n.T("tui.wiz.scanning"))
+			head = append(head, i18n.T("tui.wiz.scanning"))
 		case w.cancelled:
-			lines = append(lines, warnStyle.Render(i18n.T("tui.wiz.cancelled")))
+			head = append(head, warnStyle.Render(i18n.T("tui.wiz.cancelled")))
 		case errors.Is(w.err, scan.ErrNoStrategy):
-			lines = append(lines, badStyle.Render(i18n.T("scan.no_strategy")))
+			head = append(head, badStyle.Render(i18n.T("scan.no_strategy")))
 		case w.err != nil:
-			lines = append(lines, badStyle.Render(errText(w.err)))
+			head = append(head, badStyle.Render(errText(w.err)))
 		}
-		room := m.height - len(lines) - 6
-		lines = append(lines, w.progress.Last(max(room, 1))...)
+		list = w.progress.Last(h)
+		cursor = len(list) - 1
 	case wDone:
 		r := w.report
-		lines = append(lines, goodStyle.Render(i18n.T("scan.winner", r.Winner.ID, r.Winner.Source)))
+		head = append(head, goodStyle.Render(i18n.T("scan.winner", r.Winner.ID, r.Winner.Source)))
 		if r.VoiceUnverified {
-			lines = append(lines, warnStyle.Render(i18n.T("scan.voice")))
+			head = append(head, warnStyle.Render(i18n.T("scan.voice")))
 		}
-		lines = append(lines, "", i18n.T("tui.wiz.how"))
+		head = append(head, "", i18n.T("tui.wiz.how"))
 	}
-	return strings.Join(lines, "\n")
+	text := lipgloss.NewStyle().Width(width).Render(strings.Join(head, "\n"))
+	if len(list) == 0 {
+		return text
+	}
+	return text + "\n" + strings.Join(scroll(list, cursor, h-lipgloss.Height(text), width), "\n")
 }
 
 func asns(a []int) string {
@@ -507,20 +543,6 @@ func asns(a []int) string {
 		s[i] = strconv.Itoa(n)
 	}
 	return strings.Join(s, ",")
-}
-
-func cursorMark(on bool) string {
-	if on {
-		return focusStyle.Render(">") + " "
-	}
-	return "  "
-}
-
-func checkbox(on bool) string {
-	if on {
-		return goodStyle.Render("[x]")
-	}
-	return "[ ]"
 }
 
 // batch is tea.Batch without nil commands; a single command stays as is.

@@ -42,12 +42,14 @@ zapret2-flake or zapret2-nix instead.
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh
 sudo sh install.sh        # verifies and installs /usr/local/bin/splitdpi
-sudo splitdpi             # opens the setup wizard
+sudo splitdpi             # opens the terminal UI; press w to start the setup
 ```
 
-The wizard checks your system, finds your ISP, asks which apps should work,
-tests strategies, and then runs SplitDPI now or at every boot. Every screen
-shows the command that does the same thing, so you can script it.
+The setup checks your system, finds your ISP, asks which apps should work,
+tests strategies, and then runs SplitDPI now or at every boot. The terminal
+UI has a menu on the left (Status, Sites, Strategy, Scan, Logs, Settings) and
+the chosen page on the right; `?` lists the keys. Every page shows the command
+that does the same thing, so you can script it.
 
 ## Commands
 
@@ -71,8 +73,8 @@ shows the command that does the same thing, so you can script it.
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
 
 All commands except `--help`, `version` and `presets list` need root. Add
-`--lang tr` or `--lang en` to pick a language; otherwise SplitDPI
-follows `LANG`.
+`--lang tr` or `--lang en` to pick a language; otherwise SplitDPI uses the
+language chosen under Settings in the terminal UI, or else follows `LANG`.
 
 ## Your own sites and strategy
 
@@ -85,12 +87,12 @@ sudo splitdpi sites add pastebin.com
 
 `splitdpi strategy list` shows every preset strategy and marks the one in use;
 `sudo splitdpi strategy set ID` picks another without a scan. The terminal UI
-does both: the Apps screen lists your sites, and `t` opens the strategy list.
+does both on its Sites and Strategy pages.
 Restart SplitDPI to apply either change.
 
 To skip the presets and search for a strategy for one site, run
 `sudo splitdpi scan --site pastebin.com` or choose "Scan a site with
-blockcheck2" in the setup wizard. blockcheck2 tests that site over IPv4, and
+blockcheck2" in the setup. blockcheck2 tests that site over IPv4, and
 over IPv6 too if this machine has it. blockcheck2 results are re-tested on your
 apps and sites before one is saved: SplitDPI keeps the simplest one that opens
 all of them, preferring those that work on both IPv4 and IPv6, and adds the
@@ -104,6 +106,8 @@ site and restart SplitDPI:
 ```sh
 sudo splitdpi exclude add https://www.example-bank.com/
 ```
+
+In the terminal UI, press `e` on the Sites page.
 
 SplitDPI ships exclusion lists for common Turkish sites already.
 

@@ -44,12 +44,14 @@ kullanıcıları zapret2-flake veya zapret2-nix'e bakmalı.
 ```sh
 curl -fsSLO https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh
 sudo sh install.sh        # doğrular ve /usr/local/bin/splitdpi olarak kurar
-sudo splitdpi             # kurulum sihirbazını açar
+sudo splitdpi             # terminal arayüzünü açar; kurulum için w tuşuna basın
 ```
 
-Sihirbaz sisteminizi denetler, sağlayıcınızı bulur, hangi uygulamaların
+Kurulum sisteminizi denetler, sağlayıcınızı bulur, hangi uygulamaların
 çalışması gerektiğini sorar, stratejileri dener ve SplitDPI'yi hemen ya da her
-açılışta çalıştırır. Her ekran aynı işi yapan komutu da gösterir; isterseniz
+açılışta çalıştırır. Terminal arayüzünün solunda bir menü (Durum, Siteler,
+Strateji, Tarama, Günlük, Ayarlar), sağında seçilen sayfa bulunur; `?` tuşu
+kısayolları listeler. Her sayfa aynı işi yapan komutu da gösterir; isterseniz
 betik yazabilirsiniz.
 
 ## Komutlar
@@ -74,8 +76,9 @@ betik yazabilirsiniz.
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
 
 `--help`, `version` ve `presets list` dışındaki tüm komutlar root ister. Dili
-seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz
-SplitDPI `LANG` değişkenine uyar.
+seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz SplitDPI
+terminal arayüzünde Ayarlar'dan seçilen dili, o da yoksa `LANG` değişkenini
+kullanır.
 
 ## Kendi siteleriniz ve strateji
 
@@ -89,8 +92,8 @@ sudo splitdpi sites add pastebin.com
 
 `splitdpi strategy list` tüm hazır stratejileri gösterir ve kullanılanı
 işaretler; `sudo splitdpi strategy set ID` tarama yapmadan başka birini seçer.
-İkisini de terminal arayüzünden yapabilirsiniz: Uygulamalar ekranı
-sitelerinizi listeler, `t` tuşu strateji listesini açar. Değişikliğin geçerli
+İkisini de terminal arayüzünün Siteler ve Strateji sayfalarından
+yapabilirsiniz. Değişikliğin geçerli
 olması için SplitDPI'yi yeniden başlatın.
 
 Hazır ayarları atlayıp tek bir site için strateji aramak isterseniz
@@ -110,6 +113,8 @@ reddeder. Siteyi hariç tutun ve SplitDPI'yi yeniden başlatın:
 ```sh
 sudo splitdpi exclude add https://www.ornek-banka.com.tr/
 ```
+
+Terminal arayüzünde Siteler sayfasında `e` tuşuna basın.
 
 SplitDPI, yaygın Türk siteleri için hazır hariç tutma listeleriyle gelir.
 

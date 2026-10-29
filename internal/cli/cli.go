@@ -13,6 +13,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/tui"
@@ -49,6 +50,11 @@ var commands = map[string]Command{
 // 0 ok, 1 failure, 2 usage, 3 crash loop.
 func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 	lang, rest, ok := splitLang(args)
+	if lang == "" {
+		if c, err := config.Load(o.P); err == nil {
+			lang = c.Lang
+		}
+	}
 	i18n.Init(i18n.Detect(lang, os.Getenv))
 	if !ok {
 		fmt.Fprintln(stderr, i18n.T("err.lang_value"))
@@ -97,7 +103,7 @@ func openTUI(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM)
 	defer stop()
-	if err := tui.Run(ctx, o); err != nil {
+	if err := tui.Run(ctx, o, Version); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}

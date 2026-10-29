@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -27,7 +25,6 @@ func (m *Model) acceptDisclaimer() tea.Cmd {
 	return func() tea.Msg { return disclaimerMsg{b.AcceptDisclaimer()} }
 }
 
-func (m Model) disclaimerView() string {
-	body := lipgloss.NewStyle().Width(min(m.width, 72)).Render(i18n.T("disclaimer.body"))
-	return strings.Join([]string{titleStyle.Render(i18n.T("disclaimer.title")), "", body}, "\n")
+func (m Model) disclaimerView(width int) string {
+	return lipgloss.NewStyle().Width(min(width, 72)).Render(i18n.T("disclaimer.body"))
 }

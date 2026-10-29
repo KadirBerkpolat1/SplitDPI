@@ -7,12 +7,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
@@ -49,51 +49,34 @@ type Backend interface {
 	HasIPv6(ctx context.Context) bool
 	Enable(ctx context.Context) error
 	AcceptDisclaimer() error
-}
-
-type screen int
-
-const (
-	scrStatus screen = iota
-	scrWizard
-	scrApps
-	scrLogs
-	scrStrategy
-)
-
-// action is one thing the user can do on a screen. CLI is the command that
-// does the same outside the TUI; the footer shows it for the focused action.
-type action struct {
-	Key, Label, CLI string
-	Do              func(m *Model) tea.Cmd
+	SetLang(lang string) error
 }
 
 const statusEvery = 2 * time.Second
 
 type (
-	tickMsg    struct{}
-	logTickMsg struct{}
-	logEndMsg  struct{}
-	statusMsg  struct {
+	tickMsg   struct{}
+	statusMsg struct {
 		st  supervisor.Status
 		cfg config.Config
-		err error
-	}
-	runDoneMsg struct{ err error }
-	probeMsg   struct {
-		res map[string][]probe.Result
 		err error
 	}
 )
 
 type Model struct {
-	ctx    context.Context
-	b      Backend
-	scr    screen
-	focus  int
-	width  int
-	height int
-	every  func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	ctx     context.Context
+	b       Backend
+	version string
+	g       glyphs
+	width   int
+	height  int
+	every   func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+
+	page   int  // the selected menu entry
+	inPage bool // keys go to the page instead of the menu
+	focus  int  // the page action the footer highlights
+	help   bool
+	dialog *confirm
 
 	st    supervisor.Status
 	cfg   config.Config
@@ -101,12 +84,14 @@ type Model struct {
 	note  string // result of the last action
 	probe map[string][]probe.Result
 
-	logs      *ring
-	logCancel context.CancelFunc
+	logs       *ring
+	logCancel  context.CancelFunc
+	logTicking bool
 
-	wiz   wizard
-	apps  appsScreen
-	strat strategyScreen
+	wiz      wizard
+	apps     appsScreen
+	strat    strategyScreen
+	settings settingsScreen
 
 	// The bypass this TUI runs itself ("Run now"): quitting stops it.
 	running     bool
@@ -116,18 +101,18 @@ type Model struct {
 	quitting    bool
 }
 
-func New(ctx context.Context, b Backend) Model {
-	m := Model{ctx: ctx, b: b, every: tea.Tick, logs: &ring{max: 500}, width: 80, height: 24}
+func New(ctx context.Context, b Backend, version string) Model {
+	m := Model{ctx: ctx, b: b, version: version, g: glyphsFor(os.Getenv), every: tea.Tick, logs: &ring{max: 500}, width: 80, height: 24}
 	m.st, m.cfg, m.stErr = b.Status()
 	return m
 }
 
 // Run opens the TUI on the terminal. The bypass it may run is stopped (and
 // its rules removed) before Run returns.
-func Run(ctx context.Context, o *ops.Ops) error {
-	m := New(ctx, o)
+func Run(ctx context.Context, o *ops.Ops, version string) error {
+	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
-	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx)).Run()
+	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx)).Run()
 	if fm, ok := final.(Model); ok && fm.runFinished != nil {
 		fm.runCancel()
 		<-fm.runFinished
@@ -149,14 +134,10 @@ func (m Model) refresh() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if next, cmd, ok := m.wizardUpdate(msg); ok {
-		return next, cmd
-	}
-	if next, cmd, ok := m.appsUpdate(msg); ok {
-		return next, cmd
-	}
-	if next, cmd, ok := m.strategyUpdate(msg); ok {
-		return next, cmd
+	for _, p := range pages {
+		if next, cmd, ok := p.Update(m, msg); ok {
+			return next, cmd
+		}
 	}
 	switch msg := msg.(type) {
 	case disclaimerMsg:
@@ -172,28 +153,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case statusMsg:
 		m.st, m.cfg, m.stErr = msg.st, msg.cfg, msg.err
 		return m, nil
-	case runDoneMsg:
-		m.running, m.runCancel = false, nil
-		if msg.err != nil {
-			m.note = errText(msg.err)
-		}
-		if m.quitting {
-			return m, tea.Quit
-		}
-		return m, m.refresh()
-	case probeMsg:
-		m.probe = msg.res
-		if msg.err != nil {
-			m.note = errText(msg.err)
-		}
-		return m, nil
-	case logTickMsg:
-		if m.scr == scrLogs {
-			return m, m.every(500*time.Millisecond, func(time.Time) tea.Msg { return logTickMsg{} })
-		}
-		return m, nil
-	case logEndMsg:
-		return m, nil
+	case tea.MouseMsg:
+		return m.mouse(msg)
 	case tea.KeyMsg:
 		return m.key(msg)
 	}
@@ -205,52 +166,85 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if s == " " {
 		s = "space"
 	}
-	if m.confirmQuit {
+	switch {
+	case m.confirmQuit:
 		switch s {
 		case "y", "enter":
 			m.confirmQuit, m.quitting = false, true
+			m.stopAll()
 			m.runCancel()
-			return m, nil
 		case "n", "esc":
 			m.confirmQuit = false
 		}
 		return m, nil
-	}
-	if s == "ctrl+c" {
+	case s == "ctrl+c":
 		cmd := m.quit()
 		return m, cmd
-	}
-	if !m.showDisclaimer() {
-		var next Model
-		var cmd tea.Cmd
-		handled := false
-		switch m.scr {
-		case scrWizard:
-			next, cmd, handled = m.wizardKey(k, s)
-		case scrApps:
-			next, cmd, handled = m.appsKey(k)
-		case scrStrategy:
-			next, cmd, handled = m.strategyKey(s)
+	case m.dialog != nil:
+		return m.dialogKey(s)
+	case m.help:
+		if s == "esc" || s == "?" {
+			m.help = false
 		}
-		if handled {
-			return next, cmd
-		}
+		return m, nil
+	case m.showDisclaimer():
+		return m.do(disclaimerActions(), s)
+	case m.tooSmall():
 		if s == "q" {
 			cmd := m.quit()
 			return m, cmd
 		}
-		if s == "esc" && m.scr != scrStatus {
-			return m.leave(), nil
+		return m, nil
+	}
+	p := pages[m.page]
+	if m.inPage {
+		if next, cmd, ok := p.Key(m, k, s); ok {
+			return next, cmd
 		}
 	}
-	acts := m.actions()
 	switch s {
-	case "tab", "right":
-		m.focus = (m.focus + 1) % len(acts)
+	case "q":
+		cmd := m.quit()
+		return m, cmd
+	case "?":
+		m.help = true
 		return m, nil
-	case "shift+tab", "left":
-		m.focus = (m.focus + len(acts) - 1) % len(acts)
+	case "esc":
+		if m.inPage {
+			m.inPage = false
+			return m, nil
+		}
+	case "up", "k", "down", "j":
+		if !m.inPage {
+			next := m.page + 1
+			if s == "up" || s == "k" {
+				next = m.page - 1
+			}
+			cmd := m.selectPage(next)
+			return m, cmd
+		}
 		return m, nil
+	case "tab", "enter", "right":
+		if !m.inPage {
+			m.inPage = true
+			return m, nil
+		}
+	}
+	return m.do(p.Actions(m), s)
+}
+
+// do runs the action bound to s. In a page, tab and the arrows move the
+// footer focus and enter runs the focused action.
+func (m Model) do(acts []action, s string) (tea.Model, tea.Cmd) {
+	if n := len(acts); m.inPage && n > 0 {
+		switch s {
+		case "tab", "right":
+			m.focus = (m.focus + 1) % n
+			return m, nil
+		case "shift+tab", "left":
+			m.focus = (m.focus + n - 1) % n
+			return m, nil
+		}
 	}
 	for i, a := range acts {
 		if a.Key == s {
@@ -261,11 +255,35 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	if s == "enter" && m.focus < len(acts) {
+	if s == "enter" && m.focus < len(acts) && acts[m.focus].Do != nil {
 		cmd := acts[m.focus].Do(&m)
 		return m, cmd
 	}
 	return m, nil
+}
+
+// selectPage moves the menu to page i, if there is one.
+func (m *Model) selectPage(i int) tea.Cmd {
+	if i < 0 || i >= len(pages) || i == m.page {
+		return nil
+	}
+	m.page, m.focus, m.note = i, 0, ""
+	return pages[i].Open(m)
+}
+
+// mouse selects the menu entry under a left click.
+func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft ||
+		m.confirmQuit || m.dialog != nil || m.help || m.showDisclaimer() || m.tooSmall() {
+		return m, nil
+	}
+	i := msg.Y - menuTop
+	if msg.X >= menuWidth || i < 0 || i >= len(pages) {
+		return m, nil
+	}
+	m.inPage = false
+	cmd := m.selectPage(i)
+	return m, cmd
 }
 
 // quit leaves the TUI, but first asks when it runs the bypass itself.
@@ -274,12 +292,12 @@ func (m *Model) quit() tea.Cmd {
 		m.confirmQuit = true
 		return nil
 	}
-	*m = m.leave()
+	m.stopAll()
 	return tea.Quit
 }
 
-// leave goes back to the status screen and stops what the old screen ran.
-func (m Model) leave() Model {
+// stopAll stops the log stream and a running scan.
+func (m *Model) stopAll() {
 	if m.logCancel != nil {
 		m.logCancel()
 		m.logCancel = nil
@@ -288,46 +306,6 @@ func (m Model) leave() Model {
 		m.wiz.cancelled = true
 		m.wiz.scanCancel()
 	}
-	m.apps.typing = false
-	m.scr, m.focus = scrStatus, 0
-	return m
-}
-
-func (m Model) actions() []action {
-	if m.showDisclaimer() {
-		return disclaimerActions()
-	}
-	switch m.scr {
-	case scrLogs:
-		return logsActions()
-	case scrWizard:
-		return m.wizardActions()
-	case scrApps:
-		return m.appsActions()
-	case scrStrategy:
-		return m.strategyActions()
-	}
-	return m.statusActions()
-}
-
-func (m Model) View() string {
-	var body string
-	switch {
-	case m.showDisclaimer():
-		body = m.disclaimerView()
-	case m.scr == scrLogs:
-		body = m.logsView()
-	case m.scr == scrWizard:
-		body = m.wizardView()
-	case m.scr == scrApps:
-		body = m.appsView()
-	case m.scr == scrStrategy:
-		body = m.strategyView()
-	default:
-		body = m.statusView()
-	}
-	// Width wraps long prose (questions, errors) instead of cutting it off.
-	return lipgloss.NewStyle().Width(m.width).MaxWidth(m.width).MaxHeight(m.height).Render(body + "\n" + m.footer())
 }
 
 // errText words an ops error for the note line, as the CLI does.
