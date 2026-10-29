@@ -390,6 +390,36 @@ func TestScanDNSQuestionCancel(t *testing.T) {
 	})
 }
 
+// Durum's Setup while a scan runs (reached by clicking the menu) shows that
+// scan instead of starting over and orphaning it.
+func TestSetupDuringScanKeepsIt(t *testing.T) {
+	f := newFake()
+	started := make(chan context.Context, 1)
+	f.scanFn = func(ctx context.Context, _ scan.Options, _ func(string)) (scan.Report, error) {
+		started <- ctx
+		<-ctx.Done()
+		return scan.Report{}, ctx.Err()
+	}
+	m, cmd := toScan(t, f)
+	done := make(chan tea.Msg, 1)
+	go func() { done <- cmd() }()
+	scanCtx := <-started
+	m, _ = update(t, m, tea.MouseMsg{X: 5, Y: menuTop + pgStatus, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.page != pgStatus {
+		t.Fatalf("click on Durum: page %d", m.page)
+	}
+	m, _ = update(t, m, key("w"))
+	if m.page != pgScan || !m.wiz.scanning || m.wiz.step != wScan || scanCtx.Err() != nil {
+		t.Fatalf("w during a scan: page %d scanning %v step %v cancelled %v", m.page, m.wiz.scanning, m.wiz.step, scanCtx.Err())
+	}
+	m, _ = update(t, m, key("esc"))
+	if scanCtx.Err() == nil {
+		t.Fatal("esc no longer cancels the scan")
+	}
+	m, _ = update(t, m, <-done)
+	has(t, m.View(), "cancelled")
+}
+
 // fits checks a screen is exactly 80x24 with every key translated.
 func fits(t *testing.T, name, v string) {
 	t.Helper()

@@ -116,8 +116,12 @@ func (m *Model) openWizard() tea.Cmd { return m.startWizard(false) }
 // openSiteWizard starts the setup for a blockcheck2 scan of one site.
 func (m *Model) openSiteWizard() tea.Cmd { return m.startWizard(true) }
 
+// A running scan is kept: the page shows it instead of starting over.
 func (m *Model) startWizard(site bool) tea.Cmd {
 	m.focus, m.note, m.inPage = 0, "", true
+	if m.wiz.scanning {
+		return nil
+	}
 	m.wiz = wizard{step: wDoctor, siteFlow: site, progress: &ring{max: 200}, last: m.wiz.last, shared: m.wiz.shared}
 	return m.runDoctor()
 }
