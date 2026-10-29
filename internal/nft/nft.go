@@ -15,6 +15,7 @@ import (
 const (
 	DesyncMark    = 0x40000000 // nfqws2's default --fwmark: its own packets
 	PostNATMark   = 0x20000000
+	LocalDNSMark  = 0x10000000 // the DNS forwarder's plain queries to local servers
 	packetsOutTCP = 20
 	packetsOutUDP = 5
 	packetsInTCP  = 10
@@ -102,16 +103,21 @@ func Ruleset(in RulesetInput) (string, error) {
 	}
 	b.WriteString("\t}\n")
 
-	// Port 53 goes to our local DoH forwarder; loopback stays, so
-	// local stub resolvers are reached and their upstream queries redirected.
+	// Port 53 goes to our local forwarder. The forwarder's own queries for
+	// local names stay (else they would loop back to it), and so do VPN
+	// interfaces (split DNS) and loopback, so local stub resolvers are
+	// reached and their upstream queries redirected.
 	if in.DNSRedirectPort > 0 {
-		fmt.Fprintf(&b, `	chain %s {
-		type nat hook output priority -100; policy accept;
-		ip daddr 127.0.0.0/8 return
+		fmt.Fprintf(&b, "\tchain %s {\n\t\ttype nat hook output priority -100; policy accept;\n", DNSChain)
+		fmt.Fprintf(&b, "\t\tmeta mark and 0x%08x != 0 return\n", LocalDNSMark)
+		for _, i := range skips {
+			fmt.Fprintf(&b, "\t\toifname %q return\n", i)
+		}
+		fmt.Fprintf(&b, `		ip daddr 127.0.0.0/8 return
 		ip6 daddr ::1 return
 		meta l4proto { tcp, udp } th dport 53 counter redirect to :%d
 	}
-`, DNSChain, in.DNSRedirectPort)
+`, in.DNSRedirectPort)
 	}
 
 	fmt.Fprintf(&b, `	chain predefrag {

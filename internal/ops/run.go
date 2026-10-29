@@ -111,7 +111,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 	var startDNS func(context.Context) error
 	dnsPort := 0
 	if cfg.DNSOn() {
-		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Port: dns.Port}
+		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Local: &dns.Local{Root: o.Root}, Port: dns.Port}
 		startDNS, dnsPort = f.Start, dns.Port
 	}
 	ruleset, err := nft.Ruleset(nft.RulesetInput{

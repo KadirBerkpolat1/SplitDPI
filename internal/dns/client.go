@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"sync"
@@ -153,7 +154,7 @@ func (c *Client) doh(ctx context.Context, u Upstream, q []byte) ([]byte, error) 
 // dot is one RFC 7858 exchange, on an idle connection when there is one.
 func (c *Client) dot(ctx context.Context, u Upstream, q []byte) ([]byte, error) {
 	if conn := c.takeIdle(u.Addr); conn != nil {
-		if resp, err := dotRoundTrip(ctx, conn, q); err == nil {
+		if resp, err := tcpRoundTrip(ctx, conn, q); err == nil {
 			c.putIdle(u.Addr, conn)
 			return resp, nil
 		}
@@ -172,7 +173,7 @@ func (c *Client) dot(ctx context.Context, u Upstream, q []byte) ([]byte, error) 
 		return nil, err
 	}
 	conn := nc.(*tls.Conn)
-	resp, err := dotRoundTrip(ctx, conn, q)
+	resp, err := tcpRoundTrip(ctx, conn, q)
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -181,7 +182,8 @@ func (c *Client) dot(ctx context.Context, u Upstream, q []byte) ([]byte, error) 
 	return resp, nil
 }
 
-func dotRoundTrip(ctx context.Context, conn *tls.Conn, q []byte) ([]byte, error) {
+// tcpRoundTrip is one length-prefixed exchange (RFC 1035 4.2.2), as DoT uses too.
+func tcpRoundTrip(ctx context.Context, conn net.Conn, q []byte) ([]byte, error) {
 	if len(q) < 2 {
 		return nil, errors.New("short DNS query")
 	}
@@ -202,7 +204,7 @@ func dotRoundTrip(ctx context.Context, conn *tls.Conn, q []byte) ([]byte, error)
 		return nil, err
 	}
 	if len(resp) < 2 || !bytes.Equal(resp[:2], q[:2]) {
-		return nil, errors.New("DoT answer for another query")
+		return nil, errors.New("DNS answer for another query")
 	}
 	conn.SetDeadline(time.Time{})
 	return resp, nil

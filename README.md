@@ -191,8 +191,11 @@ It uses DNS-over-HTTPS by default; `--dot` picks DNS-over-TLS, which uses port
 853 and is blocked by some ISPs. `sudo splitdpi dns off` turns it off. The
 choice applies on the next start, and Settings in the terminal UI offers the
 same choices. It changes no resolver settings and disappears with the
-`inet splitdpi` table. While it is on, VPN split DNS and local hostnames may
-stop resolving.
+`inet splitdpi` table. Local names still go to your network's usual DNS
+server, never to the provider: single-label names, `.lan`, `.local`,
+`.home.arpa`, `.internal`, `.localdomain`, your search domains, and reverse
+lookups of private addresses. DNS through VPN interfaces (`skip_ifaces` in
+config.toml) is left alone, so VPN split DNS keeps working.
 
 ## How it works, and what to expect
 

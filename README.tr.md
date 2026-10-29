@@ -207,7 +207,11 @@ numaralı portu kullanır ve bazı sağlayıcılar bu portu engeller.
 `sudo splitdpi dns off` şifreli DNS'i kapatır. Seçim bir sonraki başlatmada
 geçerli olur; terminal arayüzünde Ayarlar sayfası aynı seçenekleri sunar.
 Hiçbir çözümleyici ayarını değiştirmez ve `inet splitdpi` tablosuyla birlikte
-kaybolur. Açıkken VPN'in ayrık DNS'i ve yerel ağ adları çözülemeyebilir.
+kaybolur. Yerel ağ adları sağlayıcıya hiç gitmez, ağınızın her zamanki DNS
+sunucusuna sorulur: tek parçalı adlar, `.lan`, `.local`, `.home.arpa`,
+`.internal`, `.localdomain`, arama alan adlarınız ve özel adreslerin ters
+sorguları. VPN arayüzlerinden (config.toml'daki `skip_ifaces`) geçen DNS'e
+dokunulmaz; böylece VPN'in ayrık DNS'i çalışmaya devam eder.
 
 ## Nasıl çalışır, ne beklemeli
 

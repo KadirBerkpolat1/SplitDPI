@@ -19,6 +19,11 @@ table inet splitdpi {
 	}
 	chain dns {
 		type nat hook output priority -100; policy accept;
+		meta mark and 0x10000000 != 0 return
+		oifname "lo" return
+		oifname "wg*" return
+		oifname "tun*" return
+		oifname "tailscale*" return
 		ip daddr 127.0.0.0/8 return
 		ip6 daddr ::1 return
 		meta l4proto { tcp, udp } th dport 53 counter redirect to :5453

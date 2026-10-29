@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -73,6 +74,62 @@ func TestDNSRedirectGolden(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, "table inet splitdpi {") || strings.Count(got, "table ") != 1 {
 		t.Error("the redirect must live inside our one table")
+	}
+}
+
+// dnsChain returns the dns chain's rule lines, hook line excluded.
+func dnsChain(t *testing.T, rs string) []string {
+	t.Helper()
+	_, body, ok := strings.Cut(rs, "\tchain dns {\n")
+	if !ok {
+		t.Fatalf("no dns chain:\n%s", rs)
+	}
+	body, _, _ = strings.Cut(body, "\t}\n")
+	var out []string
+	for _, l := range strings.Split(strings.TrimSpace(body), "\n")[1:] {
+		out = append(out, strings.TrimSpace(l))
+	}
+	return out
+}
+
+// The forwarder's marked queries to local DNS servers must return before the
+// redirect, or a local name would loop back into the forwarder forever.
+func TestDNSMarkedQueriesNotRedirected(t *testing.T) {
+	in := input()
+	in.DNSRedirectPort = 5453
+	rules := dnsChain(t, ruleset(t, in))
+	if want := fmt.Sprintf("meta mark and 0x%08x != 0 return", nft.LocalDNSMark); rules[0] != want {
+		t.Errorf("first dns rule %q, want %q", rules[0], want)
+	}
+	if nft.LocalDNSMark&(nft.DesyncMark|nft.PostNATMark) != 0 {
+		t.Error("LocalDNSMark overlaps another mark")
+	}
+	if last := rules[len(rules)-1]; !strings.Contains(last, "redirect") {
+		t.Errorf("last dns rule %q is not the redirect", last)
+	}
+	if n := strings.Count(strings.Join(rules, "\n"), "redirect"); n != 1 {
+		t.Errorf("%d redirect rules", n)
+	}
+}
+
+// VPN interfaces keep their own DNS (split DNS): the dns chain skips the same
+// interfaces as the queue chains, before the redirect.
+func TestDNSSkipsIfaces(t *testing.T) {
+	in := input()
+	in.DNSRedirectPort = 5453
+	in.SkipIfaces = []string{"wg*", "corp0"}
+	rules := dnsChain(t, ruleset(t, in))
+	want := []string{
+		"meta mark and 0x10000000 != 0 return",
+		`oifname "lo" return`,
+		`oifname "wg*" return`,
+		`oifname "corp0" return`,
+		"ip daddr 127.0.0.0/8 return",
+		"ip6 daddr ::1 return",
+		"meta l4proto { tcp, udp } th dport 53 counter redirect to :5453",
+	}
+	if strings.Join(rules, "\n") != strings.Join(want, "\n") {
+		t.Errorf("dns chain:\n%s\nwant:\n%s", strings.Join(rules, "\n"), strings.Join(want, "\n"))
 	}
 }
 

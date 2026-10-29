@@ -22,8 +22,9 @@ const (
 )
 
 type Forwarder struct {
-	DNS  *Client
-	Port int // 0 picks a free port and records it here
+	DNS   *Client
+	Local *Local // local names go here, never to DNS; nil sends everything to DNS
+	Port  int    // 0 picks a free port and records it here
 }
 
 // Start listens on UDP and TCP at 127.0.0.1:Port and, if IPv6 is up,
@@ -140,19 +141,24 @@ func (f *Forwarder) serveConn(ctx context.Context, c net.Conn) {
 }
 
 // answer relays q to the first upstream that answers within 2 s, or returns
-// SERVFAIL. It returns nil for input that is not a DNS query.
+// SERVFAIL. A local name goes only to the local servers. It returns nil for
+// input that is not a DNS query.
 func (f *Forwarder) answer(ctx context.Context, q []byte) []byte {
 	var p dnsmessage.Parser
 	h, err := p.Start(q)
 	if err != nil || h.Response {
 		return nil
 	}
-	if resp, err := f.DNS.Exchange(ctx, q); err == nil {
+	qs, _ := p.AllQuestions()
+	exchange := f.DNS.Exchange
+	if f.Local != nil && len(qs) > 0 && f.Local.Has(qs[0].Name.String()) {
+		exchange = f.Local.Exchange
+	}
+	if resp, err := exchange(ctx, q); err == nil {
 		// DoH servers may zero the ID (RFC 8484 4.1); the client needs its own back.
 		binary.BigEndian.PutUint16(resp, h.ID)
 		return resp
 	}
-	qs, _ := p.AllQuestions()
 	fail := dnsmessage.Message{
 		Header: dnsmessage.Header{
 			ID: h.ID, Response: true, OpCode: h.OpCode, RecursionDesired: h.RecursionDesired,
