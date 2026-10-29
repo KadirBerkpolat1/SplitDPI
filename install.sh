@@ -25,13 +25,17 @@ else
 fi
 
 bindir=$SPLITDPI_PREFIX/bin
-if ! mkdir -p "$bindir" 2>/dev/null; then
-	if [ "$(id -u)" -ne 0 ] && [ ! -w "$SPLITDPI_PREFIX" ]; then
+if [ "$(id -u)" -ne 0 ]; then
+	dir=$bindir
+	while [ ! -d "$dir" ]; do
+		dir=$(dirname "$dir")
+	done
+	if [ ! -w "$dir" ]; then
 		echo "rerun with sudo" >&2
 		exit 1
 	fi
-	mkdir -p "$bindir"
 fi
+mkdir -p "$bindir"
 
 asset=splitdpi-linux-$goarch
 if [ "$SPLITDPI_VERSION" = latest ]; then

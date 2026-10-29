@@ -74,6 +74,60 @@ func TestInstallSuccess(t *testing.T) {
 	}
 }
 
+// /usr/local/bin usually exists, so a non-root run must be stopped by the
+// writability check, not by a raw permission error from install.
+func TestInstallNotWritableAsksForSudo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix install.sh")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root can write anywhere")
+	}
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	for _, tc := range []struct {
+		name   string
+		mkBin  bool
+		locked func(prefix string) string
+	}{
+		{"bin dir exists", true, func(p string) string { return filepath.Join(p, "bin") }},
+		{"bin dir missing", false, func(p string) string { return p }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prefix := t.TempDir()
+			if tc.mkBin {
+				if err := os.Mkdir(filepath.Join(prefix, "bin"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			locked := tc.locked(prefix)
+			if err := os.Chmod(locked, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { os.Chmod(locked, 0o755) })
+			out, err := runInstall(t, []string{
+				"SPLITDPI_VERSION=v0.1.0-ro",
+				"SPLITDPI_BASE_URL=" + srv.URL,
+				"SPLITDPI_PREFIX=" + prefix,
+			})
+			if err == nil {
+				t.Fatal("want install failure")
+			}
+			if strings.TrimSpace(out) != "rerun with sudo" {
+				t.Fatalf("unexpected output: %q", out)
+			}
+		})
+	}
+	if hits != 0 {
+		t.Errorf("downloaded %d times before the permission check", hits)
+	}
+}
+
 func TestInstallMissingChecksumLine(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("posix install.sh")

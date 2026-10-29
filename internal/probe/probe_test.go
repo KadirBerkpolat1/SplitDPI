@@ -37,8 +37,8 @@ func TestProbeTimeout(t *testing.T) {
 	if len(res) != 1 || res[0].OK {
 		t.Fatalf("got %+v", res)
 	}
-	if !strings.Contains(strings.ToLower(res[0].Err), "timeout") {
-		t.Fatalf("err %q want timeout", res[0].Err)
+	if got := probe.Classify(res[0]); got != probe.Timeout {
+		t.Fatalf("category %q for %q, want timeout", got, res[0].Err)
 	}
 }
 
@@ -54,6 +54,25 @@ func TestProbeUntrustedTLS(t *testing.T) {
 	res := p.Probe(context.Background(), []string{srv.URL})
 	if len(res) != 1 || res[0].OK {
 		t.Fatalf("got %+v", res)
+	}
+	if got := probe.Classify(res[0]); got != probe.TLS {
+		t.Fatalf("category %q for %q, want tls", got, res[0].Err)
+	}
+}
+
+func TestProbePlainHTTPOnHTTPSPort(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	p := probe.Prober{Timeout: time.Second}
+	res := p.Probe(context.Background(), []string{strings.Replace(srv.URL, "http://", "https://", 1)})
+	if len(res) != 1 || res[0].OK {
+		t.Fatalf("got %+v", res)
+	}
+	if got := probe.Classify(res[0]); got != probe.HTTP {
+		t.Fatalf("category %q for %q, want http", got, res[0].Err)
 	}
 }
 

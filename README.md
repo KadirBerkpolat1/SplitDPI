@@ -63,12 +63,14 @@ shows the command that does the same thing, so you can script it.
 | `splitdpi enable` / `disable` | Installs and starts the service, or stops and removes it. |
 | `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
-| `splitdpi sites list\|add DOMAIN\|remove DOMAIN` | Manages your own blocked sites, which the bypass always handles. |
+| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles; `import` adds every domain in a text file, one per line. |
+| `splitdpi takeover [--yes]` | Finds another zapret or zapret2 install and shows what switching to SplitDPI changes; `--yes` imports its sites, stops its service and turns off its start on boot. |
 | `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
 | `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Sends DNS through a built-in encrypted DNS forwarder (DoH, or DoT with `--dot`); without an argument, shows the current choice. |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
+| `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
 
 All commands except `--help`, `version` and `presets list` need root. Add
 `--lang tr` or `--lang en` to pick a language; otherwise SplitDPI
@@ -135,9 +137,31 @@ unmodified.
 `sudo splitdpi revert` stops SplitDPI, removes its service, deletes its table
 and its runtime files, and then checks that nothing is left. It prints
 `clean`, or lists what remains. `--purge` also removes its settings and data.
+If `takeover` switched off another zapret install, revert turns its service
+back on; `takeover` never deletes or edits that install's files.
 Revert never reads the configuration, so a broken config cannot block it. If
 SplitDPI is killed, its queue rules stay in place but let all traffic through
 until you run `revert` or start it again.
+
+## Removing SplitDPI
+
+`sudo splitdpi uninstall` lists what it would remove and changes nothing.
+`sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
+the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove.
+
+## Where presets come from
+
+The ISP strategies started from
+[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) by Çağrı
+Taşkın (MIT). Other MIT-licensed collections, such as
+[erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs),
+are used to cross-check them. Each ISP file records in its `reported` field
+when its strategies were last seen working on a real connection. When `scan`
+saves a working strategy, it prints a link that opens a prefilled issue in
+[SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
+your AS number, ISP, country, the strategy and the versions. Nothing is sent
+until you submit the issue, and it never contains your IP address or your own
+sites.
 
 ## Reporting a strategy
 

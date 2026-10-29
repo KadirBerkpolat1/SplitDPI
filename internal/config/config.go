@@ -169,15 +169,25 @@ func ReadList(path string) ([]string, error) {
 	return out, sc.Err()
 }
 
-func AddToList(path string, d string) error {
+// AddToList appends the entries of ds that the list does not have yet.
+func AddToList(path string, ds ...string) error {
 	lines, err := ReadList(path)
 	if err != nil {
 		return err
 	}
-	for _, existing := range lines {
-		if existing == d {
-			return nil
+	have := make(map[string]bool, len(lines)+len(ds))
+	for _, l := range lines {
+		have[l] = true
+	}
+	var add strings.Builder
+	for _, d := range ds {
+		if !have[d] {
+			have[d] = true
+			add.WriteString(d + "\n")
 		}
+	}
+	if add.Len() == 0 {
+		return nil
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
@@ -188,7 +198,7 @@ func AddToList(path string, d string) error {
 	if err != nil {
 		return err
 	}
-	line := d + "\n"
+	line := add.String()
 	if fi.Size() > 0 {
 		last := make([]byte, 1)
 		if _, err := f.ReadAt(last, fi.Size()-1); err != nil {

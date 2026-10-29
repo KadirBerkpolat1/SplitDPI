@@ -10,14 +10,16 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
-// RevertReport lists what revert removed and what is still present afterwards.
+// RevertReport lists what revert removed, the other tools' services it turned
+// back on, and what is still present afterwards.
 type RevertReport struct {
-	Removed, Leftover []string
+	Removed, Restored, Leftover []string
 }
 
 // Revert removes the service (stop, disable, remove files), stops a running
-// supervisor, deletes our nft table and clears RunDir; purge also removes
-// ConfigDir and StateDir. rulesOnly deletes only the table: it runs inside
+// supervisor, deletes our nft table, turns back on what Takeover turned off
+// and clears RunDir; purge also removes ConfigDir and StateDir. rulesOnly
+// deletes only the table: it runs inside
 // the service's own stop (ExecStopPost), where calling the service manager
 // would deadlock. It uses only paths and the fixed table name, never config,
 // so a corrupt config cannot block it.
@@ -46,6 +48,8 @@ func (o *Ops) Revert(ctx context.Context, rulesOnly, purge bool) RevertReport {
 	}
 	var dirs []string
 	if !rulesOnly {
+		// Before the dirs: --purge removes StateDir with the takeover record.
+		o.restoreTakeover(ctx, &r)
 		dirs = append(dirs, o.P.RunDir)
 		if purge {
 			dirs = append(dirs, o.P.ConfigDir, o.P.StateDir)

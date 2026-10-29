@@ -35,7 +35,7 @@ help = "List, enable or disable app profiles (list | enable ID | disable ID)."
 help = "Manage domains never touched by the bypass (list | add DOMAIN | remove DOMAIN)."
 
 [cmd.sites]
-help = "Manage your own blocked sites, which the bypass always handles (list | add DOMAIN | remove DOMAIN)."
+help = "Manage your own blocked sites, which the bypass always handles (list | add DOMAIN | remove DOMAIN | import FILE)."
 
 [cmd.strategy]
 help = "List the preset strategies or choose one (list | set ID)."
@@ -44,7 +44,7 @@ help = "List the preset strategies or choose one (list | set ID)."
 help = "Test HTTPS reachability of enabled app probe URLs and your sites."
 
 [probe]
-usage = "Usage: splitdpi probe [--apps id,id]"
+usage = "Usage: splitdpi probe [--apps id,id] [-v]"
 no_apps = "No apps enabled and no sites added. Run: sudo splitdpi apps enable discord  or: sudo splitdpi sites add DOMAIN"
 failed = "One or more probes failed."
 dns.mismatch = "system and DoH disagree"
@@ -53,7 +53,7 @@ dns.mismatch = "system and DoH disagree"
 help = "Find a working DPI strategy for your ISP (preset trials, then blockcheck2), or for one site (--site DOMAIN)."
 
 [scan]
-usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|PROVIDER]"
+usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|PROVIDER] [-v]"
 site_ipv4 = "Scanning %s with blockcheck2 over IPv4 only: this machine has no global IPv6."
 site_ipv46 = "Scanning %s with blockcheck2 over IPv4 and IPv6."
 verify = "Re-testing %d blockcheck2 strategies on your apps and sites; the first that opens all of them is saved."
@@ -108,7 +108,7 @@ empty = "No domain given."
 invalid = "%q is not a valid domain name."
 
 [sites]
-usage = "Usage: splitdpi sites list | add DOMAIN | remove DOMAIN"
+usage = "Usage: splitdpi sites list | add DOMAIN | remove DOMAIN | import FILE"
 added = "Added %s to your sites. Restart splitdpi to apply."
 removed = "Removed %s from your sites. Restart splitdpi to apply."
 
@@ -378,3 +378,79 @@ scan_hint = "To scan with encrypted DNS and keep it on, run the scan again with 
 scan_kept = "Keeping the system resolver: results for the poisoned domains may be wrong."
 scan_on = "Encrypted DNS (%s) is on for this scan and stays on."
 yes = "y,yes"
+
+[cmd.uninstall]
+help = "Remove SplitDPI completely: service, rules, settings, data, log and the program ([--yes] confirms)."
+
+[uninstall]
+usage = "Usage: splitdpi uninstall [--yes]"
+nothing = "SplitDPI has no service or files to remove here."
+plan = "Uninstalling stops SplitDPI, removes its firewall rules and deletes:"
+item = "  %s"
+confirm = "Nothing was changed. To uninstall, run: sudo splitdpi uninstall --yes"
+removed = "Removed %s"
+leftover = "Still present: %s"
+done = "SplitDPI is uninstalled."
+not_clean = "Uninstall did not finish; the items above are still present. Fix them, then run `sudo splitdpi uninstall --yes` again."
+[probeerr.reset]
+what = "Your provider is blocking this site: the connection was cut."
+todo = "Try another strategy with a scan: sudo splitdpi scan"
+
+[probeerr.timeout]
+what = "The site did not answer in time."
+todo = "Your provider may be dropping the traffic, or the site may be down. Try a scan: sudo splitdpi scan. If every site is slow, check your internet connection."
+
+[probeerr.dns]
+what = "The site's address could not be looked up: DNS failed or was tampered with."
+todo = "Send DNS through encrypted DNS-over-HTTPS, then restart splitdpi: sudo splitdpi dns on"
+
+[probeerr.tls]
+what = "The secure connection failed: the certificate did not match the site, or the handshake broke."
+todo = "Your provider may be redirecting the site. Turn on encrypted DNS (sudo splitdpi dns on), then try a scan: sudo splitdpi scan"
+
+[probeerr.http]
+what = "Something other than the site answered, probably your provider's block page."
+todo = "Try a scan: sudo splitdpi scan. If it keeps happening, turn on encrypted DNS: sudo splitdpi dns on"
+
+[probeerr.other]
+what = "The connection failed for another reason."
+todo = "Run the command again with -v to see the error, and check that the site opens at all."
+
+[share]
+scan = "Help others on your provider: share this result with the preset repository. The link opens a prefilled GitHub issue; nothing is sent until you submit it:\n%s"
+
+[appnote]
+telegram = "Telegram's direct connections to IP addresses (MTProto) are not covered."
+[cmd.takeover]
+help = "Switch from another zapret install to splitdpi: take over its sites and turn it off (takeover [--yes])."
+
+[sites_import]
+added = "Added %d new sites to your sites. Restart splitdpi to apply."
+skipped = "Line %d skipped, not a domain: %s"
+
+[takeover]
+usage = "Usage: splitdpi takeover [--yes]"
+none = "No other zapret install found on this computer."
+found = "Found %s:"
+dir = "installed in %s"
+service = "service: %s (%s)"
+no_service = "no service"
+boot = "starts on boot"
+running = "running now"
+not_running = "not running"
+hostlist = "its site list: %s"
+plan = "splitdpi takeover --yes will:"
+plan_import = "add the sites from %s to your sites"
+plan_stop = "stop the %s service"
+plan_disable = "keep %s from starting on boot"
+plan_manual = "not stop %s: it runs outside a service, so stop it yourself"
+plan_nothing = "change nothing: it is not running, does not start on boot and has no site list"
+untouched = "No files of the other tool are deleted or edited; sudo splitdpi revert turns it back on."
+confirm = "To do this, run: %s"
+imported = "added %d new sites from %s"
+did_stop = "stopped the %s service"
+did_disable = "%s no longer starts on boot"
+still_running = "%s still runs outside a service: stop it yourself before starting splitdpi"
+done = "Done. Open splitdpi to set it up and start it: sudo splitdpi"
+restored = "Turned back on: %s"
+conflict = "%s is running (zapret, another DPI-bypass tool); splitdpi can switch it off and keep its sites"

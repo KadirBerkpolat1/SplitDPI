@@ -126,6 +126,9 @@ func runRevert(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	for _, d := range r.Removed {
 		fmt.Fprintln(w, i18n.T("revert.removed", d))
 	}
+	for _, s := range r.Restored {
+		fmt.Fprintln(w, i18n.T("takeover.restored", s))
+	}
 	if len(r.Leftover) == 0 {
 		fmt.Fprintln(w, i18n.T("revert.clean"))
 		return nil
