@@ -763,9 +763,9 @@ func wrapIndented(s string, width int) []string {
 }
 
 func (l lastScan) summary() string {
-	s := i18n.T("scan_page.last_none", len(l.rep.Trials))
+	s := i18n.N("scan_page.last_none", len(l.rep.Trials))
 	if l.rep.Winner != nil {
-		s = i18n.T("scan_page.last_won", len(l.rep.Trials), l.rep.Winner.ID)
+		s = i18n.N("scan_page.last_won", len(l.rep.Trials), l.rep.Winner.ID)
 	}
 	if l.site != "" {
 		s += mutedStyle.Render("  " + l.site)

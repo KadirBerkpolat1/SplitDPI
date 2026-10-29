@@ -163,7 +163,7 @@ func (m Model) dnsAskView() string {
 		lines = append(lines, text.Render(i18n.T("scan_page.dns.poisoned")))
 		for i, r := range a.q.poisoned {
 			if i == maxPoisonedShown {
-				lines = append(lines, "   "+mutedStyle.Render(i18n.T("scan_page.dns.more", len(a.q.poisoned)-i)))
+				lines = append(lines, "   "+mutedStyle.Render(i18n.N("scan_page.dns.more", len(a.q.poisoned)-i)))
 				break
 			}
 			lines = append(lines, " "+m.g.bullet+" "+r.Domain)

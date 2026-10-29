@@ -70,7 +70,7 @@ func TestScanPageOffersBothFlows(t *testing.T) {
 		t.Fatalf("start over: step %v", m.wiz.step)
 	}
 	has(t, m.View(), i18n.T("scan_page.last"))
-	has(t, m.View(), i18n.T("scan_page.last_none", 0))
+	has(t, m.View(), i18n.N("scan_page.last_none", 0))
 	has(t, m.View(), "pastebin.com")
 }
 
