@@ -251,6 +251,27 @@ func TestOwnChildNotConflict(t *testing.T) {
 	has(t, c.Msg, "nfqws2")
 }
 
+// blockcheck2 runs splitdpi's nfqws2 during a scan without the supervisor
+// lock; started from the engine dir, it is still ours.
+func TestEngineNfqws2NotConflict(t *testing.T) {
+	f := newFake(t)
+	ours := filepath.Join(f.env.P.EngineDir, "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2")
+	f.env.Procs = func() ([]doctor.Proc, error) {
+		return []doctor.Proc{{PID: 700, PPID: 690, Comm: "nfqws2", Exe: ours}}, nil
+	}
+	if names, _ := doctor.ConflictProcs(f.env); len(names) != 0 {
+		t.Errorf("engine nfqws2 flagged: %q", names)
+	}
+	f.env.Procs = func() ([]doctor.Proc, error) {
+		return []doctor.Proc{
+			{PID: 700, PPID: 690, Comm: "nfqws2", Exe: ours},
+			{PID: 1156, PPID: 1, Comm: "nfqws2", Exe: "/opt/zapret2/binaries/linux-x86_64/nfqws2"},
+		}, nil
+	}
+	c := one(t, doctor.Conflicts(context.Background(), f.env), "conflict", doctor.Blocker)
+	has(t, c.Msg, "nfqws2")
+}
+
 func TestParseProcStat(t *testing.T) {
 	p, ok := doctor.ParseProcStat("1156 (nfqws2) S 1 1156 1156 0 -1 4194560 100 0 0 0")
 	if !ok || p != (doctor.Proc{PID: 1156, PPID: 1, Comm: "nfqws2"}) {

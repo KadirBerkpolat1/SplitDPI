@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -96,6 +97,21 @@ func TestDetectForeignNone(t *testing.T) {
 	found, err := o.DetectForeign(context.Background())
 	if err != nil || len(found) != 0 {
 		t.Fatalf("got %+v, %v", found, err)
+	}
+}
+
+// During a scan blockcheck2 runs splitdpi's own nfqws2; that is not a zapret2.
+func TestDetectForeignSkipsEngineNfqws2(t *testing.T) {
+	o, _ := takeoverOps(t, nil, nil)
+	exe := filepath.Join(o.P.EngineDir, "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2")
+	o.Root = fstest.MapFS{
+		"run/systemd/system": {Mode: os.ModeDir},
+		"proc/700/stat":      proc("700", "nfqws2"),
+		"proc/700/exe":       {Mode: fs.ModeSymlink, Data: []byte(exe)},
+	}
+	found, err := o.DetectForeign(context.Background())
+	if err != nil || len(found) != 0 {
+		t.Fatalf("found %+v, %v", found, err)
 	}
 }
 

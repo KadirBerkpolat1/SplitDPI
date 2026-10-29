@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"os/exec"
+	"path"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
@@ -34,8 +35,8 @@ func (o *Ops) doctorEnv() doctor.Env {
 	}
 }
 
-// procs lists every process from /proc/*/stat. Processes that exit while
-// being read are skipped.
+// procs lists every process from /proc/*/stat, with its executable from
+// /proc/*/exe. Processes that exit while being read are skipped.
 func (o *Ops) procs() ([]doctor.Proc, error) {
 	files, err := fs.Glob(o.Root, "proc/[0-9]*/stat")
 	if err != nil {
@@ -45,6 +46,7 @@ func (o *Ops) procs() ([]doctor.Proc, error) {
 	for _, f := range files {
 		if b, err := fs.ReadFile(o.Root, f); err == nil {
 			if p, ok := doctor.ParseProcStat(string(b)); ok {
+				p.Exe, _ = fs.ReadLink(o.Root, path.Dir(f)+"/exe")
 				ps = append(ps, p)
 			}
 		}

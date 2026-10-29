@@ -48,6 +48,7 @@ type Env struct {
 type Proc struct {
 	PID, PPID int
 	Comm      string
+	Exe       string // the executable's path; "" when it cannot be read
 }
 
 const minMajor, minMinor = 5, 4
@@ -166,13 +167,16 @@ func ConflictProcs(env Env) ([]string, error) {
 	return names, err
 }
 
-// ownProcess matches splitdpi's own nfqws2 while a supervisor holds the lock:
-// the child PID in status.json, or any descendant of the lock holder (nfqws2
-// runs under a guard process). A stale lock or status file matches nothing.
+// ownProcess matches splitdpi's own nfqws2: one run from its engine dir (as
+// blockcheck2 does during a scan, without the lock), and while a supervisor
+// holds the lock, the child PID in status.json or any descendant of the lock
+// holder (nfqws2 runs under a guard process). A stale lock or status file
+// matches nothing.
 func ownProcess(p paths.Paths, procs []Proc) func(Proc) bool {
+	fromEngine := func(pr Proc) bool { return strings.HasPrefix(pr.Exe, p.EngineDir+"/") }
 	pid, _, held := supervisor.LockInfo(p)
 	if !held {
-		return func(Proc) bool { return false }
+		return fromEngine
 	}
 	st, _ := supervisor.ReadStatus(p)
 	parent := make(map[int]int, len(procs))
@@ -180,7 +184,7 @@ func ownProcess(p paths.Paths, procs []Proc) func(Proc) bool {
 		parent[pr.PID] = pr.PPID
 	}
 	return func(pr Proc) bool {
-		if st.ChildPID != 0 && pr.PID == st.ChildPID {
+		if fromEngine(pr) || st.ChildPID != 0 && pr.PID == st.ChildPID {
 			return true
 		}
 		for a, depth := pr.PPID, 0; a > 1 && depth < len(procs); a, depth = parent[a], depth+1 {
