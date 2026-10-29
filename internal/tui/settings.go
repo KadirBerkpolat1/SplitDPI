@@ -163,7 +163,7 @@ func (settingsPage) View(m Model, w, h int) string {
 	lines := make([]string, len(settings))
 	for i, st := range settings {
 		label := lipgloss.NewStyle().Width(labelW + 2).Render(st.label())
-		lines[i] = m.cursorMark(i == s.cursor) + label + st.value(m)
+		lines[i] = m.listMark(i == s.cursor) + label + st.value(m)
 	}
 	out := scroll(lines, s.cursor, len(lines), w)
 	if len(s.result) > 0 {
@@ -327,7 +327,7 @@ func (m Model) dnsPickerView(w, h int) string {
 			at = len(lines)
 		}
 		name := lipgloss.NewStyle().Width(nameW + 2).Render(d.Name)
-		left := m.cursorMark(i == p.cursor) + mark + " " + name
+		left := m.listMark(i == p.cursor) + mark + " " + name
 		lines = append(lines, strings.Split(lipgloss.JoinHorizontal(lipgloss.Top, left, mutedStyle.Render(note.Render(d.Note))), "\n")...)
 	}
 	return strings.Join(append(head, scroll(lines, at, h-len(head), w)...), "\n")

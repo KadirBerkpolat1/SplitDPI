@@ -111,7 +111,7 @@ func (strategyPage) View(m Model, w, h int) string {
 		if m.cfg.Strategy != nil && m.cfg.Strategy.ID == ch.Strategy.ID {
 			mark = goodStyle.Render(m.g.on)
 		}
-		lines[i] = m.cursorMark(i == s.cursor) + mark + " " + ch.Strategy.ID +
+		lines[i] = m.listMark(i == s.cursor) + mark + " " + ch.Strategy.ID +
 			strings.Repeat(" ", width-len(ch.Strategy.ID)) + mutedStyle.Render("  "+ch.From())
 	}
 	return strings.Join(append(head, scroll(lines, s.cursor, h-len(head), w)...), "\n")

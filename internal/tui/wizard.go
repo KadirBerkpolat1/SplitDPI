@@ -653,7 +653,7 @@ func (m Model) wizardView(width, h int) string {
 		head = append(head, i18n.T("shell.scan.intro"), "")
 		notes := []string{i18n.T("scan_page.quick_note"), i18n.T("scan_page.site_note")}
 		for i, a := range m.wizardActions() {
-			head = append(head, m.cursorMark(m.inPage && i == m.focus)+a.Label)
+			head = append(head, m.listMark(i == m.focus)+a.Label)
 			head = append(head, wrapIndented("    "+mutedStyle.Render(notes[i]), width)...)
 		}
 		if m.cfg.Strategy != nil || w.last != nil {
@@ -701,7 +701,7 @@ func (m Model) wizardView(width, h int) string {
 			if i < len(rows) {
 				label = fmt.Sprintf("%s  %s", rows[i].Name, mutedStyle.Render(rows[i].Country+" AS"+asns(rows[i].ASN)))
 			}
-			list = append(list, m.cursorMark(i == w.cursor)+label)
+			list = append(list, m.listMark(i == w.cursor)+label)
 		}
 	case wApps:
 		if w.info.ASN != 0 {
@@ -709,7 +709,7 @@ func (m Model) wizardView(width, h int) string {
 		}
 		head = append(head, i18n.T("tui.wiz.apps"))
 		for i, a := range w.apps {
-			list = append(list, m.cursorMark(i == w.cursor)+m.mark(w.chosen[a.ID])+" "+a.Name)
+			list = append(list, m.listMark(i == w.cursor)+m.mark(w.chosen[a.ID])+" "+a.Name)
 		}
 	case wSite:
 		ipv := i18n.T("tui.wiz.ipv4")

@@ -281,14 +281,67 @@ func TestTakeoverStoppedInstall(t *testing.T) {
 		t.Fatalf("found %+v, %v", found, err)
 	}
 	r, err := o.Takeover(context.Background(), found[0])
-	if err != nil || r.Stopped || r.Disabled || len(r.Added) != 2 {
+	if err != nil || r.Stopped || !r.Disabled || len(r.Added) != 2 {
 		t.Fatalf("report %+v, %v", r, err)
 	}
-	if slices.ContainsFunc(f.calls, func(c string) bool { return c != "systemctl is-enabled zapret2" }) {
-		t.Errorf("service touched: %q", f.calls)
+	// Disabling it again changes nothing, and there is nothing to restore.
+	if want := []string{"systemctl is-enabled zapret2", "systemctl disable zapret2"}; !slices.Equal(f.calls, want) {
+		t.Errorf("calls %q, want %q", f.calls, want)
 	}
 	if _, err := os.Stat(o.P.TakeoverFile); !os.IsNotExist(err) {
 		t.Errorf("record written for nothing turned off: %v", err)
+	}
+}
+
+// When systemctl cannot say whether the service starts on boot, takeover
+// still disables it, and revert enables it.
+func TestTakeoverSystemdBootUnknown(t *testing.T) {
+	ctx := context.Background()
+	root := systemdZapret2()
+	delete(root, "proc/1156/stat")
+	o, f := takeoverOps(t, root, map[string]string{"systemctl is-enabled zapret2": ""})
+	found, err := o.DetectForeign(ctx)
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found %+v, %v", found, err)
+	}
+	if s := found[0].Service; s.Enabled || !s.BootUnknown || !s.MayStartOnBoot() {
+		t.Fatalf("service %+v; want its boot state unknown", s)
+	}
+	r, err := o.Takeover(ctx, found[0])
+	if err != nil || !r.Disabled || r.Stopped {
+		t.Fatalf("report %+v, %v", r, err)
+	}
+	if !slices.Contains(f.calls, "systemctl disable zapret2") {
+		t.Errorf("not disabled: %q", f.calls)
+	}
+	f.calls = nil
+	rep := o.Revert(ctx, false, false)
+	if want := []string{"systemctl enable zapret2"}; !slices.Equal(f.calls, want) {
+		t.Errorf("revert calls %q, want %q", f.calls, want)
+	}
+	if !slices.Equal(rep.Restored, []string{"zapret2 (systemd)"}) {
+		t.Errorf("revert %+v", rep)
+	}
+}
+
+// Every state systemctl is-enabled names is known, and only "enabled" starts on boot.
+func TestSystemdBootStates(t *testing.T) {
+	for out, want := range map[string]initsys.ForeignService{
+		"enabled\n":                {Enabled: true},
+		"disabled\n":               {},
+		"static\n":                 {},
+		"masked\n":                 {},
+		"":                         {BootUnknown: true},
+		"Failed to connect to bus": {BootUnknown: true},
+	} {
+		o, _ := takeoverOps(t, systemdZapret2(), map[string]string{"systemctl is-enabled zapret2": out})
+		found, err := o.DetectForeign(context.Background())
+		if err != nil || len(found) != 1 {
+			t.Fatalf("%q: found %+v, %v", out, found, err)
+		}
+		if s := found[0].Service; s.Enabled != want.Enabled || s.BootUnknown != want.BootUnknown {
+			t.Errorf("is-enabled %q: enabled %v unknown %v, want %v %v", out, s.Enabled, s.BootUnknown, want.Enabled, want.BootUnknown)
+		}
 	}
 }
 

@@ -612,3 +612,7 @@ any_key = "SplitDPI is no longer on this computer. Press any key to close this w
 [confirm_keys]
 yes = "y"
 no = "n"
+
+[takeover_boot]
+state = "could not tell whether it starts on boot"
+change = "Keep %s from starting on boot (its current setting could not be read; revert turns it on)."

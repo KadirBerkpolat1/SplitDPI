@@ -57,6 +57,28 @@ func TestTakeoverYesAndRevert(t *testing.T) {
 	}
 }
 
+// systemctl is-enabled printing no state (no bus) is not "disabled": the plan
+// still turns off its start on boot, and revert turns it back on.
+func TestTakeoverBootUnknown(t *testing.T) {
+	o, f := runOpsFor(t, zapret2Root())
+	f.out = map[string]string{"systemctl is-enabled zapret2": ""}
+	out, code := runOps(t, o, "takeover")
+	eq(t, code, 0)
+	has(t, out, "could not tell whether it starts on boot")
+	has(t, out, "keep zapret2 from starting on boot")
+	_, code = runOps(t, o, "takeover", "--yes")
+	eq(t, code, 0)
+	if !f.saw("systemctl disable zapret2") {
+		t.Errorf("not disabled: %q", f.calls)
+	}
+	out, code = runOps(t, o, "revert")
+	eq(t, code, 0)
+	has(t, out, "Turned back on: zapret2 (systemd)")
+	if !f.saw("systemctl enable zapret2") {
+		t.Errorf("not enabled again: %q", f.calls)
+	}
+}
+
 func TestTakeoverUsage(t *testing.T) {
 	_, code := run(t, 0, "takeover", "--force")
 	eq(t, code, 2)

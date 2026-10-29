@@ -74,9 +74,10 @@ type TakeoverReport struct {
 }
 
 // Takeover moves f's sites into the user's sites, then stops its service and
-// turns off its start on boot. It records what it turned off before touching
-// it, so Revert can turn it back on. A Running f without a service keeps
-// running: there is no service to stop it with.
+// turns off its start on boot, whatever the init said about it. It records
+// what it turned off before touching it, so Revert can turn it back on; a
+// service whose boot state is unknown is recorded as starting on boot. A
+// Running f without a service keeps running: there is no service to stop it with.
 func (o *Ops) Takeover(ctx context.Context, f Foreign) (TakeoverReport, error) {
 	var r TakeoverReport
 	if f.Hostlist != "" {
@@ -85,25 +86,26 @@ func (o *Ops) Takeover(ctx context.Context, f Foreign) (TakeoverReport, error) {
 			return r, err
 		}
 	}
-	stop := f.Service.Name != "" && f.Running
-	if !stop && !f.Service.Enabled {
+	if f.Service.Name == "" {
 		return r, nil
 	}
-	if err := o.recordTakeover(takenService{Service: f.Service, Start: stop}); err != nil {
-		return r, err
+	t := takenService{Service: f.Service, Start: f.Running}
+	t.Service.Enabled = f.Service.MayStartOnBoot()
+	if t.Start || t.Service.Enabled {
+		if err := o.recordTakeover(t); err != nil {
+			return r, err
+		}
 	}
-	if stop {
+	if t.Start {
 		if err := f.Service.Stop(ctx, o.Exec, o.P.Root); err != nil {
 			return r, err
 		}
 		r.Stopped = true
 	}
-	if f.Service.Enabled {
-		if err := f.Service.Disable(ctx, o.Exec, o.P.Root); err != nil {
-			return r, err
-		}
-		r.Disabled = true
+	if err := f.Service.Disable(ctx, o.Exec, o.P.Root); err != nil {
+		return r, err
 	}
+	r.Disabled = true
 	return r, nil
 }
 

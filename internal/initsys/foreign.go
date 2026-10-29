@@ -21,6 +21,8 @@ type ForeignService struct {
 	Init    sysinfo.Init `json:"init"`
 	Name    string       `json:"name"`
 	Enabled bool         `json:"enabled"` // starts on boot
+	// BootUnknown: the init could not say whether it starts on boot.
+	BootUnknown bool `json:"boot_unknown,omitempty"`
 	// Runlevels are the OpenRC runlevels it is added to.
 	Runlevels []string `json:"runlevels,omitempty"`
 	// Link is the runit enable link (a host path) and Target what it points at.
@@ -29,6 +31,13 @@ type ForeignService struct {
 }
 
 var systemdUnitDirs = []string{"etc/systemd/system", "usr/lib/systemd/system", "lib/systemd/system", "usr/local/lib/systemd/system"}
+
+// systemdStates are the states systemctl is-enabled prints.
+var systemdStates = []string{"enabled", "enabled-runtime", "linked", "linked-runtime", "alias", "masked", "masked-runtime",
+	"static", "indirect", "disabled", "generated", "transient", "bad", "not-found"}
+
+// MayStartOnBoot: it starts on boot, or the init could not say.
+func (s ForeignService) MayStartOnBoot() bool { return s.Enabled || s.BootUnknown }
 
 // FindForeign looks for the service name under init in on root (the host
 // "/"); it returns the zero ForeignService when it is not installed there.
@@ -41,9 +50,12 @@ func FindForeign(ctx context.Context, root fs.FS, run execx.Runner, in sysinfo.I
 		if !slices.ContainsFunc(systemdUnitDirs, func(d string) bool { return exists(root, d+"/"+name+".service") }) {
 			return ForeignService{}
 		}
-		// is-enabled exits non-zero for every state but enabled; its stdout still names the state.
+		// is-enabled exits non-zero for every state but enabled; its stdout still
+		// names the state. Without one (no bus, say) the state is unknown.
 		out, _ := run(ctx, "", "systemctl", "is-enabled", name)
-		s.Enabled = strings.TrimSpace(string(out)) == "enabled"
+		state := strings.TrimSpace(string(out))
+		s.Enabled = state == "enabled"
+		s.BootUnknown = !slices.Contains(systemdStates, state)
 	case sysinfo.OpenRC:
 		if !exists(root, "etc/init.d/"+name) {
 			return ForeignService{}
@@ -103,6 +115,10 @@ func (s ForeignService) Start(ctx context.Context, run execx.Runner, _ string) e
 	return ErrUnsupportedInit
 }
 
+// Disable keeps the service from starting on boot. For one that does not, it
+// changes nothing: systemctl disable leaves a disabled or static unit as it
+// is, an OpenRC service in no runlevel has no rc-update del to run, and a
+// runit service is only found through the enable link this removes.
 func (s ForeignService) Disable(ctx context.Context, run execx.Runner, root string) error {
 	switch s.Init {
 	case sysinfo.Systemd:

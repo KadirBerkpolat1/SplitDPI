@@ -451,13 +451,13 @@ help = "SplitDPI'yi tamamen kaldırır: servis, kurallar, ayarlar, veriler, gün
 [uninstall]
 usage = "Kullanım: splitdpi uninstall [--yes]"
 nothing = "Burada kaldırılacak bir SplitDPI servisi ya da dosyası yok."
-plan = "Kaldırma, SplitDPI'yi durdurur, güvenlik duvarı kurallarını kaldırır ve şunları siler:"
+plan = "Kaldırma işlemi SplitDPI'yi durdurur, güvenlik duvarı kurallarını kaldırır ve şunları siler:"
 item = "  %s"
 confirm = "Hiçbir şey değiştirilmedi. Kaldırmak için şunu çalıştırın: sudo splitdpi uninstall --yes"
 removed = "Kaldırıldı: %s"
 leftover = "Hâlâ duruyor: %s"
 done = "SplitDPI kaldırıldı."
-not_clean = "Kaldırma tamamlanmadı; yukarıdakiler hâlâ duruyor. Sorunu giderip `sudo splitdpi uninstall --yes` komutunu yeniden çalıştırın."
+not_clean = "Kaldırma işlemi tamamlanmadı; yukarıdakiler hâlâ duruyor. Sorunu giderip `sudo splitdpi uninstall --yes` komutunu yeniden çalıştırın."
 [probeerr.reset]
 what = "Sağlayıcı bu siteyi engelliyor: bağlantı kesildi."
 todo = "Tarama ile başka bir strateji deneyin: sudo splitdpi scan"
@@ -602,7 +602,7 @@ value = "servis, ayarlar ve program"
 do = "Kaldır"
 title = "SplitDPI kaldırılsın mı?"
 stop = "SplitDPI durdurulur ve güvenlik duvarı kuralları kaldırılır."
-service = "Servisi kaldırılır: %s"
+service = "Servis kaldırılır: %s"
 paths = "Şunlar silinir: %s"
 restore = "SplitDPI'nin kapattığı bir zapret servisi varsa yeniden açılır."
 no_undo = "Bu geri alınamaz: ayarlarınız ve site listeniz de silinir. SplitDPI'yi yeniden kurmak için şuradaki README'de bulunan kurulum komutunu kullanın:"
@@ -612,3 +612,7 @@ any_key = "SplitDPI artık bu bilgisayarda yok. Bu pencereyi kapatmak için herh
 [confirm_keys]
 yes = "e"
 no = "h"
+
+[takeover_boot]
+state = "açılışta başlayıp başlamadığı okunamadı"
+change = "%s servisinin açılışta başlaması kapatılacak (şu anki ayarı okunamadı; geri alma onu açar)."

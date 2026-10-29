@@ -215,6 +215,10 @@ func (m Model) cursorMark(on bool) string {
 	return strings.Repeat(" ", lipgloss.Width(m.g.cursor)+1)
 }
 
+// listMark is the cursor of a page's list. It shows only while the page has
+// focus, so that the menu's cursor is the one active marker otherwise.
+func (m Model) listMark(on bool) string { return m.cursorMark(on && m.inPage) }
+
 // mark shows whether a toggle is on, or the bypass applies to an entry.
 func (m Model) mark(on bool) string {
 	if on {

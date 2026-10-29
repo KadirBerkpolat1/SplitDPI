@@ -73,7 +73,10 @@ func (m *Model) confirmTakeover() tea.Cmd {
 		if f.Running {
 			changes = append(changes, i18n.T("takeover_tui.stop", f.Service.Name, string(f.Service.Init)))
 		}
-		if f.Service.Enabled {
+		switch {
+		case f.Service.BootUnknown:
+			changes = append(changes, i18n.T("takeover_boot.change", f.Service.Name))
+		case f.Service.Name != "":
 			changes = append(changes, i18n.T("takeover_tui.boot", f.Service.Name))
 		}
 	}

@@ -1197,7 +1197,7 @@ func TestSitesLayoutTurkish(t *testing.T) {
 		"╭──────────────╮╭",
 		"│   Durum      ││ Siteler  · engel aşmanın her zaman uygulandığı siteler",
 		"│ ▸ Siteler    ││",
-		"│   Strateji   ││ ▸ ✓ Discord       uygulama",
+		"│   Strateji   ││   ✓ Discord       uygulama", // the menu has focus: one cursor
 		"│   Tarama     ││   ✓ YouTube       uygulama",
 		"│   Günlük     ││   ✓ pastebin.com  sizin eklediğiniz",
 		"│   Ayarlar    ││",
@@ -1217,6 +1217,13 @@ func TestSitesLayoutTurkish(t *testing.T) {
 	has(t, lines[22], "q Çık")
 	if lines[23] != "$ sudo splitdpi sites add DOMAIN" {
 		t.Errorf("CLI line %q", lines[23])
+	}
+	if n := strings.Count(m.View(), "▸"); n != 1 {
+		t.Errorf("%d cursors with the menu focused, want 1", n)
+	}
+	m = press(t, m, "enter")
+	if l := strings.Split(m.View(), "\n")[4]; !strings.HasPrefix(l, "│   Strateji   ││ ▸ ✓ Discord       uygulama") {
+		t.Errorf("in the page, line 4 = %q; want the list cursor", l)
 	}
 }
 
@@ -1351,9 +1358,8 @@ func TestSitesAppNoteTurkish(t *testing.T) {
 	if strings.Contains(v, "Direct connections") {
 		t.Errorf("English note in tr:\n%s", v)
 	}
-	// The row is cut at 80 columns; selected, it shows in full under the list.
-	m = press(t, m, "down")
-	has(t, flat(pages[pgSites].View(m, 60, 18)), "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor.")
+	// The note wraps under the row instead of being cut.
+	has(t, flat(pageText(v)), "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor.")
 }
 
 func TestProbeFailureInPlainWords(t *testing.T) {

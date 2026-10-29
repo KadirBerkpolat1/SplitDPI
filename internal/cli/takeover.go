@@ -72,8 +72,11 @@ func printForeign(w io.Writer, f ops.Foreign) {
 		fmt.Fprintln(w, "  "+i18n.T("takeover.no_service"))
 	} else {
 		fmt.Fprintln(w, "  "+i18n.T("takeover.service", f.Service.Name, string(f.Service.Init)))
-		if f.Service.Enabled {
+		switch {
+		case f.Service.Enabled:
 			fmt.Fprintln(w, "  "+i18n.T("takeover.boot"))
+		case f.Service.BootUnknown:
+			fmt.Fprintln(w, "  "+i18n.T("takeover_boot.state"))
 		}
 	}
 	if f.Running {
@@ -96,7 +99,7 @@ func printPlan(w io.Writer, f ops.Foreign) {
 	if f.Running && f.Service.Name != "" {
 		steps = append(steps, i18n.T("takeover.plan_stop", f.Service.Name))
 	}
-	if f.Service.Enabled {
+	if f.Service.Name != "" {
 		steps = append(steps, i18n.T("takeover.plan_disable", f.Service.Name))
 	}
 	if f.Running && f.Service.Name == "" {

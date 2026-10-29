@@ -362,28 +362,40 @@ func (m Model) appsView(w, h int) string {
 	for _, d := range a.excluded {
 		entries = append(entries, entry{name: d, kind: i18n.T("shell.sites.excluded")})
 	}
-	describe := func(e entry) (styled, plain string) {
-		styled, plain = mutedStyle.Render(e.kind), e.kind
+	describe := func(e entry) string {
+		s := mutedStyle.Render(e.kind)
 		if e.fail != probe.None {
-			styled += mutedStyle.Render(", ") + badStyle.Render(e.fail.What())
-			plain += ", " + e.fail.What()
+			s += mutedStyle.Render(", ") + badStyle.Render(e.fail.What())
 		}
 		if e.note != "" {
-			styled += mutedStyle.Render(", " + e.note)
-			plain += ", " + e.note
+			s += mutedStyle.Render(", " + e.note)
 		}
-		return styled, plain
+		return s
 	}
 	nameW := 0
 	for _, e := range entries {
 		nameW = max(nameW, lipgloss.Width(e.name))
 	}
 	nameW = min(nameW, w/2)
-	lines := make([]string, len(entries))
+	// A long description wraps under itself, so no note or failure is cut.
+	var lines []string
+	first := make([]int, len(entries)) // each entry's first line
 	for i, e := range entries {
-		name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW).Render(e.name)
-		what, _ := describe(e)
-		lines[i] = m.cursorMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name + "  " + what
+		head := m.listMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + lipgloss.NewStyle().Width(nameW).MaxWidth(nameW).Render(e.name) + "  "
+		indent := lipgloss.Width(head)
+		what := describe(e)
+		first[i] = len(lines)
+		for j, l := range strings.Split(lipgloss.NewStyle().Width(max(w-indent, 10)).Render(what), "\n") {
+			if j == 0 {
+				lines = append(lines, head+l)
+			} else {
+				lines = append(lines, strings.Repeat(" ", indent)+l)
+			}
+		}
+	}
+	cursorLine := 0
+	if a.cursor < len(first) {
+		cursorLine = first[a.cursor]
 	}
 	var tail []string
 	if a.typing {
@@ -397,28 +409,15 @@ func (m Model) appsView(w, h int) string {
 		tail = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
 		tail = append([]string{""}, tail...)
 	} else {
-		if i := a.cursor; i < len(entries) {
-			e := entries[i]
-			var detail []string
-			if lipgloss.Width(lines[i]) > w {
-				_, plain := describe(e)
-				detail = append(detail, plain)
-			}
-			if e.fail != probe.None {
-				detail = append(detail, e.fail.Todo())
-			}
-			if len(detail) > 0 {
-				tail = append(tail, "")
-			}
-			for _, d := range detail {
-				tail = append(tail, strings.Split(mutedStyle.Width(w).Render(d), "\n")...)
-			}
+		if i := a.cursor; i < len(entries) && entries[i].fail != probe.None {
+			tail = append(tail, "")
+			tail = append(tail, strings.Split(mutedStyle.Width(w).Render(entries[i].fail.Todo()), "\n")...)
 		}
 		if sk := a.skippedView(w, max(h/3, 3)); len(sk) > 0 {
 			tail = append(append(tail, ""), sk...)
 		}
 	}
-	lines = scroll(lines, a.cursor, h-len(tail), w)
+	lines = scroll(lines, cursorLine, h-len(tail), w)
 	return strings.Join(append(lines, tail...), "\n")
 }
 
