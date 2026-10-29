@@ -161,7 +161,13 @@ stratejiyi kaydeder.
 - **Neden açılmadı.** `scan` ve `probe` bir sitenin neden açılmadığını
   (bağlantı kesildi, zaman aşımına uğradı, DNS ya da güvenli bağlantı
   başarısız oldu, ya da siteden başka bir şey yanıt verdi) anlaşılır bir dille
-  söyler ve ne denemeniz gerektiğini yazar.
+  söyler ve ne denemeniz gerektiğini yazar. Hem sizin DNS'inize hem şifreli
+  DNS'e göre kendi adresi olmayan bir alan adı (yalnızca alt alan adları
+  kullanılıyor, hiç yok ya da bu bilgisayarı gösteriyor) test edilmedi olarak
+  gösterilir ve başarısızlık sayılmaz; `probe` sonunda kaç sitenin açıldığını,
+  kaçının engelli olduğunu ve kaçının test edilmediğini yazar. Terminal
+  arayüzünün Durum sayfası aynı sayıları ve en fazla üç engelli siteyi
+  gösterir; tüm sonuçlar Siteler sayfasındadır.
 - **Sonucu paylaşma.** `scan` bir strateji kaydettiğinde,
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
   deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS

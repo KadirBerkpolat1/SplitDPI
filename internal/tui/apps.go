@@ -354,17 +354,20 @@ func (m Model) appsView(w, h int) string {
 	}
 	var entries []entry
 	for _, app := range a.apps {
-		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, i18n.T("shell.sites.app"), failure(m.probe[app.ID]), ops.AppNote(app)})
+		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, i18n.T("shell.sites.app"), probe.Overall(m.probe[app.ID]), ops.AppNote(app)})
 	}
 	for _, d := range a.sites {
-		entries = append(entries, entry{on: true, name: d, kind: i18n.T("shell.sites.yours"), fail: failure(m.probe[d])})
+		entries = append(entries, entry{on: true, name: d, kind: i18n.T("shell.sites.yours"), fail: probe.Overall(m.probe[d])})
 	}
 	for _, d := range a.excluded {
 		entries = append(entries, entry{name: d, kind: i18n.T("shell.sites.excluded")})
 	}
 	describe := func(e entry) string {
 		s := mutedStyle.Render(e.kind)
-		if e.fail != probe.None {
+		switch {
+		case e.fail == probe.NoAddress:
+			s += mutedStyle.Render(", " + e.fail.What())
+		case e.fail.Failed():
 			s += mutedStyle.Render(", ") + badStyle.Render(e.fail.What())
 		}
 		if e.note != "" {
@@ -381,7 +384,11 @@ func (m Model) appsView(w, h int) string {
 	var lines []string
 	first := make([]int, len(entries)) // each entry's first line
 	for i, e := range entries {
-		head := m.listMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + lipgloss.NewStyle().Width(nameW).MaxWidth(nameW).Render(e.name) + "  "
+		name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW)
+		if e.fail == probe.NoAddress {
+			name = name.Foreground(muted)
+		}
+		head := m.listMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name.Render(e.name) + "  "
 		indent := lipgloss.Width(head)
 		what := describe(e)
 		first[i] = len(lines)
@@ -411,7 +418,7 @@ func (m Model) appsView(w, h int) string {
 	} else {
 		if i := a.cursor; i < len(entries) && entries[i].fail != probe.None {
 			tail = append(tail, "")
-			tail = append(tail, strings.Split(mutedStyle.Width(w).Render(entries[i].fail.Todo()), "\n")...)
+			tail = append(tail, strings.Split(mutedStyle.Width(w).Render(probeTodo(entries[i].fail)), "\n")...)
 		}
 		if sk := a.skippedView(w, max(h/3, 3)); len(sk) > 0 {
 			tail = append(append(tail, ""), sk...)

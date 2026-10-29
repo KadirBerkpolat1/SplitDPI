@@ -147,7 +147,13 @@ works.
   stops after them, and `-v` shows the raw error of every failed test.
 - **Why it failed.** `scan` and `probe` say in plain words why a site did not
   open (the connection was cut, it timed out, DNS or the secure connection
-  failed, or something else answered) and what to try next.
+  failed, or something else answered) and what to try next. A domain that has
+  no address of its own, by both your DNS and encrypted DNS (only its
+  subdomains are used, it does not exist, or it points to this computer), is
+  shown as not tested and does not count as a failure; `probe` ends with how
+  many sites open, are blocked and were not tested. The terminal UI's Status
+  page shows the same counts and up to three blocked sites; Sites lists every
+  result.
 - **Sharing the result.** When `scan` saves a strategy, it prints a link that
   opens a prefilled issue in
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with

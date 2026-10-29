@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
@@ -46,21 +48,39 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 		}
 		return err
 	}
-	var failed bool
-	for app, rs := range results {
-		for _, r := range rs {
-			if r.OK {
+	return printProbe(w, results, verbose)
+}
+
+// printProbe lists each result and counts the apps and sites that open, are
+// blocked, or have no address to test. Only a blocked one is an error.
+func printProbe(w io.Writer, results map[string][]probe.Result, verbose bool) error {
+	var open, blocked, untested int
+	for _, app := range slices.Sorted(maps.Keys(results)) {
+		for _, r := range results[app] {
+			cat := probe.Classify(r)
+			switch {
+			case cat == probe.None:
 				fmt.Fprintf(w, "%s  %s  ✓\n", app, r.URL)
 				continue
+			case cat == probe.NoAddress:
+				fmt.Fprintf(w, "%s  %s  -  %s\n", app, r.URL, cat.What())
+			default:
+				fmt.Fprintf(w, "%s  %s  ✗  %s\n", app, r.URL, cat.What())
 			}
-			failed = true
-			cat := probe.Classify(r)
-			fmt.Fprintf(w, "%s  %s  ✗  %s\n", app, r.URL, cat.What())
 			fmt.Fprintln(w, "    "+cat.Todo())
 			printRawErr(w, r, verbose)
 		}
+		switch probe.Overall(results[app]) {
+		case probe.None:
+			open++
+		case probe.NoAddress:
+			untested++
+		default:
+			blocked++
+		}
 	}
-	if failed {
+	fmt.Fprintln(w, i18n.T("probe_summary.cli", open, blocked, untested))
+	if blocked > 0 {
 		return errors.New(i18n.T("probe.failed"))
 	}
 	return nil

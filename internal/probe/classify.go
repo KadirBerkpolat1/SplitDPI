@@ -25,14 +25,40 @@ const (
 	TLS     Category = "tls"     // handshake or certificate failure
 	HTTP    Category = "http"    // a plain HTTP answer on the HTTPS port, typically a block page
 	Other   Category = "other"
+	// NoAddress is not a failure: the host has no address, so nothing was tested.
+	NoAddress Category = "noaddress"
 )
 
 // Classify returns the category of a probe result; None when it succeeded.
 func Classify(r Result) Category {
-	if r.OK {
+	switch {
+	case r.OK:
 		return None
+	case r.NoAddress:
+		return NoAddress
 	}
 	return classifyErr(r.Cause)
+}
+
+// Failed reports whether c is a real failure, not a success or an untested host.
+func (c Category) Failed() bool { return c != None && c != NoAddress }
+
+// Overall is the category of one site's or app's results: the first failure;
+// else None when a result got through; else NoAddress.
+func Overall(rs []Result) Category {
+	c := None
+	if len(rs) > 0 {
+		c = NoAddress
+	}
+	for _, r := range rs {
+		switch rc := Classify(r); {
+		case rc.Failed():
+			return rc
+		case rc == None:
+			c = None
+		}
+	}
+	return c
 }
 
 func classifyErr(err error) Category {

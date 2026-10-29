@@ -2,10 +2,14 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"maps"
+	"net"
+	"net/netip"
 	"slices"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
@@ -56,8 +60,30 @@ func (o *Ops) Probe(ctx context.Context, apps []string) (map[string][]probe.Resu
 	}
 	p := probe.Prober{Client: o.HTTP, Timeout: probe.DefaultTimeout}
 	results := p.Probe(ctx, urls)
+	probe.MarkNoAddress(ctx, results, systemAddrs, dohAddrs(o.dnsClient(c)))
 	for i, s := range order {
 		out[s.app] = append(out[s.app], results[i])
 	}
 	return out, nil
+}
+
+// systemAddrs is the system resolver as a probe.Lookup.
+func systemAddrs(ctx context.Context, name string) ([]netip.Addr, error) {
+	addrs, err := lookupSystemDNS(ctx, name)
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return nil, nil
+	}
+	return addrs, err
+}
+
+// dohAddrs is c as a probe.Lookup.
+func dohAddrs(c *dns.Client) probe.Lookup {
+	return func(ctx context.Context, name string) ([]netip.Addr, error) {
+		addrs, err := c.Resolve(ctx, name)
+		if errors.Is(err, dns.ErrNoAddress) {
+			return nil, nil
+		}
+		return addrs, err
+	}
 }

@@ -278,7 +278,6 @@ apps = "Apps"
 dns = "DNS"
 dns_on = "encrypted; local names and VPN DNS use your normal DNS"
 probe = "Probe"
-reachable = "reachable"
 last_error = "Last error"
 none = "none"
 running_here = "running in this window"
@@ -622,3 +621,32 @@ doctor = "system DNS is already encrypted (%s)"
 scan_skip = "System DNS is already encrypted (%s), so the DNS poisoning check is skipped."
 not_needed = "Your system already encrypts DNS with %s, so SplitDPI's encrypted DNS is not needed."
 bypass_only = "It only affects programs that send DNS queries straight to a server instead of through the local resolver."
+
+[probeerr.noaddress]
+what = "This domain has no address of its own (only its subdomains are used, or it is not used at all); not tested."
+todo = "Nothing to do: this is not a block. If you use the site, add the address you actually open, such as its www. subdomain."
+
+[probe_summary]
+cli = "%d reachable, %d blocked, %d not tested"
+open = "%d/%d sites open"
+blocked = "%d blocked"
+untested = "%d not tested"
+all = "all on the Sites page"
+more = "%d more; all on the Sites page"
+
+[probe_short]
+reset = "connection cut"
+timeout = "does not answer"
+dns = "address not found (DNS)"
+tls = "secure connection failed"
+http = "provider's block page"
+other = "cannot connect"
+
+[probeerr_tui]
+reset = "Find another strategy on the Scan page."
+timeout = "Your provider may be dropping the traffic, or the site may be down. Try the Scan page. If every site is slow, check your internet connection."
+dns = "Turn on encrypted DNS on the Settings page, then restart SplitDPI."
+tls = "Your provider may be redirecting the site. Turn on encrypted DNS on the Settings page, then try the Scan page."
+http = "Try the Scan page. If it keeps happening, turn on encrypted DNS on the Settings page."
+other = "The technical detail is on the Logs page. Also check that the site opens at all."
+noaddress = "Nothing to do: this is not a block. If you use the site, add the address you actually open, such as its www. subdomain."

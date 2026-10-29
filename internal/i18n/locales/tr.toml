@@ -283,7 +283,6 @@ apps = "Uygulamalar"
 dns = "DNS"
 dns_on = "şifreli; yerel adlar ve VPN DNS'i her zamanki DNS'i kullanır"
 probe = "Erişim"
-reachable = "erişilebilir"
 last_error = "Son hata"
 none = "yok"
 running_here = "bu pencerede çalışıyor"
@@ -622,3 +621,32 @@ doctor = "sistem DNS'i zaten şifreli (%s)"
 scan_skip = "Sistem DNS'i zaten şifreli (%s); DNS zehirlenmesi denetimi atlanıyor."
 not_needed = "Sisteminiz DNS'i zaten %s ile şifreliyor; SplitDPI'nin şifreli DNS'ine gerek yok."
 bypass_only = "Yalnızca DNS sorgularını yerel çözümleyiciden geçirmeden doğrudan bir sunucuya gönderen programları etkiler."
+
+[probeerr.noaddress]
+what = "Bu alan adının kendi adresi yok (yalnızca alt alan adları kullanılıyor ya da hiç kullanılmıyor); test edilmedi."
+todo = "Yapmanız gereken bir şey yok: bu bir engel değil. Siteyi kullanıyorsanız gerçekten açtığınız adresi, örneğin www. ile başlayanı ekleyin."
+
+[probe_summary]
+cli = "%d açılıyor, %d engelli, %d test edilmedi"
+open = "%d/%d site açılıyor"
+blocked = "%d engelli"
+untested = "%d test edilmedi"
+all = "tümü Siteler sayfasında"
+more = "%d site daha; tümü Siteler sayfasında"
+
+[probe_short]
+reset = "bağlantı kesiliyor"
+timeout = "yanıt vermiyor"
+dns = "adresi bulunamadı (DNS)"
+tls = "güvenli bağlantı kurulamadı"
+http = "sağlayıcının engelleme sayfası"
+other = "bağlanılamıyor"
+
+[probeerr_tui]
+reset = "Tarama sayfasında başka bir strateji bulun."
+timeout = "Sağlayıcı trafiği sessizce düşürüyor ya da site çalışmıyor olabilir. Tarama sayfasını deneyin. Bütün siteler yavaşsa internet bağlantınızı kontrol edin."
+dns = "Ayarlar sayfasından şifreli DNS'i açın, sonra SplitDPI'yi yeniden başlatın."
+tls = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Ayarlar sayfasından şifreli DNS'i açın, sonra Tarama sayfasını deneyin."
+http = "Tarama sayfasını deneyin. Sorun sürerse Ayarlar sayfasından şifreli DNS'i açın."
+other = "Teknik ayrıntı Günlük sayfasında. Sitenin hiç açılıp açılmadığını da kontrol edin."
+noaddress = "Yapmanız gereken bir şey yok: bu bir engel değil. Siteyi kullanıyorsanız gerçekten açtığınız adresi, örneğin www. ile başlayanı ekleyin."

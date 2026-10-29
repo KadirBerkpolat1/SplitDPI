@@ -62,7 +62,7 @@ func TestCategoryText(t *testing.T) {
 	defer i18n.Init("en")
 	for _, lang := range []string{"en", "tr"} {
 		i18n.Init(lang)
-		for _, c := range []probe.Category{probe.Reset, probe.Timeout, probe.DNS, probe.TLS, probe.HTTP, probe.Other} {
+		for _, c := range []probe.Category{probe.Reset, probe.Timeout, probe.DNS, probe.TLS, probe.HTTP, probe.Other, probe.NoAddress} {
 			for _, s := range []string{c.What(), c.Todo()} {
 				if s == "" || strings.HasPrefix(s, "!") {
 					t.Errorf("%s %s: %q", lang, c, s)

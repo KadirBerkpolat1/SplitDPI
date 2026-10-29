@@ -16,6 +16,8 @@ type Result struct {
 	Err     string // the raw error text
 	Cause   error  // the raw error, for Classify
 	Elapsed time.Duration
+	// NoAddress means the host has no address to test; see MarkNoAddress.
+	NoAddress bool
 }
 
 type Prober struct {

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -186,6 +187,37 @@ func TestExchangeFallsBack(t *testing.T) {
 	got, err := c.Resolve(context.Background(), "discord.com")
 	if err != nil || len(got) != 2 {
 		t.Fatalf("got %v, %v", got, err)
+	}
+}
+
+// Only a definite answer without addresses is ErrNoAddress; a server failure
+// says nothing about the name.
+func TestResolveNoAddress(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		rcode dnsmessage.RCode
+		want  bool
+	}{
+		{"nxdomain", dnsmessage.RCodeNameError, true},
+		{"nodata", dnsmessage.RCodeSuccess, true},
+		{"servfail", dnsmessage.RCodeServerFailure, false},
+	} {
+		srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			var q dnsmessage.Message
+			if err := q.Unpack(body); err != nil {
+				http.Error(w, "bad", http.StatusBadRequest)
+				return
+			}
+			b, _ := (&dnsmessage.Message{Header: dnsmessage.Header{ID: q.ID, Response: true, RCode: tc.rcode}, Questions: q.Questions}).Pack()
+			w.Write(b)
+		}))
+		c := &dns.Client{Upstreams: dohUpstreams(t, srv.URL), HTTP: srv.Client()}
+		got, err := c.Resolve(context.Background(), "rbxcdn.com")
+		srv.Close()
+		if got != nil || err == nil || errors.Is(err, dns.ErrNoAddress) != tc.want {
+			t.Errorf("%s: got %v, %v; want ErrNoAddress %v", tc.name, got, err, tc.want)
+		}
 	}
 }
 

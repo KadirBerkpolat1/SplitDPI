@@ -728,8 +728,8 @@ func TestProbeShowsResults(t *testing.T) {
 	if !f.called("probe") {
 		t.Fatal("probe not called")
 	}
-	has(t, m.View(), "discord")
-	has(t, m.View(), "reachable")
+	has(t, m.View(), "1/1 sites open")
+	has(t, m.View(), "all on the Sites page")
 }
 
 // Run now keeps the bypass inside this process; quitting must ask, then revert.
@@ -1373,9 +1373,9 @@ func TestProbeFailureInPlainWords(t *testing.T) {
 	f.probeRes = failedProbe()
 	m := press(t, newModel(t, f), "p")
 	page := flat(pages[pgStatus].View(m, 60, 18))
-	has(t, page, "discord "+probe.Reset.What())
-	has(t, page, "youtube reachable")
-	has(t, page, "What to do "+probe.Reset.Todo())
+	has(t, page, "1/2 sites open · 1 blocked")
+	has(t, page, "✗ Discord connection cut")
+	has(t, page, "What to do Find another strategy on the Scan page.")
 	if strings.Contains(m.View(), "connection reset by peer") {
 		t.Errorf("raw error on the status page:\n%s", m.View())
 	}
@@ -1383,12 +1383,12 @@ func TestProbeFailureInPlainWords(t *testing.T) {
 
 	m = goTo(t, m, pgSites)
 	has(t, m.View(), "Discord  app, "+probe.Reset.What()[:20])
-	has(t, flat(pages[pgSites].View(m, 60, 18)), probe.Reset.Todo())
+	has(t, flat(pages[pgSites].View(m, 60, 18)), probeTodo(probe.Reset))
 	if strings.Contains(m.View(), "connection reset") {
 		t.Errorf("raw error on the sites page:\n%s", m.View())
 	}
 	// The hint follows the cursor: YouTube passed.
-	if strings.Contains(flat(pages[pgSites].View(press(t, m, "down"), 60, 18)), probe.Reset.Todo()) {
+	if strings.Contains(flat(pages[pgSites].View(press(t, m, "down"), 60, 18)), probeTodo(probe.Reset)) {
 		t.Error("what to do shown for a row that passed")
 	}
 }

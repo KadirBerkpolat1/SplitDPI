@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -19,8 +20,9 @@ type statusPage struct{}
 type (
 	runDoneMsg struct{ err error }
 	probeMsg   struct {
-		res map[string][]probe.Result
-		err error
+		res   map[string][]probe.Result
+		names map[string]string // the probed apps' names by id
+		err   error
 	}
 )
 
@@ -63,7 +65,7 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, m.refresh(), true
 	case probeMsg:
-		m.probe, m.note = msg.res, ""
+		m.probe, m.probeNames, m.note = msg.res, msg.names, ""
 		if msg.err != nil {
 			m.note = errText(msg.err)
 		}
@@ -108,25 +110,102 @@ func (m *Model) probeApps() tea.Cmd {
 	b, ctx, apps, w := m.b, m.ctx, m.cfg.Apps, m.logs
 	return func() tea.Msg {
 		res, err := b.Probe(ctx, apps)
+		set := b.PresetsList()
+		names := map[string]string{}
 		for _, id := range slices.Sorted(maps.Keys(res)) {
+			if a, ok := set.Apps[id]; ok {
+				names[id] = a.Name
+			}
 			for _, r := range res[id] {
 				if !r.OK {
 					fmt.Fprintf(w, "%s: %s\n", r.URL, r.Err)
 				}
 			}
 		}
-		return probeMsg{res, err}
+		return probeMsg{res, names, err}
 	}
 }
 
-// failure is the category of the first failed result; None when all passed.
-func failure(rs []probe.Result) probe.Category {
-	for _, r := range rs {
-		if c := probe.Classify(r); c != probe.None {
-			return c
+// probeTodo is what to do about a failed probe, with the TUI's pages
+// instead of commands.
+func probeTodo(c probe.Category) string { return i18n.T("probeerr_tui." + string(c)) }
+
+// probeSummary counts the probed apps and sites that open, are blocked, or
+// have no address to test; it names up to three blocked ones, apps first,
+// and says what to do about the first.
+func (m Model) probeSummary(w int) []string {
+	if len(m.probe) == 0 {
+		return nil
+	}
+	type blockedSite struct {
+		name string
+		app  bool
+		cat  probe.Category
+	}
+	var blocked []blockedSite
+	open, untested := 0, 0
+	for id, rs := range m.probe {
+		switch c := probe.Overall(rs); c {
+		case probe.None:
+			open++
+		case probe.NoAddress:
+			untested++
+		default:
+			name, app := m.probeNames[id]
+			if !app {
+				name = id
+			}
+			blocked = append(blocked, blockedSite{name, app, c})
 		}
 	}
-	return probe.None
+	slices.SortFunc(blocked, func(a, b blockedSite) int {
+		if a.app != b.app {
+			if a.app {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.name, b.name)
+	})
+	parts := []string{i18n.T("probe_summary.open", open, len(m.probe))}
+	if len(blocked) > 0 {
+		parts = append(parts, badStyle.Render(i18n.T("probe_summary.blocked", len(blocked))))
+	}
+	if untested > 0 {
+		parts = append(parts, mutedStyle.Render(i18n.T("probe_summary.untested", untested)))
+	}
+	lines := []string{row(w, i18n.T("tui.probe"), joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), w-labelStyle.GetWidth()))}
+	shown := blocked[:min(len(blocked), 3)]
+	for _, b := range shown {
+		lines = append(lines, row(w, "", badStyle.Render(m.g.fail)+" "+b.name+"  "+badStyle.Render(i18n.T("probe_short."+string(b.cat)))))
+	}
+	more := i18n.T("probe_summary.all")
+	if n := len(blocked) - len(shown); n > 0 {
+		more = i18n.T("probe_summary.more", n)
+	}
+	lines = append(lines, row(w, "", mutedStyle.Render(more)))
+	if len(blocked) > 0 {
+		lines = append(lines, row(w, i18n.T("probe_tui.todo"), probeTodo(blocked[0].cat)))
+	}
+	return lines
+}
+
+// joinWrapped joins parts with sep in lines of at most width cells, breaking
+// only between parts.
+func joinWrapped(parts []string, sep string, width int) string {
+	var lines []string
+	cur := ""
+	for _, p := range parts {
+		switch {
+		case cur == "":
+			cur = p
+		case lipgloss.Width(cur+sep+p) > width:
+			lines, cur = append(lines, cur), p
+		default:
+			cur += sep + p
+		}
+	}
+	return strings.Join(append(lines, cur), "\n")
 }
 
 func (statusPage) View(m Model, w, _ int) string {
@@ -160,20 +239,7 @@ func (statusPage) View(m Model, w, _ int) string {
 	if m.cfg.DNSOn() {
 		lines = append(lines, row(w, i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
 	}
-	var todo string
-	for _, id := range slices.Sorted(maps.Keys(m.probe)) {
-		verdict := goodStyle.Render(i18n.T("tui.reachable"))
-		if c := failure(m.probe[id]); c != probe.None {
-			verdict = badStyle.Render(c.What())
-			if todo == "" {
-				todo = c.Todo()
-			}
-		}
-		lines = append(lines, row(w, i18n.T("tui.probe"), id+"  "+verdict))
-	}
-	if todo != "" {
-		lines = append(lines, row(w, i18n.T("probe_tui.todo"), todo))
-	}
+	lines = append(lines, m.probeSummary(w)...)
 	if m.st.LastError != "" {
 		lines = append(lines, row(w, i18n.T("tui.last_error"), badStyle.Render(m.st.LastError)))
 	}

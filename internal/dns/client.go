@@ -67,14 +67,20 @@ func (c *Client) Exchange(ctx context.Context, q []byte) ([]byte, error) {
 	return nil, last
 }
 
-// Resolve looks up the A and AAAA addresses of name.
+// ErrNoAddress means the upstream answered that the name has no A or AAAA
+// record: it does not exist, or exists without an address.
+var ErrNoAddress = errors.New("no A/AAAA record")
+
+// Resolve looks up the A and AAAA addresses of name. It fails with
+// ErrNoAddress only when both questions got a definite answer.
 func (c *Client) Resolve(ctx context.Context, name string) ([]netip.Addr, error) {
 	fqdn, err := dnsmessage.NewName(name + ".")
 	if err != nil {
 		return nil, err
 	}
 	var out []netip.Addr
-	last := fmt.Errorf("no A/AAAA for %s", name)
+	var last error
+	answered := 0
 	// One question per message: many servers answer only the first.
 	for _, t := range []dnsmessage.Type{dnsmessage.TypeA, dnsmessage.TypeAAAA} {
 		q := dnsmessage.Message{
@@ -94,6 +100,11 @@ func (c *Client) Resolve(ctx context.Context, name string) ([]netip.Addr, error)
 			last = err
 			continue
 		}
+		if rc := m.Header.RCode; rc == dnsmessage.RCodeSuccess || rc == dnsmessage.RCodeNameError {
+			answered++
+		} else {
+			last = fmt.Errorf("%s: %s", name, rc)
+		}
 		for _, ans := range m.Answers {
 			switch r := ans.Body.(type) {
 			case *dnsmessage.AResource:
@@ -104,6 +115,9 @@ func (c *Client) Resolve(ctx context.Context, name string) ([]netip.Addr, error)
 		}
 	}
 	if len(out) == 0 {
+		if answered == 2 {
+			return nil, fmt.Errorf("%s: %w", name, ErrNoAddress)
+		}
 		return nil, last
 	}
 	return out, nil

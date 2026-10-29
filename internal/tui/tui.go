@@ -94,11 +94,12 @@ type Model struct {
 	dialog *confirm
 	ask    *dnsAsk // the scan's encrypted DNS question
 
-	st    supervisor.Status
-	cfg   config.Config
-	stErr error
-	note  string // result of the last action
-	probe map[string][]probe.Result
+	st         supervisor.Status
+	cfg        config.Config
+	stErr      error
+	note       string // result of the last action
+	probe      map[string][]probe.Result
+	probeNames map[string]string // the probed apps' names by id
 
 	foreign   []ops.Foreign // other zapret installs that get in the way
 	takenOver []string      // what the last takeover did
