@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"net"
@@ -46,6 +47,7 @@ type fake struct {
 	runStart   chan struct{}
 	logs       string
 	logsFollow bool // Logs blocks until cancelled, like a real follow
+	logsErr    error
 	calls      []string
 	checks     []doctor.Check
 	set        presets.Set
@@ -108,7 +110,7 @@ func (f *fake) Logs(ctx context.Context, follow bool, w io.Writer) error {
 	if f.logsFollow {
 		<-ctx.Done()
 	}
-	return nil
+	return f.logsErr
 }
 func (f *fake) Probe(ctx context.Context, apps []string) (map[string][]probe.Result, error) {
 	f.record("probe")
@@ -655,6 +657,21 @@ func TestLogsScreen(t *testing.T) {
 	m, cmd = update(t, m, key("up"))
 	if m.page != pgLogs || cmd != nil {
 		t.Errorf("back on the logs: page %d, a second stream %v", m.page, cmd != nil)
+	}
+	m.stopAll()
+}
+
+// A log stream that cannot start says why instead of looking empty.
+func TestLogsStreamError(t *testing.T) {
+	f := newFake()
+	f.logsErr = errors.New(`exec: "journalctl": executable file not found in $PATH`)
+	m := newModel(t, f)
+	m.page = pgLogs - 1
+	m = press(t, m, "down")
+	v := m.View()
+	has(t, v, `exec: "journalctl": executable file not found`)
+	if strings.Contains(v, i18n.T("tui.logs_empty")) {
+		t.Errorf("failed stream shown as an empty log:\n%s", v)
 	}
 	m.stopAll()
 }

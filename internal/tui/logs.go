@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -37,7 +38,9 @@ func (logsPage) Open(m *Model) tea.Cmd {
 		m.logCancel = cancel
 		b, w := m.b, m.logs
 		stream = func() tea.Msg {
-			b.Logs(ctx, true, w)
+			if err := b.Logs(ctx, true, w); err != nil && ctx.Err() == nil {
+				fmt.Fprintln(w, err.Error())
+			}
 			return logEndMsg{}
 		}
 	}
