@@ -108,6 +108,9 @@ func runStatus(_ context.Context, o *ops.Ops, w io.Writer, args []string) error 
 	fmt.Fprintln(w, i18n.T("status.state", i18n.Enum("state", st.State)))
 	if st.State == "running" {
 		fmt.Fprintln(w, i18n.T("status.process", i18n.Enum("mode", st.Mode), st.PID, st.Since.Format("2006-01-02 15:04:05")))
+		if st.Mode == "background" {
+			fmt.Fprintln(w, i18n.T("background.until_reboot"))
+		}
 	}
 	if cfg.Strategy != nil {
 		fmt.Fprintln(w, i18n.T("status.strategy", cfg.Strategy.ID, cfg.Strategy.Source))
