@@ -40,16 +40,15 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 - **Discord voice** uses a substitute fake blob and has not been tested on a
   real call. In Türkiye voice currently works without UDP desync, so the UDP
   profile is not needed there today.
-- **Presets import**: once the presets repo has a release, run
-  `scripts/import-presets.sh <tag>` and confirm it replaces
-  `internal/presets/data` and `go test ./internal/presets` still passes.
-
 ## Before the first public release
 
 - [x] Turkish copy reviewed (`internal/i18n/locales/tr.toml`, `README.tr.md`).
 - [x] The SplitDPI repository made public; README status line updated.
       (2026-10-29, published as a fresh single-commit history.)
-- [ ] The `SplitDPI-presets` repository created and seeded with
+- [x] The `SplitDPI-presets` repository created and seeded with
       `scripts/export-presets.sh <checkout>`, then its first release tagged.
       Its workflows download the latest SplitDPI release, so this comes after
       the first non-prerelease SplitDPI release is public.
+      (2026-10-29: release `2026-10-29`; `splitdpi presets update` fetched it,
+      and `scripts/import-presets.sh 2026-10-29` left `internal/presets/data`
+      unchanged.)
