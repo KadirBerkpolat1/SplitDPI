@@ -1,16 +1,25 @@
 package tui
 
 import (
+	"errors"
+	"fmt"
+	"io/fs"
 	"maps"
+	"os"
+	"os/user"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
 // The sites page: toggle apps, add or remove the user's own sites
@@ -25,12 +34,29 @@ type appsScreen struct {
 	excluded []string
 	input    textinput.Model
 	typing   bool
-	addSite  bool // the input adds a site instead of an exclusion
+	ask      askKind
+	skipped  []ops.ImportSkip // lines the last import left out
 }
+
+// askKind is what the text input asks for.
+type askKind int
+
+const (
+	askExclude askKind = iota
+	askSite
+	askFile
+)
 
 type (
 	appsToggledMsg struct{ err error }
-	excludedMsg    struct {
+	importedMsg    struct {
+		path    string
+		added   int
+		skipped []ops.ImportSkip
+		list    []string
+		err     error
+	}
+	excludedMsg struct {
 		domain string
 		list   []string
 		err    error
@@ -59,8 +85,6 @@ func (m *Model) openApps() {
 	for _, id := range slices.Sorted(maps.Keys(set.Apps)) {
 		a.apps = append(a.apps, set.Apps[id])
 	}
-	a.input.Placeholder = "example.com"
-	a.input.CharLimit = 253
 	if list, err := m.b.SitesList(); err == nil {
 		a.sites = list
 	} else {
@@ -91,8 +115,10 @@ func (m Model) appsActions() []action {
 	a := m.apps
 	cancel := action{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { return nil }} // appsKey cancels
 	switch {
-	case a.typing && a.addSite:
+	case a.typing && a.ask == askSite:
 		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.add"), CLI: "sudo splitdpi sites add " + a.input.Value(), Do: (*Model).siteTyped}, cancel}
+	case a.typing && a.ask == askFile:
+		return []action{{Key: "enter", Label: i18n.T("sites_import_tui.import"), CLI: "sudo splitdpi sites import " + a.input.Value(), Do: (*Model).importTyped}, cancel}
 	case a.typing:
 		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.exclude"), CLI: "sudo splitdpi exclude add " + a.input.Value(), Do: (*Model).excludeTyped}, cancel}
 	}
@@ -107,18 +133,77 @@ func (m Model) appsActions() []action {
 		}
 		first.CLI = "sudo splitdpi apps " + verb + " " + a.apps[a.cursor].ID
 	}
-	startTyping := func(site bool) func(m *Model) tea.Cmd {
+	startTyping := func(k askKind) func(m *Model) tea.Cmd {
 		return func(m *Model) tea.Cmd {
-			m.apps.typing, m.apps.addSite, m.focus, m.inPage = true, site, 0, true
-			m.apps.input.SetValue("")
-			return m.apps.input.Focus()
+			a := &m.apps
+			a.typing, a.ask, a.skipped, m.focus, m.inPage = true, k, nil, 0, true
+			a.input.Placeholder, a.input.CharLimit = "example.com", 253
+			if k == askFile {
+				a.input.Placeholder, a.input.CharLimit = i18n.T("sites_import_tui.placeholder"), 4096
+			}
+			a.input.SetValue("")
+			return a.input.Focus()
 		}
 	}
 	return []action{
-		{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(true)},
+		{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(askSite)},
 		first,
-		{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(false)},
+		{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(askExclude)},
+		{Key: "i", Label: i18n.T("sites_import_tui.act"), CLI: "sudo splitdpi sites import FILE", Do: startTyping(askFile)},
 	}
+}
+
+// importTyped adds the sites in the typed file; skipped lines also go to the log.
+func (m *Model) importTyped() tea.Cmd {
+	typed, b, w := strings.TrimSpace(m.apps.input.Value()), m.b, m.logs
+	if typed == "" {
+		return nil
+	}
+	m.apps.typing = false
+	m.apps.input.Blur()
+	path := expandHome(typed)
+	return func() tea.Msg {
+		added, skipped, err := b.SitesImport(path)
+		if err != nil {
+			fmt.Fprintln(w, err.Error())
+			return importedMsg{path: path, err: err}
+		}
+		for _, s := range skipped {
+			fmt.Fprintf(w, "%s:%d: %s\n", path, s.Line, s.Text)
+		}
+		list, err := b.SitesList()
+		return importedMsg{path, len(added), skipped, list, err}
+	}
+}
+
+// plural is the message key_one when n is 1, else key_many, formatted with n
+// and then args.
+func plural(key string, n int, args ...any) string {
+	if n == 1 {
+		key += "_one"
+	} else {
+		key += "_many"
+	}
+	return i18n.T(key, append([]any{n}, args...)...)
+}
+
+// expandHome turns a leading ~/ into the home of the user who ran sudo, or
+// else of this user.
+func expandHome(p string) string {
+	rest, ok := strings.CutPrefix(p, "~/")
+	if !ok {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if name := os.Getenv("SUDO_USER"); name != "" {
+		if u, uerr := user.Lookup(name); uerr == nil {
+			home, err = u.HomeDir, nil
+		}
+	}
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, rest)
 }
 
 func (m *Model) toggleApp() tea.Cmd {
@@ -209,6 +294,27 @@ func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		a.cursor = max(min(a.cursor, a.rows()-1), 0)
 		m.note = msg.note
 		return m, nil, true
+	case importedMsg:
+		switch {
+		case errors.Is(msg.err, fs.ErrNotExist):
+			m.note = i18n.T("sites_import_tui.not_found", msg.path)
+			return m, nil, true
+		case msg.err != nil:
+			m.note = errText(msg.err)
+			return m, nil, true
+		}
+		a := &m.apps
+		a.sites, a.skipped = msg.list, msg.skipped
+		a.cursor = max(min(a.cursor, a.rows()-1), 0)
+		note := []string{plural("sites_import_tui.added", msg.added)}
+		if n := len(msg.skipped); n > 0 {
+			note = append(note, plural("sites_import_tui.skipped", n))
+		}
+		if msg.added > 0 {
+			note = append(note, i18n.T("sites_import_tui.restart"))
+		}
+		m.note = strings.Join(note, " ")
+		return m, nil, true
 	}
 	return m, nil, false
 }
@@ -246,26 +352,38 @@ func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 }
 
 // appsView lists apps, the user's sites and the exclusions in one list,
-// each with what it is; the bypass applies to the marked ones.
+// each with what it is; the bypass applies to the marked ones. Under the
+// list: the selected row in full when it is cut, what to do when its probe
+// failed, and the lines the last import skipped.
 func (m Model) appsView(w, h int) string {
 	a := m.apps
 	type entry struct {
 		on         bool
-		name, what string
+		name, kind string
+		fail       probe.Category
+		note       string
 	}
 	var entries []entry
 	for _, app := range a.apps {
-		what := i18n.T("shell.sites.app")
-		if app.Note != "" {
-			what += ", " + app.Note
-		}
-		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, what})
+		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, i18n.T("shell.sites.app"), failure(m.probe[app.ID]), ops.AppNote(app)})
 	}
 	for _, d := range a.sites {
-		entries = append(entries, entry{true, d, i18n.T("shell.sites.yours")})
+		entries = append(entries, entry{on: true, name: d, kind: i18n.T("shell.sites.yours"), fail: failure(m.probe[d])})
 	}
 	for _, d := range a.excluded {
-		entries = append(entries, entry{false, d, i18n.T("shell.sites.excluded")})
+		entries = append(entries, entry{name: d, kind: i18n.T("shell.sites.excluded")})
+	}
+	describe := func(e entry) (styled, plain string) {
+		styled, plain = mutedStyle.Render(e.kind), e.kind
+		if e.fail != probe.None {
+			styled += mutedStyle.Render(", ") + badStyle.Render(e.fail.What())
+			plain += ", " + e.fail.What()
+		}
+		if e.note != "" {
+			styled += mutedStyle.Render(", " + e.note)
+			plain += ", " + e.note
+		}
+		return styled, plain
 	}
 	nameW := 0
 	for _, e := range entries {
@@ -275,17 +393,64 @@ func (m Model) appsView(w, h int) string {
 	lines := make([]string, len(entries))
 	for i, e := range entries {
 		name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW).Render(e.name)
-		lines[i] = m.cursorMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name + "  " + mutedStyle.Render(e.what)
+		what, _ := describe(e)
+		lines[i] = m.cursorMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name + "  " + what
 	}
-	var prompt []string
+	var tail []string
 	if a.typing {
 		q := i18n.T("tui.apps_screen.which_site")
-		if a.addSite {
+		switch a.ask {
+		case askSite:
 			q = i18n.T("tui.apps_screen.which_add")
+		case askFile:
+			q = i18n.T("sites_import_tui.which")
 		}
-		prompt = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
-		prompt = append([]string{""}, prompt...)
+		tail = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
+		tail = append([]string{""}, tail...)
+	} else {
+		if i := a.cursor; i < len(entries) {
+			e := entries[i]
+			var detail []string
+			if lipgloss.Width(lines[i]) > w {
+				_, plain := describe(e)
+				detail = append(detail, plain)
+			}
+			if e.fail != probe.None {
+				detail = append(detail, e.fail.Todo())
+			}
+			if len(detail) > 0 {
+				tail = append(tail, "")
+			}
+			for _, d := range detail {
+				tail = append(tail, strings.Split(mutedStyle.Width(w).Render(d), "\n")...)
+			}
+		}
+		if sk := a.skippedView(w, max(h/3, 3)); len(sk) > 0 {
+			tail = append(append(tail, ""), sk...)
+		}
 	}
-	lines = scroll(lines, a.cursor, h-len(prompt), w)
-	return strings.Join(append(lines, prompt...), "\n")
+	lines = scroll(lines, a.cursor, h-len(tail), w)
+	return strings.Join(append(lines, tail...), "\n")
+}
+
+// skippedView lists the lines the last import skipped in at most room lines.
+func (a appsScreen) skippedView(w, room int) []string {
+	if len(a.skipped) == 0 {
+		return nil
+	}
+	lines := []string{warnStyle.Render(i18n.T("sites_import_tui.skipped_title"))}
+	shown := a.skipped
+	if len(shown) > room-1 {
+		shown = shown[:max(room-2, 0)]
+	}
+	for _, s := range shown {
+		lines = append(lines, "  "+i18n.T("sites_import_tui.skipped_line", s.Line, s.Text))
+	}
+	if n := len(a.skipped) - len(shown); n > 0 {
+		lines = append(lines, mutedStyle.Render("  "+i18n.T("sites_import_tui.more", n)))
+	}
+	for i, l := range lines {
+		lines[i] = ansi.Truncate(l, w, "")
+	}
+	return lines
 }

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -25,7 +26,7 @@ type (
 
 func (statusPage) Title() string                                              { return i18n.T("shell.menu.status") }
 func (statusPage) Hint() string                                               { return i18n.T("shell.hint.status") }
-func (statusPage) Open(*Model) tea.Cmd                                        { return nil }
+func (statusPage) Open(m *Model) tea.Cmd                                      { return m.detectForeign() }
 func (statusPage) Key(m Model, _ tea.KeyMsg, _ string) (Model, tea.Cmd, bool) { return m, nil, false }
 
 func (m Model) bypassOn() bool { return m.running || m.st.State == "running" }
@@ -33,6 +34,9 @@ func (m Model) bypassOn() bool { return m.running || m.st.State == "running" }
 // Actions offer the setup first while there is no strategy to run with.
 func (statusPage) Actions(m Model) []action {
 	var acts []action
+	if a, ok := m.takeoverAction(); ok {
+		acts = append(acts, a)
+	}
 	if m.cfg.Strategy == nil {
 		acts = append(acts, action{Key: "w", Label: i18n.T("tui.act.setup"), CLI: "sudo splitdpi scan", Do: func(m *Model) tea.Cmd {
 			m.page, m.inPage = pgScan, true
@@ -65,7 +69,7 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	}
-	return m, nil, false
+	return m.takeoverUpdate(msg)
 }
 
 // runNow runs the bypass inside this process, like `splitdpi run` in a
@@ -101,15 +105,32 @@ func (m *Model) stop() tea.Cmd {
 
 func (m *Model) probeApps() tea.Cmd {
 	m.note = i18n.T("tui.probing")
-	b, ctx, apps := m.b, m.ctx, m.cfg.Apps
+	b, ctx, apps, w := m.b, m.ctx, m.cfg.Apps, m.logs
 	return func() tea.Msg {
 		res, err := b.Probe(ctx, apps)
+		for _, id := range slices.Sorted(maps.Keys(res)) {
+			for _, r := range res[id] {
+				if !r.OK {
+					fmt.Fprintf(w, "%s: %s\n", r.URL, r.Err)
+				}
+			}
+		}
 		return probeMsg{res, err}
 	}
 }
 
+// failure is the category of the first failed result; None when all passed.
+func failure(rs []probe.Result) probe.Category {
+	for _, r := range rs {
+		if c := probe.Classify(r); c != probe.None {
+			return c
+		}
+	}
+	return probe.None
+}
+
 func (statusPage) View(m Model, w, _ int) string {
-	var lines []string
+	lines := m.takeoverView(w)
 	state := i18n.Enum("state", m.st.State)
 	switch {
 	case m.running:
@@ -139,14 +160,19 @@ func (statusPage) View(m Model, w, _ int) string {
 	if m.cfg.DNSOn() {
 		lines = append(lines, row(w, i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
 	}
+	var todo string
 	for _, id := range slices.Sorted(maps.Keys(m.probe)) {
 		verdict := goodStyle.Render(i18n.T("tui.reachable"))
-		for _, r := range m.probe[id] {
-			if !r.OK {
-				verdict = badStyle.Render(i18n.T("tui.blocked"))
+		if c := failure(m.probe[id]); c != probe.None {
+			verdict = badStyle.Render(c.What())
+			if todo == "" {
+				todo = c.Todo()
 			}
 		}
 		lines = append(lines, row(w, i18n.T("tui.probe"), id+"  "+verdict))
+	}
+	if todo != "" {
+		lines = append(lines, row(w, i18n.T("probe_tui.todo"), todo))
 	}
 	if m.st.LastError != "" {
 		lines = append(lines, row(w, i18n.T("tui.last_error"), badStyle.Render(m.st.LastError)))

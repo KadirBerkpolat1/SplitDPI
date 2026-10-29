@@ -3,11 +3,16 @@ package tui
 import (
 	"context"
 	"io"
+	"io/fs"
+	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -18,11 +23,13 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 func TestMain(m *testing.M) {
@@ -48,6 +55,13 @@ type fake struct {
 	sites      []string
 	strategies []ops.StrategyChoice
 	ipv6       bool
+
+	probeRes      map[string][]probe.Result
+	importAdded   []string
+	importSkipped []ops.ImportSkip
+	importErr     error
+	foreign       []ops.Foreign
+	takeoverRep   ops.TakeoverReport
 
 	plan         ops.UninstallPlan
 	uninstallRep ops.UninstallReport
@@ -98,6 +112,9 @@ func (f *fake) Logs(ctx context.Context, follow bool, w io.Writer) error {
 }
 func (f *fake) Probe(ctx context.Context, apps []string) (map[string][]probe.Result, error) {
 	f.record("probe")
+	if f.probeRes != nil {
+		return f.probeRes, nil
+	}
 	return map[string][]probe.Result{"discord": {{URL: "https://discord.com/api/v9/gateway", OK: true}}}, nil
 }
 func (f *fake) Doctor(ctx context.Context) []doctor.Check { f.record("doctor"); return f.checks }
@@ -164,6 +181,34 @@ func (f *fake) AcceptDisclaimer() error {
 	return nil
 }
 func (f *fake) SetLang(lang string) error { f.record("lang " + lang); return nil }
+
+func (f *fake) SitesImport(path string) ([]string, []ops.ImportSkip, error) {
+	f.record("sites import " + path)
+	if f.importErr != nil {
+		return nil, nil, f.importErr
+	}
+	f.sites = append(f.sites, f.importAdded...)
+	return f.importAdded, f.importSkipped, nil
+}
+func (f *fake) DetectForeign(ctx context.Context) ([]ops.Foreign, error) {
+	f.record("detect foreign")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.foreign), nil
+}
+
+// Takeover leaves the install stopped and off at boot, as the real one does.
+func (f *fake) Takeover(ctx context.Context, fr ops.Foreign) (ops.TakeoverReport, error) {
+	f.record("takeover " + fr.Kind)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i := range f.foreign {
+		if f.foreign[i].Kind == fr.Kind {
+			f.foreign[i].Running, f.foreign[i].Service.Enabled = false, false
+		}
+	}
+	return f.takeoverRep, nil
+}
 
 func (f *fake) DNSProviders() []ops.DNSProvider {
 	out := []ops.DNSProvider{
@@ -1039,6 +1084,26 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 	views["done"] = d.View()
 	views["confirm"] = press(t, d, "b").View()
 
+	f.probeRes = failedProbe()
+	views["probe failed"] = press(t, prep(newModel(t, f)), "p").View()
+	views["sites probe failed"] = goTo(t, press(t, prep(newModel(t, f)), "p"), pgSites).View()
+	f.probeRes = nil
+	f.foreign = []ops.Foreign{zapret2()}
+	f.takeoverRep = takeoverReport()
+	tk := prep(newModel(t, f))
+	tk = settle(t, tk, tk.detectForeign())
+	views["takeover notice"] = tk.View()
+	views["takeover confirm"] = press(t, tk, "z").View()
+	views["takeover report"] = press(t, press(t, tk, "z"), "y").View()
+	f.foreign = []ops.Foreign{{Kind: "zapret", Running: true}}
+	tk = prep(newModel(t, f))
+	views["foreign manual"] = settle(t, tk, tk.detectForeign()).View()
+	f.foreign = nil
+	im := press(t, goTo(t, prep(newModel(t, f)), pgSites), "i")
+	views["import prompt"] = im.View()
+	f.importAdded, f.importSkipped = []string{"a.example"}, skippedLines(30)
+	views["imported"] = press(t, typeText(t, im, "/tmp/list.txt"), "enter").View()
+
 	f.cfg.DisclaimerAccepted = false
 	views["disclaimer"] = prep(newModel(t, f)).View()
 	f.cfg.DisclaimerAccepted = true
@@ -1112,11 +1177,302 @@ func TestSitesLayoutTurkish(t *testing.T) {
 	if !strings.HasSuffix(lines[0], "● ÇALIŞIYOR") {
 		t.Errorf("header %q", lines[0])
 	}
-	has(t, lines[22], "a Site ekle")
-	has(t, lines[22], "e Bir site bozuldu")
-	has(t, lines[22], "↑↓ Menü")
+	keys := lines[21] + "\n" + lines[22]
+	has(t, lines[21], "a Site ekle")
+	has(t, keys, "e Bir site bozuldu")
+	has(t, keys, "i Dosyadan al")
+	has(t, keys, "↑↓ Menü")
 	has(t, lines[22], "q Çık")
 	if lines[23] != "$ sudo splitdpi sites add DOMAIN" {
 		t.Errorf("CLI line %q", lines[23])
 	}
+}
+
+// flat joins a page's words, so wrapped text reads as one line.
+func flat(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+func skippedLines(n int) []ops.ImportSkip {
+	out := make([]ops.ImportSkip, n)
+	for i := range out {
+		out[i] = ops.ImportSkip{Line: 2*i + 3, Text: "not a domain " + strconv.Itoa(i)}
+	}
+	return out
+}
+
+func failedProbe() map[string][]probe.Result {
+	return map[string][]probe.Result{
+		"discord": {{
+			URL:   "https://discord.com/api/v9/gateway",
+			Err:   "read tcp 10.0.0.2:51234->162.159.128.233:443: read: connection reset by peer",
+			Cause: &net.OpError{Op: "read", Net: "tcp", Err: os.NewSyscallError("read", syscall.ECONNRESET)},
+		}},
+		"youtube": {{URL: "https://www.youtube.com/", OK: true}},
+	}
+}
+
+func zapret2() ops.Foreign {
+	return ops.Foreign{
+		Kind:     "zapret2",
+		Dir:      "/opt/zapret2",
+		Service:  initsys.ForeignService{Init: sysinfo.Systemd, Name: "zapret2", Enabled: true},
+		Hostlist: "/opt/zapret2/ipset/zapret-hosts-user.txt",
+		Running:  true,
+	}
+}
+
+func takeoverReport() ops.TakeoverReport {
+	return ops.TakeoverReport{
+		Added:    []string{"discord.gg", "pastebin.com"},
+		Skipped:  []ops.ImportSkip{{Line: 4, Text: "1.2.3.4/24"}},
+		Stopped:  true,
+		Disabled: true,
+	}
+}
+
+func TestSitesImport(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SUDO_USER", "")
+	f := newFake()
+	f.set = trSet()
+	f.importAdded = []string{"pastebin.com", "rutracker.org"}
+	f.importSkipped = []ops.ImportSkip{{Line: 3, Text: "not a domain!"}, {Line: 7, Text: "http://"}}
+	m := goTo(t, newModel(t, f), pgSites)
+	has(t, m.View(), "i From a file")
+	m = press(t, m, "i")
+	if !m.apps.typing || m.apps.ask != askFile {
+		t.Fatalf("i: typing %v ask %v", m.apps.typing, m.apps.ask)
+	}
+	has(t, flat(m.View()), "Which file? One site per line")
+	m = typeText(t, m, "~/list.txt")
+	has(t, m.View(), "$ sudo splitdpi sites import ~/list.txt")
+	m = press(t, m, "enter")
+	path := filepath.Join(home, "list.txt")
+	if f.count("sites import "+path) != 1 {
+		t.Fatalf("calls %q", f.calls)
+	}
+	v := m.View()
+	has(t, v, "Added 2 sites. Skipped 2 lines. Restart splitdpi to apply.")
+	has(t, v, "rutracker.org")
+	has(t, v, "Skipped lines, not a domain:")
+	has(t, v, "line 3: not a domain!")
+	has(t, v, "line 7: http://")
+	if !slices.Equal(m.apps.sites, []string{"pastebin.com", "rutracker.org"}) {
+		t.Errorf("sites %q", m.apps.sites)
+	}
+	has(t, m.logs.String(), path+":3: not a domain!")
+
+	// A long list of skipped lines is cut short; the log has them all.
+	f.importSkipped = skippedLines(40)
+	m = press(t, typeText(t, press(t, m, "i"), "/tmp/big.txt"), "enter")
+	has(t, m.View(), "line 3: not a domain 0")
+	has(t, m.View(), "more; Logs lists them all")
+	has(t, m.logs.String(), "/tmp/big.txt:81: not a domain 39")
+	for _, l := range strings.Split(m.View(), "\n") {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("line %d wide: %q", lipgloss.Width(l), l)
+		}
+	}
+}
+
+func TestSitesImportCancelAndMissingFile(t *testing.T) {
+	f := newFake()
+	f.set = trSet()
+	m := press(t, goTo(t, newModel(t, f), pgSites), "i")
+	m = press(t, typeText(t, m, "/tmp/x.txt"), "esc")
+	if m.apps.typing || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "sites import") }) {
+		t.Fatalf("esc: typing %v calls %q", m.apps.typing, f.calls)
+	}
+	f.importAdded, f.importSkipped = []string{"one.example"}, []ops.ImportSkip{{Line: 2, Text: "?"}}
+	m = press(t, typeText(t, press(t, m, "i"), "/tmp/one.txt"), "enter")
+	has(t, m.View(), "Added 1 site. Skipped 1 line. Restart splitdpi to apply.")
+	f.importErr = &fs.PathError{Op: "open", Path: "/tmp/none.txt", Err: fs.ErrNotExist}
+	m = press(t, typeText(t, press(t, m, "i"), "/tmp/none.txt"), "enter")
+	has(t, m.View(), "There is no file /tmp/none.txt.")
+	has(t, m.logs.String(), "open /tmp/none.txt: file does not exist")
+}
+
+func TestExpandHome(t *testing.T) {
+	t.Setenv("HOME", "/home/someone")
+	t.Setenv("SUDO_USER", "")
+	for in, want := range map[string]string{
+		"~/a/sites.txt": "/home/someone/a/sites.txt",
+		"/etc/x.txt":    "/etc/x.txt",
+		"rel.txt":       "rel.txt",
+		"~other/x":      "~other/x",
+	} {
+		if got := expandHome(in); got != want {
+			t.Errorf("expandHome(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSitesAppNoteTurkish(t *testing.T) {
+	defer i18n.Init("en")
+	i18n.Init("tr")
+	f := newFake()
+	f.set = trSet()
+	f.set.Apps["telegram"] = presets.App{ID: "telegram", Name: "Telegram", Note: "Direct connections to Telegram IPs are not covered."}
+	m := goTo(t, newModel(t, f), pgSites)
+	v := m.View()
+	has(t, v, "Telegram  uygulama, Telegram'ın IP")
+	if strings.Contains(v, "Direct connections") {
+		t.Errorf("English note in tr:\n%s", v)
+	}
+	// The row is cut at 80 columns; selected, it shows in full under the list.
+	m = press(t, m, "down")
+	has(t, flat(pages[pgSites].View(m, 60, 18)), "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor.")
+}
+
+func TestProbeFailureInPlainWords(t *testing.T) {
+	f := newFake()
+	f.set = trSet()
+	f.probeRes = failedProbe()
+	m := press(t, newModel(t, f), "p")
+	page := flat(pages[pgStatus].View(m, 60, 18))
+	has(t, page, "discord "+probe.Reset.What())
+	has(t, page, "youtube reachable")
+	has(t, page, "What to do "+probe.Reset.Todo())
+	if strings.Contains(m.View(), "connection reset by peer") {
+		t.Errorf("raw error on the status page:\n%s", m.View())
+	}
+	has(t, m.logs.String(), "https://discord.com/api/v9/gateway: read tcp 10.0.0.2:51234->162.159.128.233:443: read: connection reset by peer")
+
+	m = goTo(t, m, pgSites)
+	has(t, m.View(), "Discord  app, "+probe.Reset.What()[:20])
+	has(t, flat(pages[pgSites].View(m, 60, 18)), probe.Reset.Todo())
+	if strings.Contains(m.View(), "connection reset") {
+		t.Errorf("raw error on the sites page:\n%s", m.View())
+	}
+	// The hint follows the cursor: YouTube passed.
+	if strings.Contains(flat(pages[pgSites].View(press(t, m, "down"), 60, 18)), probe.Reset.Todo()) {
+		t.Error("what to do shown for a row that passed")
+	}
+}
+
+func TestTakeoverNoticeAndConfirm(t *testing.T) {
+	f := newFake()
+	f.foreign = []ops.Foreign{zapret2()}
+	f.takeoverRep = takeoverReport()
+	m := newModel(t, f)
+	m = settle(t, m, m.Init())
+	page := flat(pages[pgStatus].View(m, 60, 18))
+	has(t, page, "zapret2 is running on this computer. Use SplitDPI instead of it?")
+	has(t, m.View(), "z Switch to SplitDPI")
+	has(t, m.View(), "$ sudo splitdpi takeover --yes")
+
+	m = press(t, m, "z")
+	if m.dialog == nil {
+		t.Fatal("z did not ask")
+	}
+	want := []string{
+		"Add the sites listed in /opt/zapret2/ipset/zapret-hosts-user.txt to your sites.",
+		"Stop the zapret2 service (systemd).",
+		"Keep zapret2 from starting on boot.",
+		"Leave its files alone: nothing is deleted or edited.",
+	}
+	if !slices.Equal(m.dialog.changes, want) || m.dialog.undo != "sudo splitdpi revert" {
+		t.Fatalf("changes %q undo %q", m.dialog.changes, m.dialog.undo)
+	}
+	has(t, m.View(), "Use SplitDPI instead of zapret2?")
+	has(t, m.View(), "sudo splitdpi revert")
+
+	m = press(t, m, "n")
+	if m.dialog != nil || f.count("takeover zapret2") != 0 {
+		t.Fatalf("n: dialog %v calls %q", m.dialog, f.calls)
+	}
+	has(t, flat(pages[pgStatus].View(m, 60, 18)), "zapret2 is running")
+
+	m = press(t, press(t, m, "z"), "y")
+	if f.count("takeover zapret2") != 1 {
+		t.Fatalf("y: calls %q", f.calls)
+	}
+	page = flat(pages[pgStatus].View(m, 120, 18))
+	for _, s := range []string{
+		"Switched to SplitDPI:",
+		"added 2 new sites from /opt/zapret2/ipset/zapret-hosts-user.txt",
+		"1 line of its list was not a domain and was skipped",
+		"stopped the zapret2 service",
+		"zapret2 no longer starts on boot",
+	} {
+		has(t, page, s)
+	}
+	if strings.Contains(page, "is running on this computer") || strings.Contains(m.View(), "z Switch") {
+		t.Errorf("notice still shown after the takeover:\n%s", m.View())
+	}
+	has(t, m.View(), "Done. The other tool is off")
+	has(t, m.logs.String(), "/opt/zapret2/ipset/zapret-hosts-user.txt:4: 1.2.3.4/24")
+}
+
+// The longest confirm on Durum fits 80x24 in Turkish down to its keys.
+func TestTakeoverConfirmFitsTurkish(t *testing.T) {
+	defer i18n.Init("en")
+	i18n.Init("tr")
+	f := newFake()
+	f.foreign = []ops.Foreign{zapret2()}
+	m := newModel(t, f)
+	m = press(t, settle(t, m, m.Init()), "z")
+	v := m.View()
+	for _, want := range []string{
+		"zapret2 yerine SplitDPI kullanılsın mı?",
+		"zapret2 servisinin açılışta başlaması kapatılacak.",
+		"dokunulmayacak: hiçbir şey silinmeyecek",
+		"ya da değiştirilmeyecek.",
+		"sudo splitdpi revert",
+		"e Evet, devam et   h Vazgeç",
+	} {
+		has(t, v, want)
+	}
+	for _, l := range strings.Split(v, "\n") {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("%d columns: %q", lipgloss.Width(l), l)
+		}
+	}
+	m = press(t, m, "h")
+	if m.dialog != nil || f.count("takeover zapret2") != 0 {
+		t.Fatalf("h: dialog %v calls %q", m.dialog, f.calls)
+	}
+	press(t, press(t, m, "z"), "e")
+	if f.count("takeover zapret2") != 1 {
+		t.Errorf("e: calls %q", f.calls)
+	}
+}
+
+func TestTakeoverManualStop(t *testing.T) {
+	f := newFake()
+	f.foreign = []ops.Foreign{{Kind: "zapret", Running: true}}
+	m := newModel(t, f)
+	m = settle(t, m, m.Init())
+	has(t, flat(pages[pgStatus].View(m, 60, 18)), "zapret is running on this computer, but not as a service, so SplitDPI cannot stop it. Stop it yourself")
+	if strings.Contains(m.View(), "z Switch") {
+		t.Error("z offered for a process without a service")
+	}
+	if m = press(t, m, "z"); m.dialog != nil {
+		t.Error("z asked to take over a process without a service")
+	}
+}
+
+func TestNoTakeoverNotice(t *testing.T) {
+	for name, found := range map[string][]ops.Foreign{
+		"none": nil,
+		// Installed but neither running nor starting on boot: not in the way.
+		"dormant": {{Kind: "zapret2", Dir: "/opt/zapret2", Hostlist: "/opt/zapret2/ipset/zapret-hosts-user.txt", Service: initsys.ForeignService{Init: sysinfo.Systemd, Name: "zapret2"}}},
+	} {
+		f := newFake()
+		f.foreign = found
+		m := newModel(t, f)
+		m = settle(t, m, m.Init())
+		if v := m.View(); strings.Contains(v, "zapret") || strings.Contains(v, "z Switch") {
+			t.Errorf("%s: notice shown:\n%s", name, v)
+		}
+	}
+	// Coming back to Durum looks again.
+	f := newFake()
+	m := goTo(t, goTo(t, newModel(t, f), pgSites), pgStatus)
+	if f.count("detect foreign") != 1 {
+		t.Errorf("calls %q", f.calls)
+	}
+	f.foreign = []ops.Foreign{zapret2()}
+	m = goTo(t, goTo(t, m, pgSites), pgStatus)
+	has(t, m.View(), "z Switch to SplitDPI")
 }

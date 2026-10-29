@@ -52,6 +52,10 @@ type Backend interface {
 	AcceptDisclaimer() error
 	SetLang(lang string) error
 
+	SitesImport(path string) ([]string, []ops.ImportSkip, error)
+	DetectForeign(ctx context.Context) ([]ops.Foreign, error)
+	Takeover(ctx context.Context, f ops.Foreign) (ops.TakeoverReport, error)
+
 	DNSProviders() []ops.DNSProvider
 	SetDNS(provider string, proto dns.Protocol) (running bool, err error)
 	UninstallPlan() ops.UninstallPlan
@@ -89,6 +93,9 @@ type Model struct {
 	stErr error
 	note  string // result of the last action
 	probe map[string][]probe.Result
+
+	foreign   []ops.Foreign // other zapret installs that get in the way
+	takenOver []string      // what the last takeover did
 
 	logs       *ring
 	logCancel  context.CancelFunc
@@ -133,7 +140,7 @@ func (m Model) stopRun() {
 	}
 }
 
-func (m Model) Init() tea.Cmd { return m.tick() }
+func (m Model) Init() tea.Cmd { return tea.Batch(m.tick(), m.detectForeign()) }
 
 func (m Model) tick() tea.Cmd {
 	return m.every(statusEvery, func(time.Time) tea.Msg { return tickMsg{} })
