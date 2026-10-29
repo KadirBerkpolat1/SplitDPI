@@ -402,15 +402,15 @@ todo = "Your provider may be dropping the traffic, or the site may be down. Try 
 
 [probeerr.dns]
 what = "The site's address could not be looked up: DNS failed or was tampered with."
-todo = "Send DNS through encrypted DNS-over-HTTPS, then restart splitdpi: sudo splitdpi dns on"
+todo = "Turn on encrypted DNS, then restart splitdpi: sudo splitdpi dns auto"
 
 [probeerr.tls]
 what = "The secure connection failed: the certificate did not match the site, or the handshake broke."
-todo = "Your provider may be redirecting the site. Turn on encrypted DNS (sudo splitdpi dns on), then try a scan: sudo splitdpi scan"
+todo = "Your provider may be redirecting the site. Turn on encrypted DNS (sudo splitdpi dns auto), then try a scan: sudo splitdpi scan"
 
 [probeerr.http]
 what = "Something other than the site answered, probably your provider's block page."
-todo = "Try a scan: sudo splitdpi scan. If it keeps happening, turn on encrypted DNS: sudo splitdpi dns on"
+todo = "Try a scan: sudo splitdpi scan. If it keeps happening, turn on encrypted DNS: sudo splitdpi dns auto"
 
 [probeerr.other]
 what = "The connection failed for another reason."

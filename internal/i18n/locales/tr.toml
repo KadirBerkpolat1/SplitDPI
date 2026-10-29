@@ -402,15 +402,15 @@ todo = "Sağlayıcı trafiği sessizce düşürüyor ya da site çalışmıyor o
 
 [probeerr.dns]
 what = "Sitenin adresi bulunamadı: DNS yanıt vermedi ya da yanıtı değiştirildi."
-todo = "DNS'i şifreli DNS-over-HTTPS üzerinden geçirin, sonra splitdpi'yi yeniden başlatın: sudo splitdpi dns on"
+todo = "Şifreli DNS'i açın, sonra splitdpi'yi yeniden başlatın: sudo splitdpi dns auto"
 
 [probeerr.tls]
 what = "Güvenli bağlantı kurulamadı: sertifika siteyle eşleşmedi ya da el sıkışma yarıda kaldı."
-todo = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Şifreli DNS'i açın (sudo splitdpi dns on), sonra tarama deneyin: sudo splitdpi scan"
+todo = "Sağlayıcı siteyi başka bir yere yönlendiriyor olabilir. Şifreli DNS'i açın (sudo splitdpi dns auto), sonra tarama deneyin: sudo splitdpi scan"
 
 [probeerr.http]
 what = "Site yerine başka bir şey yanıt verdi; büyük olasılıkla sağlayıcının engelleme sayfası."
-todo = "Tarama deneyin: sudo splitdpi scan. Sorun sürerse şifreli DNS'i açın: sudo splitdpi dns on"
+todo = "Tarama deneyin: sudo splitdpi scan. Sorun sürerse şifreli DNS'i açın: sudo splitdpi dns auto"
 
 [probeerr.other]
 what = "Bağlantı başka bir nedenle kurulamadı."
