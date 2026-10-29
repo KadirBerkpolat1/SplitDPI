@@ -534,7 +534,9 @@ install = "Install the engine"
 install_offer = "SplitDPI can download and install the zapret2 %s engine, which does the bypassing, for you. The download is checked against its pinned SHA-256 sum."
 installing = "Downloading and installing zapret2 %s..."
 file = "FILE"
-share = "To share this result, open the link in a browser; nothing is sent automatically. Hold Shift and drag to select it:"
+share = "To share this result, open the link in a browser; nothing is sent automatically. c copies it, and it is printed again when you quit:"
+copy = "Copy the link"
+copied = "Copied (if your terminal supports it)."
 
 [scan_page.dns]
 title = "Turn on encrypted DNS?"

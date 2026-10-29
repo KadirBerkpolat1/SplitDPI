@@ -151,8 +151,9 @@ works.
 - **Sharing the result.** When `scan` saves a strategy, it prints a link that
   opens a prefilled issue in
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
-  your AS number, ISP, country, the strategy and the versions; the terminal UI
-  shows the same link. Nothing is sent
+  your AS number, ISP, country, the strategy and the versions. The terminal UI
+  shows the same link, copies it with `c` and prints it again when you quit.
+  Nothing is sent
   until you submit the issue, and it never contains your IP address or your own
   sites.
 

@@ -73,7 +73,9 @@ type wizard struct {
 	report     *scan.Report
 	err        error
 
-	last *lastScan // the last finished scan; a new setup keeps it
+	// A new setup keeps these.
+	last   *lastScan // the last finished scan
+	shared string    // the share link of the last strategy saved in this session
 }
 
 type lastScan struct {
@@ -116,15 +118,32 @@ func (m *Model) openSiteWizard() tea.Cmd { return m.startWizard(true) }
 
 func (m *Model) startWizard(site bool) tea.Cmd {
 	m.focus, m.note, m.inPage = 0, "", true
-	m.wiz = wizard{step: wDoctor, siteFlow: site, progress: &ring{max: 200}, last: m.wiz.last}
+	m.wiz = wizard{step: wDoctor, siteFlow: site, progress: &ring{max: 200}, last: m.wiz.last, shared: m.wiz.shared}
 	return m.runDoctor()
 }
 
 // resetWizard goes back to the page's choice of flows.
 func (m *Model) resetWizard() tea.Cmd {
-	m.wiz = wizard{last: m.wiz.last}
+	m.wiz = wizard{last: m.wiz.last, shared: m.wiz.shared}
 	m.focus = 0
 	return nil
+}
+
+// copyLink puts the share link on the clipboard through the terminal (OSC 52).
+func (m *Model) copyLink() tea.Cmd {
+	m.note = i18n.T("scan_page.copied")
+	out, seq := m.out, ansi.SetSystemClipboard(m.wiz.shared)
+	return func() tea.Msg {
+		io.WriteString(out, seq)
+		return nil
+	}
+}
+
+// printShare writes the share link once more, once the screen is back to normal.
+func (m Model) printShare(w io.Writer) {
+	if m.wiz.shared != "" {
+		fmt.Fprintln(w, m.wiz.shared)
+	}
 }
 
 // finishWizard leaves the finished wizard for the status page.
@@ -258,6 +277,9 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			w.err = scan.ErrNoStrategy
 		default:
 			w.report = &msg.rep
+			if w.shared = ops.ShareURL(msg.rep, m.version); w.shared != "" {
+				fmt.Fprintln(m.logs, w.shared)
+			}
 			w.step, m.focus = wDone, 0
 			if w.site != "" {
 				m.note = i18n.T("sites.added", w.site)
@@ -400,10 +422,14 @@ func (m Model) wizardActions() []action {
 			{Key: "b", Label: i18n.T("scan_page.restart"), Do: (*Model).resetWizard},
 		}
 	case wDone:
-		return []action{
+		acts := []action{
 			{Key: "r", Label: i18n.T("tui.wiz.run_now"), CLI: "sudo splitdpi run", Do: func(m *Model) tea.Cmd { m.finishWizard(); return m.runNow() }},
 			{Key: "b", Label: i18n.T("tui.wiz.at_boot"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable},
 		}
+		if w.shared != "" {
+			acts = append(acts, action{Key: "c", Label: i18n.T("scan_page.copy"), Do: (*Model).copyLink})
+		}
+		return acts
 	}
 	return nil
 }
@@ -709,8 +735,8 @@ func (m Model) wizardView(width, h int) string {
 			head = append(head, warnStyle.Render(i18n.T("scan.voice")))
 		}
 		// The link stays whole, on lines of its own, for copying.
-		if u := ops.ShareURL(*r, m.version); u != "" {
-			head = append(head, "", i18n.T("scan_page.share"), ansi.Hardwrap(u, width, false))
+		if w.shared != "" {
+			head = append(head, "", i18n.T("scan_page.share"), ansi.Hardwrap(w.shared, width, false))
 		}
 		// The question repeats the footer keys; it gives way to the link.
 		how := append(slices.Clone(head), "", i18n.T("tui.wiz.how"))

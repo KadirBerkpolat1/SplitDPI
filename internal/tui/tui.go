@@ -84,6 +84,7 @@ type Model struct {
 	width   int
 	height  int
 	every   func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
+	out     io.Writer // the program's output, for escape sequences the renderer cannot send
 
 	page   int  // the selected menu entry
 	inPage bool // keys go to the page instead of the menu
@@ -119,19 +120,21 @@ type Model struct {
 }
 
 func New(ctx context.Context, b Backend, version string) Model {
-	m := Model{ctx: ctx, b: b, version: version, g: glyphsFor(os.Getenv), every: tea.Tick, logs: &ring{max: 500}, width: 80, height: 24}
+	m := Model{ctx: ctx, b: b, version: version, g: glyphsFor(os.Getenv), every: tea.Tick, out: os.Stdout, logs: &ring{max: 500}, width: 80, height: 24}
 	m.st, m.cfg, m.stErr = b.Status()
 	return m
 }
 
 // Run opens the TUI on the terminal. The bypass it may run is stopped (and
-// its rules removed) before Run returns.
+// its rules removed) before Run returns; then the share link of a strategy
+// saved in this session is printed where the scrollback keeps it.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
-	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx)).Run()
+	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx), tea.WithOutput(m.out)).Run()
 	if fm, ok := final.(Model); ok {
 		fm.stopRun()
+		fm.printShare(m.out)
 	}
 	return err
 }

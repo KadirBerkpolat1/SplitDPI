@@ -534,7 +534,9 @@ install = "Motoru kur"
 install_offer = "SplitDPI, engeli aşan zapret2 %s motorunu sizin için indirip kurabilir. İndirilen dosya sabitlenmiş SHA-256 özetiyle doğrulanır."
 installing = "zapret2 %s indiriliyor ve kuruluyor..."
 file = "DOSYA"
-share = "Bu sonucu paylaşmak için linki tarayıcıda açın; hiçbir şey otomatik gönderilmez. Seçmek için Shift'e basılı tutup sürükleyin:"
+share = "Bu sonucu paylaşmak için linki tarayıcıda açın; hiçbir şey otomatik gönderilmez. c linki kopyalar; çıkarken link terminale bir kez daha yazılır:"
+copy = "Linki kopyala"
+copied = "Kopyalandı (terminaliniz destekliyorsa)."
 
 [scan_page.dns]
 title = "Şifreli DNS açılsın mı?"

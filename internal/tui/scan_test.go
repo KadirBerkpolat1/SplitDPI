@@ -1,9 +1,12 @@
 package tui
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/netip"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -206,6 +209,45 @@ func TestScanShareLinkAfterWinner(t *testing.T) {
 			}
 		}
 		fits(t, lang+" done", v)
+	}
+}
+
+func TestScanCopyLinkAndPrintOnExit(t *testing.T) {
+	f := newFake()
+	rep := scan.Report{
+		ASN:    scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"},
+		Winner: &config.Strategy{ID: "tt-multidisorder", Source: "isp/tr/as9121-turk-telekom.toml"},
+	}
+	f.scanFn = func(context.Context, scan.Options, func(string)) (scan.Report, error) { return rep, nil }
+	m, cmd := toScan(t, f)
+	var out bytes.Buffer
+	m.out = &out
+	var none bytes.Buffer
+	m.printShare(&none)
+	if none.Len() != 0 {
+		t.Fatalf("printed %q before any strategy was saved", none.String())
+	}
+	m = settle(t, m, cmd)
+	u := ops.ShareURL(rep, "v0.1.0")
+	if !slices.Contains(m.logs.Last(50), u) {
+		t.Errorf("the link is not one line of the log: %q", m.logs.String())
+	}
+	has(t, m.View(), "c "+i18n.T("scan_page.copy"))
+
+	m = press(t, m, "c")
+	if want := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(u)) + "\a"; out.String() != want {
+		t.Errorf("c wrote %q, want the OSC 52 sequence %q", out.String(), want)
+	}
+	has(t, m.View(), i18n.T("scan_page.copied"))
+
+	// The link outlives the result screen and is printed once on exit.
+	m = press(t, m, "b")
+	m = press(t, m, "n")
+	m.resetWizard()
+	var exit bytes.Buffer
+	m.printShare(&exit)
+	if exit.String() != u+"\n" {
+		t.Errorf("exit printed %q, want the link once on its own line", exit.String())
 	}
 }
 

@@ -165,8 +165,9 @@ stratejiyi kaydeder.
 - **Sonucu paylaşma.** `scan` bir strateji kaydettiğinde,
   [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
   deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS
-  numaranız, sağlayıcınız, ülkeniz, strateji ve sürümler; terminal arayüzü de
-  aynı bağlantıyı gösterir. Siz issue'yu
+  numaranız, sağlayıcınız, ülkeniz, strateji ve sürümler. Terminal arayüzü de
+  aynı bağlantıyı gösterir, `c` ile kopyalar ve çıkarken bir kez daha yazar.
+  Siz issue'yu
   göndermedikçe hiçbir şey gönderilmez; içinde IP adresiniz ya da kendi
   siteleriniz hiçbir zaman yer almaz.
 
