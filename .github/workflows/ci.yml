@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck install.sh test/distro/check.sh
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: sudo apt-get update && sudo apt-get install -y nftables curl dnsutils
+      # No fallback: without NFQUEUE the netns tests cannot run, and they must not be skipped.
+      - run: sudo modprobe -a nfnetlink_queue nft_queue
+      - uses: actions/cache@v4
+        with:
+          path: /tmp/z2/zapret2-v1.0.6.tar.gz
+          key: zapret2-v1.0.6
+      - run: |
+          if [ ! -f /tmp/z2/zapret2-v1.0.6.tar.gz ]; then
+            mkdir -p /tmp/z2
+            curl -fsSL -o /tmp/z2/zapret2-v1.0.6.tar.gz https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz
+          fi
+      - run: go build -o /tmp/splitdpi ./cmd/splitdpi
+      - run: sudo -E env "PATH=$PATH" SPLITDPI_BIN=/tmp/splitdpi go test -count=1 -tags integration -v ./test/integration/...
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: CGO_ENABLED=0 go build -o splitdpi ./cmd/splitdpi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: splitdpi
+          path: splitdpi
+
+  distros:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:13
+            hint: apt install
+          - image: fedora:latest
+            hint: dnf install
+          - image: archlinux:latest
+            hint: pacman -S
+          - image: opensuse/tumbleweed
+            hint: zypper install
+          - image: alpine:latest
+            hint: apk add
+          - image: ghcr.io/void-linux/void-glibc:latest
+            hint: xbps-install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: splitdpi
+      - run: chmod +x splitdpi
+      - run: |
+          docker run --rm \
+            -v "$PWD:/w" \
+            -v "$PWD/splitdpi:/usr/local/bin/splitdpi:ro" \
+            -w /w \
+            "${{ matrix.image }}" \
+            sh test/distro/check.sh "${{ matrix.hint }}"

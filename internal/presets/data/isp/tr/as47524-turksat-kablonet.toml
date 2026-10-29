@@ -1,0 +1,10 @@
+schema = 1
+name = "Türksat Kablonet"
+country = "TR"
+asn = [47524]
+source = "SplitWire-Turkey presets2.txt (MIT, Çağrı Taşkın); origin alimali54/zapret-win-turkey"
+reported = "2026-10"
+
+[[strategy]]
+id = "ts-multidisorder"
+tcp_tls = "--payload=tls_client_hello --lua-desync=multidisorder:pos=2:seqovl=1"

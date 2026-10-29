@@ -1,0 +1,10 @@
+schema = 1
+id = "discord"
+name = "Discord"
+hosts = ["7tv.app", "7tv.io", "betterttv.net", "dis.gd", "discord-activities.com", "discord-attachments-uploads-prd.storage.googleapis.com", "discord.app", "discord.co", "discord.com", "discord.design", "discord.dev", "discord.gg", "discord.gift", "discord.gifts", "discord.media", "discord.new", "discord.status", "discord.store", "discordactivities.com", "discordapp.com", "discordapp.io", "discordapp.net", "discordcdn.com", "discordmerch.com", "discordpartygames.com", "discordsays.com", "discordsez.com", "discordstatus.com", "ffzap.com", "frankerfacez.com", "klipy.com", "live-video.net"]
+probe = ["https://discord.com/api/v9/gateway"]
+
+[udp]
+ports = "50000-50100,19294-19344,3478-3481,5349,1400"
+l7 = ["discord", "stun"]
+desync = "--payload=stun,discord_ip_discovery --lua-desync=fake:blob=fake_default_quic:repeats=6"

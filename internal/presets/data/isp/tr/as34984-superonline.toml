@@ -1,0 +1,10 @@
+schema = 1
+name = "Superonline"
+country = "TR"
+asn = [34984]
+source = "SplitWire-Turkey presets2.txt (MIT, Çağrı Taşkın); origin alimali54/zapret-win-turkey"
+reported = "2026-10"
+
+[[strategy]]
+id = "so-multidisorder"
+tcp_tls = "--payload=tls_client_hello --lua-desync=multidisorder:pos=2:seqovl=1"

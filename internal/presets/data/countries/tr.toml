@@ -1,0 +1,4 @@
+schema = 1
+code = "TR"
+default_apps = ["discord", "roblox"]
+exclude = "tr"

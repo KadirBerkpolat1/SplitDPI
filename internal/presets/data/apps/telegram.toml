@@ -1,0 +1,6 @@
+schema = 1
+id = "telegram"
+name = "Telegram"
+hosts = ["telegram.org", "t.me", "telegram.me", "web.telegram.org"]
+probe = ["https://web.telegram.org/"]
+note = "MTProto to raw IPs is not covered"

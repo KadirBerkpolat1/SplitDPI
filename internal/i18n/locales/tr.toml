@@ -1,0 +1,361 @@
+# Türkçe. Ürün, uygulama ve sağlayıcı adları, komutlar, bayraklar ve dosya yolları çevrilmez.
+
+[usage]
+header = "Kullanım: splitdpi [--lang en|tr] <komut> [argümanlar]"
+commands = "Komutlar:"
+
+[err]
+need_root = "Bu komut root yetkisi ister. Şunu çalıştırın: %s"
+unknown_command = "Bilinmeyen komut: %s"
+lang_value = "--lang bir değer ister: en veya tr"
+
+[cmd.version]
+help = "Sürümü gösterir."
+
+[cmd.engine]
+help = "Sabitlenmiş zapret2 motorunu kurar (install [--from DOSYA]) veya durumunu gösterir (status)."
+
+[engine]
+usage = "Kullanım: splitdpi engine install [--from DOSYA] | splitdpi engine status"
+downloading = "İndiriliyor: %s"
+installed = "zapret2 %s kuruldu: %s"
+not_installed = "Motor kurulu değil. Şunu çalıştırın: sudo splitdpi engine install"
+status = "Motor: zapret2 %s\nDizin: %s"
+pin_ok = "Sabitlenmiş sürümle aynı."
+pin_mismatch = "Sabitlenmiş sürümden (%s) farklı. Şunu çalıştırın: sudo splitdpi engine install"
+download_hint = "İndirme engellenirse %s dosyasını başka bir yoldan edinip şunu çalıştırın: sudo splitdpi engine install --from DOSYA"
+
+[engine.err]
+install = "Motor kurulamadı: %v"
+checksum = "SHA-256 uyuşmuyor: arşiv zapret2 %s değil (bozuk ya da yanlış dosya). Kurulu motor değiştirilmedi."
+arch = "Desteklenmeyen mimari: %s (desteklenenler: amd64, arm64)."
+
+[cmd.presets]
+help = "Hazır ayar verisini gösterir, günceller veya doğrular (list | update | check DİZİN)."
+
+[cmd.apps]
+help = "Uygulama profillerini listeler, açar veya kapatır (list | enable ID | disable ID)."
+
+[cmd.exclude]
+help = "Engel aşmanın hiç dokunmayacağı alan adlarını yönetir (list | add ALAN | remove ALAN)."
+
+[cmd.sites]
+help = "Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir (list | add ALAN | remove ALAN)."
+
+[cmd.strategy]
+help = "Hazır stratejileri listeler ya da birini seçer (list | set ID)."
+
+[cmd.probe]
+help = "Açık uygulamaların test adreslerine ve sitelerinize HTTPS ile erişilip erişilemediğini dener."
+
+[probe]
+usage = "Kullanım: splitdpi probe [--apps id,id]"
+no_apps = "Açık uygulama ya da eklenmiş site yok. Şunu çalıştırın: sudo splitdpi apps enable discord  ya da: sudo splitdpi sites add ALAN"
+failed = "Bir veya daha fazla test başarısız oldu."
+dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
+
+[cmd.scan]
+help = "Sağlayıcınızda ya da tek bir sitede (--site ALAN) çalışan bir DPI stratejisi bulur (önce hazır ayarlar, sonra blockcheck2)."
+
+[scan]
+usage = "Kullanım: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ALAN] [--blockcheck-only] [--no-blockcheck]"
+site_ipv4 = "%s blockcheck2 ile yalnızca IPv4 üzerinden taranıyor; bu bilgisayarda küresel IPv6 yok."
+site_ipv46 = "%s blockcheck2 ile IPv4 ve IPv6 üzerinden taranıyor."
+verify = "blockcheck2'nin bulduğu %d strateji uygulamalarınızda ve sitelerinizde yeniden deneniyor; hepsini açan ilk strateji kaydedilecek."
+locked = "splitdpi zaten çalışıyor. Önce durdurun: sudo splitdpi stop"
+no_strategy = "Çalışan bir strateji bulunamadı."
+winner = "Seçilen strateji: %s (kaynak: %s)"
+voice = "sesli görüşme: hazır ayar uygulandı, doğrulanmadı"
+next = "Sonra: sudo splitdpi run   ya da: sudo splitdpi enable"
+presets_stale = "Hazır ayar verisi 30 günden eski. Güncellemek için: splitdpi presets update"
+
+[cmd.detect]
+help = "ASN'nizi bulur ve sağlayıcınıza uyan hazır stratejileri listeler."
+
+[detect]
+usage = "Kullanım: splitdpi detect [--asn N] [--country CC]"
+asking = "%s soruluyor…"
+result = "AS%d %s — %s"
+isp = "Sağlayıcı hazır ayarı: %s"
+candidates = "Aday stratejiler:"
+
+[presets]
+usage = "Kullanım: splitdpi presets list | update | check DİZİN"
+update.usage = "Kullanım: splitdpi presets update"
+check.usage = "Kullanım: splitdpi presets check DİZİN"
+check.no_dir = "%s bir dizin değil."
+check.bad = "%d dosya atlanırdı; bunları düzeltin."
+check.empty = "Uygulama dosyası bulunamadı; bu bir hazır ayar dizini değil."
+check.ok = "Hazır ayarlar sorunsuz: sürüm %s, %d sağlayıcı, %d uygulama."
+update.fetching = "İndiriliyor: %s"
+update.done = "Hazır ayar önbelleği %s sürümüne güncellendi (%d uygulama)."
+header = "Hazır ayarlar: %s, sürüm %s"
+isps = "Sağlayıcılar:"
+strategies = "strateji sayısı: %d"
+apps = "Uygulamalar:"
+countries = "Ülkeler: %s"
+generic = "Genel stratejiler: %d"
+warnings = "Atlanan dosyalar:"
+
+[apps]
+usage = "Kullanım: splitdpi apps list | enable ID | disable ID"
+unknown = "Bilinmeyen uygulama %q. Bilinen uygulamalar: %s"
+enabled = "%s açıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+disabled = "%s kapatıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+
+[exclude]
+usage = "Kullanım: splitdpi exclude list | add ALAN | remove ALAN"
+added = "%s hariç tutuldu. Uygulamak için splitdpi'yi yeniden başlatın."
+removed = "%s hariç tutulanlardan çıkarıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+
+[domain]
+empty = "Alan adı verilmedi."
+invalid = "%q geçerli bir alan adı değil."
+
+[sites]
+usage = "Kullanım: splitdpi sites list | add ALAN | remove ALAN"
+added = "%s sitelerinize eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+removed = "%s sitelerinizden çıkarıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+
+[strategy]
+usage = "Kullanım: splitdpi strategy list | set ID"
+unknown = "Bilinmeyen strateji %q. Listeyi görmek için: splitdpi strategy list"
+set = "Strateji %s olarak ayarlandı (%s)."
+restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
+current = "Geçerli strateji: %s (kaynak: %s)"
+from_country = "%s geneli"
+from_generic = "genel"
+
+[cmd.doctor]
+help = "Bu bilgisayarda splitdpi'nin ihtiyaç duyduğu her şeyi denetler."
+
+[doctor]
+usage = "Kullanım: splitdpi doctor"
+fix = "çözüm: %s"
+blockers = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce bunları giderin."
+
+[doctor.root]
+ok = "root olarak çalışıyor"
+no = "root olarak çalışmıyor"
+
+[doctor.kernel]
+ok = "çekirdek %s"
+old = "çekirdek %s, %d.%d sürümünden eski"
+unknown = "çekirdek sürümü okunamadı: %v"
+
+[doctor.tool]
+ok = "%s bulundu: %s"
+missing.nft = "nft (nftables) kurulu değil; splitdpi trafiği kuyruğa almak için buna ihtiyaç duyar"
+missing.curl = "curl kurulu değil; tarama (blockcheck2) için gerekli"
+
+[doctor.nfqueue]
+ok = "çekirdek nftables kuyruk kurallarını kabul ediyor"
+fail = "çekirdek deneme kuyruk kuralını reddetti (NFQUEUE desteği eksik olabilir): %v"
+
+[doctor.engine]
+ok = "zapret2 %s: %s"
+missing = "zapret2 motoru kurulu değil"
+old = "kurulu motor %s, sabitlenmiş zapret2 %s sürümünden farklı"
+
+[doctor.strategy]
+ok = "kayıtlı strateji sabitlenmiş motorla uyumlu"
+old = "kayıtlı strateji %s motoruyla bulundu; sabitlenmiş motor %s"
+
+[doctor.lsm]
+ok = "SELinux %s, AppArmor açık: %t"
+enforcing = "SELinux zorlayıcı modda; nfqws2/splitdpi için %d engelleme var (kaynak: %s)"
+enforcing_clean = "SELinux zorlayıcı modda; nfqws2/splitdpi için 0 engelleme (kaynak: %s)"
+enforcing_nolog = "SELinux zorlayıcı modda; engellemeleri saymak için ne audit günlüğü ne dmesg okunabildi: %v"
+
+[doctor.conflict]
+none = "başka DPI engel aşma aracı bulunamadı"
+process = "%s çalışıyor (başka bir DPI engel aşma aracı); önce onu ve servisini durdurun"
+dir = "%s var (eski bir zapret kurulumu)"
+dir_pkg = "%s var (büyük olasılıkla bir dağıtım paketi); o paketi paket yöneticinizle kaldırın"
+resolv = "/etc/resolv.conf değiştirilemez durumda (başka bir araç kilitlemiş); DNS değişiklikleri başarısız olur"
+
+[doctor.init]
+ok = "init sistemi: %s"
+other = "bilinmeyen init sistemi: servis modu desteklenmiyor; `splitdpi run` kullanın"
+
+[doctor.ipv6]
+yes = "küresel IPv6 var (varsayılan rota ve adres)"
+no = "küresel IPv6 yok; taramalar yalnızca IPv4'ü dener"
+
+[doctor.dns]
+ok = "açık uygulamalarda DNS zehirlenmesi bulunmadı"
+poisoned = "%s için DNS zehirlenmesi: %s"
+
+[cmd.run]
+help = "Engel aşmayı ön planda çalıştırır (Ctrl-C durdurur ve kuralları kaldırır)."
+
+[cmd.stop]
+help = "Çalışan engel aşmayı durdurur."
+
+[cmd.status]
+help = "Engel aşmanın çalışıp çalışmadığını, stratejiyi, motoru, uygulamaları ve son hatayı gösterir."
+
+[cmd.revert]
+help = "splitdpi'nin tüm güvenlik duvarı kurallarını ve çalışma dosyalarını kaldırır ([--purge] ayarları ve verileri de)."
+
+[run]
+usage = "Kullanım: splitdpi run [--service]"
+conflict = "Başka bir DPI engel aşma aracı çalışıyor. Önce onu durdurun, sonra splitdpi'yi yeniden çalıştırın."
+no_strategy = "Henüz strateji yok. Önce `splitdpi scan` çalıştırın."
+already = "splitdpi zaten çalışıyor (%s). Önce `splitdpi stop` kullanın."
+crash_loop = "nfqws2 sürekli çöktüğü için splitdpi durdu ve kurallarını kaldırdı. Hata için `splitdpi status` komutuna bakın."
+bad_config = "%s: %v"
+
+[stop]
+usage = "Kullanım: splitdpi stop"
+stopped = "Durduruldu."
+not_running = "splitdpi çalışmıyor."
+timeout = "splitdpi 10 saniyede durmadı. Şunu çalıştırın: `sudo splitdpi revert`."
+
+[status]
+usage = "Kullanım: splitdpi status"
+state = "Durum: %s"
+process = "Mod: %s, pid %d, başlangıç %s"
+strategy = "Strateji: %s (%s)"
+no_strategy = "Henüz strateji yok: `splitdpi scan` çalıştırın."
+engine = "Motor: zapret2 %s"
+apps = "Uygulamalar: %s"
+last_error = "Son hata: %s"
+dns = "DNS yönlendirmesi açık: VPN'in ayrık DNS'i ve yerel ağ adları çalışmayabilir. Kapatmak için: `sudo splitdpi dns off`."
+
+[cmd.dns]
+help = "DNS'i (53. port) yerleşik DNS-over-HTTPS ileticisinden geçirir (on | off)."
+
+[dns]
+usage = "Kullanım: splitdpi dns on | off"
+on = "DNS yönlendirmesi açıldı. Bir sonraki başlatmada geçerli olur."
+off = "DNS yönlendirmesi kapatıldı. Bir sonraki başlatmada geçerli olur."
+restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
+
+[revert]
+usage = "Kullanım: splitdpi revert [--rules-only] [--purge]"
+removed = "Kaldırıldı: %s"
+clean = "Geri alma tamam, sistem temiz: splitdpi kuralı ya da çalışma dosyası kalmadı."
+leftover = "Hâlâ duruyor: %s"
+not_clean = "Geri alma tamamlanmadı; yukarıdakiler hâlâ duruyor."
+
+[cmd.enable]
+help = "splitdpi'yi açılışta da başlayan bir servis olarak kurar ve başlatır."
+
+[cmd.disable]
+help = "Servisi durdurur ve kaldırır."
+
+[cmd.logs]
+help = "Servis günlüğünü gösterir ([-f] izlemeyi sürdürür)."
+
+[service]
+enable_usage = "Kullanım: splitdpi enable"
+disable_usage = "Kullanım: splitdpi disable"
+logs_usage = "Kullanım: splitdpi logs [-f]"
+enabled = "Servis kuruldu ve çalışıyor. Açılışta da başlayacak."
+disabled = "Servis durduruldu ve kaldırıldı."
+not_enabled = "Servis kurulu değil."
+unsupported = "Bu init sisteminde servis modu desteklenmiyor. Bunun yerine `splitdpi run` kullanın."
+no_binary = "Servis, splitdpi programının %s konumunda olmasını ister. Önce kurun: sudo install -m 755 ./splitdpi %s"
+not_started = "Servis 10 saniyede başlamadı. `sudo splitdpi logs` ve `sudo splitdpi status` komutlarına bakın."
+no_logs = "Henüz servis günlüğü yok."
+
+[state]
+running = "çalışıyor"
+stopped = "durdu"
+failed = "hata verdi"
+
+[mode]
+foreground = "ön plan"
+service = "servis"
+scan = "tarama"
+
+[tui]
+process = "%s, pid %d"
+state = "Durum"
+strategy = "Strateji"
+strategy_none = "yok, kurulumu başlatın"
+engine = "Motor"
+apps = "Uygulamalar"
+dns = "DNS"
+dns_on = "yönlendiriliyor; VPN'in ayrık DNS'i ve yerel ağ adları çalışmayabilir"
+probe = "Erişim"
+reachable = "erişilebilir"
+blocked = "engelli"
+last_error = "Son hata"
+none = "yok"
+running_here = "bu pencerede çalışıyor"
+probing = "Uygulamaların sitelerine erişim deneniyor..."
+confirm_quit = "Engel aşma durdurulup çıkılsın mı? [y] evet  [n] hayır"
+logs = "Günlük"
+logs_empty = "Henüz kayıt yok."
+
+[tui.act]
+run = "Çalıştır"
+stop = "Durdur"
+setup = "Kurulum"
+apps = "Uygulamalar"
+probe = "Dene"
+logs = "Günlük"
+back = "Geri"
+quit = "Çık"
+toggle = "Aç/kapat"
+cancel = "Vazgeç"
+strategy = "Strateji"
+choose = "Seç"
+add_site = "Site ekle"
+remove = "Kaldır"
+
+[tui.wiz]
+title = "Kurulum"
+checking = "Bilgisayar denetleniyor..."
+doctor = "Önce şu sorunlar giderilmeli:"
+check_again = "Yeniden denetle"
+lookup_ask = "Sağlayıcınız ve ülkeniz %s sitesine sorularak bulunsun mu? Bu, o siteye tek bir istek gönderir."
+look_up = "Bul"
+looking_up = "%s soruluyor..."
+pick_isp = "Sağlayıcımı seçeceğim"
+pick = "Hangi internet sağlayıcısını kullanıyorsunuz?"
+not_listed = "Listede yok: genel stratejileri dene"
+choose = "Seç"
+detected = "Sağlayıcınız: %s (AS%d, %s)"
+apps = "Hangi uygulamalar çalışsın?"
+no_apps = "En az bir uygulama seçin."
+scan = "Hazır stratejileri dene (hızlı)"
+scan_site = "Bir siteyi blockcheck2 ile tara"
+scan_site_go = "Tara"
+which_site = "Hangi site açılsın? Tek bir adres girin; blockcheck2 onu açan en basit stratejiyi arar. Bu uzun sürebilir."
+ipv4 = "Bu bilgisayarda küresel IPv6 yok; yalnızca IPv4 denenecek."
+ipv46 = "Bu bilgisayarda IPv6 var; hem IPv4 hem IPv6 denenecek."
+scanning = "Çalışan bir strateji aranıyor. Bu birkaç dakika sürebilir."
+cancel = "Vazgeç"
+cancelled = "Tarama iptal edildi. Hiçbir şey değiştirilmedi."
+scan_again = "Yeniden dene"
+how = "splitdpi nasıl çalışsın?"
+run_now = "Şimdi çalıştır"
+at_boot = "Açılışta başlat"
+enabling = "Servis kuruluyor..."
+
+[tui.apps_screen]
+title = "Uygulamalar, siteler ve hariç tutulanlar"
+site_broke = "Bir site bozuldu"
+which_site = "Hangi site bozuldu? Adresini yapıştırın; splitdpi ona dokunmayacak."
+exclude = "Hariç tut"
+excluded = "Engel aşmanın dokunmadığı siteler:"
+sites = "Engeli her zaman aşılacak siteleriniz:"
+which_add = "Hangi site açılmıyor? Adresini yapıştırın; splitdpi bu sitede engeli her zaman aşmaya çalışacak."
+add = "Ekle"
+
+[tui.strategy_screen]
+title = "Strateji"
+pick = "splitdpi'nin kullanacağı stratejiyi seçin. Bir sonraki başlatmada geçerli olur."
+
+[disclaimer]
+title = "Başlamadan önce"
+accept = "Anladım"
+body = "SplitDPI, bu bilgisayarın bazı ağ trafiğini derin paket incelemesinden (DPI) geçebilecek şekilde gönderir. Böyle bir aracı kullanmanın serbest olup olmadığı bulunduğunuz yere göre değişir; size uygulanan kuralları kontrol edin. SplitDPI'yi kendi sorumluluğunuzda kullanırsınız ve hiçbir garanti verilmez."
+
+[supervisor]
+started = "nfqws2 başladı (pid %d)"
+restarting = "nfqws2 durdu (%v); %s sonra yeniden başlatılıyor"
+crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralları kaldırıldı, vazgeçildi"

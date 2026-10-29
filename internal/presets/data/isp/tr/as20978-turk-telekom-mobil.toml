@@ -1,0 +1,10 @@
+schema = 1
+name = "Türk Telekom Mobil"
+country = "TR"
+asn = [20978]
+source = "SplitWire-Turkey presets2.txt (MIT, Çağrı Taşkın); origin alimali54/zapret-win-turkey"
+reported = "2026-10"
+
+[[strategy]]
+id = "ttm-fake"
+tcp_tls = "--payload=tls_client_hello --lua-desync=fake:blob=0x00000000:ip_ttl=5:repeats=1"

@@ -1,0 +1,61 @@
+SplitDPI
+Copyright (c) 2026 Kadir Berk Polat
+Licensed under the MIT License (see LICENSE).
+
+Engine
+======
+
+SplitDPI downloads and runs zapret2; it does not redistribute it.
+
+zapret2 (https://github.com/bol-van/zapret2), v1.0.6
+Copyright (c) 2016-2026 bol-van
+Licensed under the MIT License.
+
+Preset data (internal/presets/data)
+===================================
+
+SplitWire-Turkey (https://github.com/cagritaskn/SplitWire-Turkey)
+at 6607695700ee27203002a8bdc4ae8685d5d030bb
+Copyright (c) 2025 Çağrı Taşkın
+Licensed under the MIT License.
+Used: ISP strategies, the exclusion list, Roblox hosts.
+
+Flowseal/zapret-discord-youtube (https://github.com/Flowseal/zapret-discord-youtube)
+host lists at c4ad8548bf3f5f7eeadfda263913283d246e132a,
+general.bat at 73cee5db28940ba3cdb09b53c8b06d7afcd1a75f
+Copyright (c) 2024-2026 Flowseal
+Licensed under the MIT License.
+Used: Discord and YouTube hosts; Discord voice ports, L7 filters and repeats.
+
+dmfrpro/zapret2-flake (https://github.com/dmfrpro/zapret2-flake)
+at d0867ec745c282eaacc985010482b199427b6f75
+Copyright (c) 2026 dmfrpro
+Licensed under the MIT License.
+Used: extra Discord voice ports and the built-in-blob fallback.
+
+alimali54/zapret-win-turkey (https://github.com/alimali54/zapret-win-turkey)
+Published without a license. Credited as the origin of the Turkish zapret2
+strategy strings that SplitWire-Turkey carries.
+
+Go modules compiled into the splitdpi binary
+============================================
+
+Licensed under the MIT License:
+- BurntSushi/toml, Copyright (c) 2013 TOML authors
+- charmbracelet/bubbletea, bubbles, colorprofile, Copyright (c) 2020-2025 Charmbracelet, Inc
+- charmbracelet/lipgloss, Copyright (c) 2021-2023 Charmbracelet, Inc
+- charmbracelet/x/ansi, x/cellbuf, x/term, Copyright (c) 2023 Charmbracelet, Inc.
+- aymanbagabas/go-osc52, Copyright (c) 2022 Ayman Bagabas
+- clipperhouse/displaywidth, stringish, Copyright (c) 2025 Matt Sherman
+- clipperhouse/uax29, Copyright (c) 2020 Matt Sherman
+- lucasb-eyer/go-colorful, Copyright (c) 2013 Lucas Beyer
+- mattn/go-isatty, go-runewidth, Copyright (c) 2016 Yasuhiro Matsumoto
+- muesli/ansi, Copyright (c) 2021 Christian Muehlhaeuser
+- muesli/cancelreader, Copyright (c) 2022 Erik Geiser and Christian Muehlhaeuser
+- muesli/termenv, Copyright (c) 2019 Christian Muehlhaeuser
+- rivo/uniseg, Copyright (c) 2019 Oliver Kuederle
+- xo/terminfo, Copyright (c) 2016 Anmol Sethi
+
+Licensed under the BSD 3-Clause License:
+- atotto/clipboard, Copyright (c) 2013 Ato Araki
+- golang.org/x/net, x/sys, x/term, x/text, Copyright 2009 The Go Authors

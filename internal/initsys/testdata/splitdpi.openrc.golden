@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+
+description="SplitDPI DPI bypass (zapret2)"
+command="/usr/local/bin/splitdpi"
+command_args="run --service"
+command_background="yes"
+pidfile="/run/splitdpi.pid"
+
+depend() {
+	need net;
+}
+
+stop_post() {
+	/usr/local/bin/splitdpi revert --rules-only;
+}

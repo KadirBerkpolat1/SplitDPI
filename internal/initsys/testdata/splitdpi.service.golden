@@ -1,0 +1,15 @@
+[Unit]
+Description=SplitDPI DPI bypass (zapret2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/splitdpi run --service
+ExecStopPost=/usr/local/bin/splitdpi revert --rules-only
+Restart=on-failure
+RestartSec=5
+RestartPreventExitStatus=3
+
+[Install]
+WantedBy=multi-user.target

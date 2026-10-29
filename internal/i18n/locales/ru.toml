@@ -1,0 +1,361 @@
+# Русский. Названия продукта, приложений и провайдеров, команды, флаги и пути не переводятся.
+
+[usage]
+header = "Использование: splitdpi [--lang en|tr|ru] <команда> [аргументы]"
+commands = "Команды:"
+
+[err]
+need_root = "Этой команде нужны права root. Выполните: %s"
+unknown_command = "Неизвестная команда: %s"
+lang_value = "Для --lang нужно значение: en, tr или ru"
+
+[cmd.version]
+help = "Показать версию."
+
+[cmd.engine]
+help = "Установить закреплённый движок zapret2 (install [--from ФАЙЛ]) или показать его состояние (status)."
+
+[engine]
+usage = "Использование: splitdpi engine install [--from ФАЙЛ] | splitdpi engine status"
+downloading = "Загрузка %s"
+installed = "zapret2 %s установлен в %s"
+not_installed = "Движок не установлен. Выполните: sudo splitdpi engine install"
+status = "Движок: zapret2 %s\nКаталог: %s"
+pin_ok = "Совпадает с закреплённой версией."
+pin_mismatch = "Отличается от закреплённой версии %s. Выполните: sudo splitdpi engine install"
+download_hint = "Если загрузка заблокирована, скачайте %s другим способом и выполните: sudo splitdpi engine install --from ФАЙЛ"
+
+[engine.err]
+install = "Не удалось установить движок: %v"
+checksum = "SHA-256 не совпадает: архив не является zapret2 %s (повреждён или не тот файл). Установленный движок не изменён."
+arch = "Архитектура %s не поддерживается (поддерживаются: amd64, arm64)."
+
+[cmd.presets]
+help = "Показать, обновить или проверить данные пресетов (list | update | check КАТАЛОГ)."
+
+[cmd.apps]
+help = "Список приложений, включение и выключение их профилей (list | enable ID | disable ID)."
+
+[cmd.exclude]
+help = "Домены, которые обход блокировок никогда не трогает (list | add ДОМЕН | remove ДОМЕН)."
+
+[cmd.sites]
+help = "Ваши заблокированные сайты, к которым обход применяется всегда (list | add ДОМЕН | remove ДОМЕН)."
+
+[cmd.strategy]
+help = "Показать готовые стратегии или выбрать одну (list | set ID)."
+
+[cmd.probe]
+help = "Проверить доступность по HTTPS адресов включённых приложений и ваших сайтов."
+
+[probe]
+usage = "Использование: splitdpi probe [--apps id,id]"
+no_apps = "Нет включённых приложений и добавленных сайтов. Выполните: sudo splitdpi apps enable discord  или: sudo splitdpi sites add ДОМЕН"
+failed = "Одна или несколько проверок не прошли."
+dns.mismatch = "системный DNS и DoH отвечают по-разному"
+
+[cmd.scan]
+help = "Подобрать рабочую DPI-стратегию для вашего провайдера (сначала пресеты, затем blockcheck2) или для одного сайта (--site ДОМЕН)."
+
+[scan]
+usage = "Использование: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ДОМЕН] [--blockcheck-only] [--no-blockcheck]"
+site_ipv4 = "Сканирование %s через blockcheck2 только по IPv4: на этом компьютере нет глобального IPv6."
+site_ipv46 = "Сканирование %s через blockcheck2 по IPv4 и IPv6."
+verify = "Повторная проверка %d стратегий blockcheck2 на ваших приложениях и сайтах; сохранится первая, которая открывает их все."
+locked = "splitdpi уже запущен. Сначала остановите его: sudo splitdpi stop"
+no_strategy = "Рабочая стратегия не найдена."
+winner = "Выбрана стратегия: %s (источник: %s)"
+voice = "голосовая связь: пресет применён, не проверен"
+next = "Дальше: sudo splitdpi run   или: sudo splitdpi enable"
+presets_stale = "Данным пресетов больше 30 дней. Обновите их: splitdpi presets update"
+
+[cmd.detect]
+help = "Определить ваш ASN и показать подходящие стратегии провайдера."
+
+[detect]
+usage = "Использование: splitdpi detect [--asn N] [--country CC]"
+asking = "Запрос к %s…"
+result = "AS%d %s — %s"
+isp = "Пресет провайдера: %s"
+candidates = "Стратегии-кандидаты:"
+
+[presets]
+usage = "Использование: splitdpi presets list | update | check КАТАЛОГ"
+update.usage = "Использование: splitdpi presets update"
+check.usage = "Использование: splitdpi presets check КАТАЛОГ"
+check.no_dir = "%s не является каталогом."
+check.bad = "Будут пропущены файлы (%d); исправьте их."
+check.empty = "Файлы приложений не найдены; это не каталог пресетов."
+check.ok = "Пресеты в порядке: версия %s, провайдеров: %d, приложений: %d."
+update.fetching = "Загрузка %s"
+update.done = "Кэш пресетов обновлён до версии %s (приложений: %d)."
+header = "Пресеты: %s, версия %s"
+isps = "Провайдеры:"
+strategies = "стратегий: %d"
+apps = "Приложения:"
+countries = "Страны: %s"
+generic = "Общие стратегии: %d"
+warnings = "Пропущенные файлы:"
+
+[apps]
+usage = "Использование: splitdpi apps list | enable ID | disable ID"
+unknown = "Неизвестное приложение %q. Известные приложения: %s"
+enabled = "%s включено. Перезапустите splitdpi, чтобы применить."
+disabled = "%s выключено. Перезапустите splitdpi, чтобы применить."
+
+[exclude]
+usage = "Использование: splitdpi exclude list | add ДОМЕН | remove ДОМЕН"
+added = "%s добавлен в исключения. Перезапустите splitdpi, чтобы применить."
+removed = "%s удалён из исключений. Перезапустите splitdpi, чтобы применить."
+
+[domain]
+empty = "Домен не указан."
+invalid = "%q — недопустимое имя домена."
+
+[sites]
+usage = "Использование: splitdpi sites list | add ДОМЕН | remove ДОМЕН"
+added = "%s добавлен в ваши сайты. Перезапустите splitdpi, чтобы применить."
+removed = "%s удалён из ваших сайтов. Перезапустите splitdpi, чтобы применить."
+
+[strategy]
+usage = "Использование: splitdpi strategy list | set ID"
+unknown = "Неизвестная стратегия %q. Список: splitdpi strategy list"
+set = "Выбрана стратегия %s (%s)."
+restart = "splitdpi запущен; перезапустите его, чтобы применить: sudo splitdpi stop && sudo splitdpi run"
+current = "Текущая стратегия: %s (источник: %s)"
+from_country = "%s, общая для страны"
+from_generic = "общая"
+
+[cmd.doctor]
+help = "Проверить, есть ли на этом компьютере всё, что нужно splitdpi."
+
+[doctor]
+usage = "Использование: splitdpi doctor"
+fix = "исправление: %s"
+blockers = "doctor нашёл препятствий: %d. Устраните их перед запуском splitdpi."
+
+[doctor.root]
+ok = "запущено от root"
+no = "запущено не от root"
+
+[doctor.kernel]
+ok = "ядро %s"
+old = "ядро %s старее версии %d.%d"
+unknown = "не удалось прочитать версию ядра: %v"
+
+[doctor.tool]
+ok = "%s найден: %s"
+missing.nft = "nft (nftables) не установлен; он нужен splitdpi, чтобы ставить трафик в очередь"
+missing.curl = "curl не установлен; он нужен для поиска стратегии (blockcheck2)"
+
+[doctor.nfqueue]
+ok = "ядро принимает правила очереди nftables"
+fail = "ядро отклонило тестовое правило очереди (нет поддержки NFQUEUE?): %v"
+
+[doctor.engine]
+ok = "zapret2 %s в %s"
+missing = "движок zapret2 не установлен"
+old = "установленный движок %s отличается от закреплённого zapret2 %s"
+
+[doctor.strategy]
+ok = "сохранённая стратегия подходит к закреплённому движку"
+old = "сохранённая стратегия найдена с движком %s; закреплён движок %s"
+
+[doctor.lsm]
+ok = "SELinux %s, AppArmor включён: %t"
+enforcing = "SELinux в режиме enforcing; отказов для nfqws2/splitdpi: %d (источник: %s)"
+enforcing_clean = "SELinux в режиме enforcing; отказов для nfqws2/splitdpi: 0 (источник: %s)"
+enforcing_nolog = "SELinux в режиме enforcing; не удалось прочитать ни журнал audit, ни dmesg, чтобы посчитать отказы: %v"
+
+[doctor.conflict]
+none = "других средств обхода DPI не найдено"
+process = "запущен %s (другое средство обхода DPI); сначала остановите его и его службу"
+dir = "есть %s (старая установка zapret)"
+dir_pkg = "есть %s (вероятно, пакет дистрибутива); удалите этот пакет менеджером пакетов"
+resolv = "/etc/resolv.conf защищён от изменений (это сделала другая программа); изменить DNS не получится"
+
+[doctor.init]
+ok = "система инициализации: %s"
+other = "неизвестная система инициализации: режим службы не поддерживается; используйте `splitdpi run`"
+
+[doctor.ipv6]
+yes = "глобальный IPv6 есть (маршрут по умолчанию и адрес)"
+no = "глобального IPv6 нет; сканирование проверяет только IPv4"
+
+[doctor.dns]
+ok = "подмены DNS для включённых приложений не обнаружено"
+poisoned = "подмена DNS для %s: %s"
+
+[cmd.run]
+help = "Запустить обход блокировок в этом окне (Ctrl-C останавливает его и удаляет правила)."
+
+[cmd.stop]
+help = "Остановить работающий обход блокировок."
+
+[cmd.status]
+help = "Показать, работает ли обход, а также стратегию, движок, приложения и последнюю ошибку."
+
+[cmd.revert]
+help = "Удалить все правила брандмауэра и рабочие файлы splitdpi ([--purge] также настройки и данные)."
+
+[run]
+usage = "Использование: splitdpi run [--service]"
+conflict = "Запущено другое средство обхода DPI. Остановите его и снова запустите splitdpi."
+no_strategy = "Стратегия ещё не выбрана. Сначала выполните `splitdpi scan`."
+already = "splitdpi уже запущен (%s). Сначала выполните `splitdpi stop`."
+crash_loop = "nfqws2 постоянно падал, поэтому splitdpi остановился и удалил свои правила. Ошибку смотрите в `splitdpi status`."
+bad_config = "%s: %v"
+
+[stop]
+usage = "Использование: splitdpi stop"
+stopped = "Остановлено."
+not_running = "splitdpi не запущен."
+timeout = "splitdpi не остановился за 10 с. Выполните `sudo splitdpi revert`."
+
+[status]
+usage = "Использование: splitdpi status"
+state = "Состояние: %s"
+process = "Режим: %s, pid %d, с %s"
+strategy = "Стратегия: %s (%s)"
+no_strategy = "Стратегия ещё не выбрана: выполните `splitdpi scan`."
+engine = "Движок: zapret2 %s"
+apps = "Приложения: %s"
+last_error = "Последняя ошибка: %s"
+dns = "Перенаправление DNS включено: раздельный DNS в VPN и имена в локальной сети могут не работать. Выключить: `sudo splitdpi dns off`."
+
+[cmd.dns]
+help = "Пропускать DNS (порт 53) через встроенный DNS-over-HTTPS (on | off)."
+
+[dns]
+usage = "Использование: splitdpi dns on | off"
+on = "Перенаправление DNS включено. Изменение вступит в силу при следующем запуске."
+off = "Перенаправление DNS выключено. Изменение вступит в силу при следующем запуске."
+restart = "splitdpi запущен; перезапустите его, чтобы применить: sudo splitdpi stop && sudo splitdpi run"
+
+[revert]
+usage = "Использование: splitdpi revert [--rules-only] [--purge]"
+removed = "Удалено: %s"
+clean = "Откат завершён, система чиста: правил и рабочих файлов splitdpi не осталось."
+leftover = "Осталось: %s"
+not_clean = "Откат не завершён; перечисленное выше всё ещё на месте."
+
+[cmd.enable]
+help = "Установить и запустить splitdpi как службу, которая стартует и при загрузке."
+
+[cmd.disable]
+help = "Остановить и удалить службу."
+
+[cmd.logs]
+help = "Показать журнал службы ([-f] продолжает следить за ним)."
+
+[service]
+enable_usage = "Использование: splitdpi enable"
+disable_usage = "Использование: splitdpi disable"
+logs_usage = "Использование: splitdpi logs [-f]"
+enabled = "Служба установлена и работает. Она будет запускаться и при загрузке."
+disabled = "Служба остановлена и удалена."
+not_enabled = "Служба не установлена."
+unsupported = "В этой системе инициализации режим службы не поддерживается. Используйте `splitdpi run`."
+no_binary = "Службе нужен файл splitdpi по пути %s. Сначала установите его: sudo install -m 755 ./splitdpi %s"
+not_started = "Служба не запустилась за 10 с. Смотрите `sudo splitdpi logs` и `sudo splitdpi status`."
+no_logs = "Журнала службы пока нет."
+
+[state]
+running = "работает"
+stopped = "остановлен"
+failed = "сбой"
+
+[mode]
+foreground = "в окне"
+service = "служба"
+scan = "поиск стратегии"
+
+[tui]
+process = "%s, pid %d"
+state = "Состояние"
+strategy = "Стратегия"
+strategy_none = "нет, запустите настройку"
+engine = "Движок"
+apps = "Приложения"
+dns = "DNS"
+dns_on = "перенаправлен; раздельный DNS в VPN и имена в локальной сети могут не работать"
+probe = "Проверка"
+reachable = "доступен"
+blocked = "заблокирован"
+last_error = "Ошибка"
+none = "нет"
+running_here = "работает в этом окне"
+probing = "Проверяю сайты приложений..."
+confirm_quit = "Остановить обход и выйти? [y] да  [n] нет"
+logs = "Журнал"
+logs_empty = "Записей пока нет."
+
+[tui.act]
+run = "Запустить"
+stop = "Остановить"
+setup = "Настройка"
+apps = "Приложения"
+probe = "Проверить"
+logs = "Журнал"
+back = "Назад"
+quit = "Выход"
+toggle = "Вкл/выкл"
+cancel = "Отмена"
+strategy = "Стратегия"
+choose = "Выбрать"
+add_site = "Добавить сайт"
+remove = "Удалить"
+
+[tui.wiz]
+title = "Настройка"
+checking = "Проверяю компьютер..."
+doctor = "Сначала нужно устранить эти проблемы:"
+check_again = "Проверить снова"
+lookup_ask = "Определить провайдера и страну через %s? На этот сайт уйдёт один запрос."
+look_up = "Определить"
+looking_up = "Запрос к %s..."
+pick_isp = "Выбрать провайдера"
+pick = "Какой у вас интернет-провайдер?"
+not_listed = "Нет в списке: попробовать общие стратегии"
+choose = "Выбрать"
+detected = "Ваш провайдер: %s (AS%d, %s)"
+apps = "Какие приложения должны работать?"
+no_apps = "Выберите хотя бы одно приложение."
+scan = "Попробовать готовые стратегии (быстро)"
+scan_site = "Просканировать сайт через blockcheck2"
+scan_site_go = "Сканировать"
+which_site = "Какой сайт должен открываться? Введите один адрес; blockcheck2 найдёт самую простую стратегию, которая его открывает. Это может занять много времени."
+ipv4 = "На этом компьютере нет глобального IPv6, поэтому проверяется только IPv4."
+ipv46 = "На этом компьютере есть IPv6, поэтому проверяются IPv4 и IPv6."
+scanning = "Ищу рабочую стратегию. Это может занять несколько минут."
+cancel = "Отмена"
+cancelled = "Поиск отменён. Ничего не изменено."
+scan_again = "Попробовать снова"
+how = "Как запускать splitdpi?"
+run_now = "Запустить сейчас"
+at_boot = "Запускать при загрузке"
+enabling = "Устанавливаю службу..."
+
+[tui.apps_screen]
+title = "Приложения, сайты и исключения"
+site_broke = "Сайт не работает"
+which_site = "Какой сайт перестал работать? Вставьте его адрес, и splitdpi не будет его трогать."
+exclude = "Исключить"
+excluded = "Обход блокировок их не трогает:"
+sites = "Ваши сайты, обход всегда включён:"
+which_add = "Какой сайт заблокирован? Вставьте его адрес, и splitdpi всегда будет обходить для него блокировку."
+add = "Добавить"
+
+[tui.strategy_screen]
+title = "Стратегия"
+pick = "Выберите стратегию для splitdpi. Она вступит в силу при следующем запуске."
+
+[disclaimer]
+title = "Перед началом"
+accept = "Понятно"
+body = "SplitDPI меняет то, как этот компьютер отправляет часть сетевого трафика, чтобы он проходил через глубокую инспекцию пакетов (DPI). Разрешено ли пользоваться таким средством, зависит от того, где вы находитесь; проверьте правила, которые действуют для вас. Вы пользуетесь SplitDPI под свою ответственность, без каких-либо гарантий."
+
+[supervisor]
+started = "nfqws2 запущен (pid %d)"
+restarting = "nfqws2 остановился (%v); перезапуск через %s"
+crash_loop = "nfqws2 упал %d раз за %s; правила брандмауэра удалены, перезапусков больше не будет"

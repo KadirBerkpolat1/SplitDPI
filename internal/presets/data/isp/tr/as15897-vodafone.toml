@@ -1,0 +1,14 @@
+schema = 1
+name = "Vodafone TR"
+country = "TR"
+asn = [15897]
+source = "SplitWire-Turkey presets2.txt (MIT, Çağrı Taşkın); origin alimali54/zapret-win-turkey"
+reported = "2026-10"
+
+[[strategy]]
+id = "vf-multisplit"
+tcp_tls = "--payload=tls_client_hello --lua-desync=multisplit:blob=fake_default_tls:ip_ttl=5:pos=2:nodrop:repeats=1"
+
+[[strategy]]
+id = "vf-mobil-multidisorder"
+tcp_tls = "--payload=tls_client_hello --lua-desync=multidisorder:pos=2:seqovl=1"

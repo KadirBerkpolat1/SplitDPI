@@ -1,0 +1,361 @@
+# English is the source locale. Keys may use dotted names or [tables].
+
+[usage]
+header = "Usage: splitdpi [--lang en|tr] <command> [args]"
+commands = "Commands:"
+
+[err]
+need_root = "This command needs root. Run: %s"
+unknown_command = "Unknown command: %s"
+lang_value = "--lang needs a value: en or tr"
+
+[cmd.version]
+help = "Print the version."
+
+[cmd.engine]
+help = "Install (install [--from FILE]) or show (status) the pinned zapret2 engine."
+
+[engine]
+usage = "Usage: splitdpi engine install [--from FILE] | splitdpi engine status"
+downloading = "Downloading %s"
+installed = "Installed zapret2 %s in %s"
+not_installed = "The engine is not installed. Run: sudo splitdpi engine install"
+status = "Engine: zapret2 %s\nDirectory: %s"
+pin_ok = "Matches the pinned version."
+pin_mismatch = "Differs from the pinned version %s. Run: sudo splitdpi engine install"
+download_hint = "If the download is blocked, get %s another way and run: sudo splitdpi engine install --from FILE"
+
+[cmd.presets]
+help = "Show, refresh or validate preset data (list | update | check DIR)."
+
+[cmd.apps]
+help = "List, enable or disable app profiles (list | enable ID | disable ID)."
+
+[cmd.exclude]
+help = "Manage domains never touched by the bypass (list | add DOMAIN | remove DOMAIN)."
+
+[cmd.sites]
+help = "Manage your own blocked sites, which the bypass always handles (list | add DOMAIN | remove DOMAIN)."
+
+[cmd.strategy]
+help = "List the preset strategies or choose one (list | set ID)."
+
+[cmd.probe]
+help = "Test HTTPS reachability of enabled app probe URLs and your sites."
+
+[probe]
+usage = "Usage: splitdpi probe [--apps id,id]"
+no_apps = "No apps enabled and no sites added. Run: sudo splitdpi apps enable discord  or: sudo splitdpi sites add DOMAIN"
+failed = "One or more probes failed."
+dns.mismatch = "system and DoH disagree"
+
+[cmd.scan]
+help = "Find a working DPI strategy for your ISP (preset trials, then blockcheck2), or for one site (--site DOMAIN)."
+
+[scan]
+usage = "Usage: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site DOMAIN] [--blockcheck-only] [--no-blockcheck]"
+site_ipv4 = "Scanning %s with blockcheck2 over IPv4 only: this machine has no global IPv6."
+site_ipv46 = "Scanning %s with blockcheck2 over IPv4 and IPv6."
+verify = "Re-testing %d blockcheck2 strategies on your apps and sites; the first that opens all of them is saved."
+locked = "splitdpi is already running. Stop it first: sudo splitdpi stop"
+no_strategy = "No working strategy found."
+winner = "Selected strategy: %s (from %s)"
+voice = "voice: preset applied, not verified"
+next = "Next: sudo splitdpi run   or: sudo splitdpi enable"
+presets_stale = "Preset data is over 30 days old. Consider: splitdpi presets update"
+
+[cmd.detect]
+help = "Look up your ASN and list matching ISP preset strategies."
+
+[detect]
+usage = "Usage: splitdpi detect [--asn N] [--country CC]"
+asking = "Asking %s …"
+result = "AS%d %s — %s"
+isp = "ISP preset: %s"
+candidates = "Candidate strategies:"
+
+[presets]
+usage = "Usage: splitdpi presets list | update | check DIR"
+update.usage = "Usage: splitdpi presets update"
+check.usage = "Usage: splitdpi presets check DIR"
+check.no_dir = "%s is not a directory."
+check.bad = "%d file(s) would be skipped; fix them."
+check.empty = "No app files found; this is not a preset tree."
+check.ok = "Presets OK: version %s, %d ISPs, %d apps."
+update.fetching = "Fetching %s"
+update.done = "Updated preset cache to version %s (%d apps)."
+header = "Presets: %s, version %s"
+isps = "ISPs:"
+strategies = "strategies: %d"
+apps = "Apps:"
+countries = "Countries: %s"
+generic = "Generic strategies: %d"
+warnings = "Skipped files:"
+
+[apps]
+usage = "Usage: splitdpi apps list | enable ID | disable ID"
+unknown = "Unknown app %q. Known apps: %s"
+enabled = "Enabled %s. Restart splitdpi to apply."
+disabled = "Disabled %s. Restart splitdpi to apply."
+
+[exclude]
+usage = "Usage: splitdpi exclude list | add DOMAIN | remove DOMAIN"
+added = "Excluded %s. Restart splitdpi to apply."
+removed = "Removed %s from exclusions. Restart splitdpi to apply."
+
+[domain]
+empty = "No domain given."
+invalid = "%q is not a valid domain name."
+
+[sites]
+usage = "Usage: splitdpi sites list | add DOMAIN | remove DOMAIN"
+added = "Added %s to your sites. Restart splitdpi to apply."
+removed = "Removed %s from your sites. Restart splitdpi to apply."
+
+[strategy]
+usage = "Usage: splitdpi strategy list | set ID"
+unknown = "Unknown strategy %q. See: splitdpi strategy list"
+set = "Strategy set to %s (%s)."
+restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
+current = "Current strategy: %s (from %s)"
+from_country = "%s country-wide"
+from_generic = "generic"
+
+[cmd.doctor]
+help = "Check this machine for everything splitdpi needs."
+
+[doctor]
+usage = "Usage: splitdpi doctor"
+fix = "fix: %s"
+blockers = "doctor found %d blocker(s); fix them before running splitdpi."
+
+[doctor.root]
+ok = "running as root"
+no = "not running as root"
+
+[doctor.kernel]
+ok = "kernel %s"
+old = "kernel %s is older than %d.%d"
+unknown = "cannot read the kernel version: %v"
+
+[doctor.tool]
+ok = "%s found at %s"
+missing.nft = "nft (nftables) is not installed; splitdpi needs it to queue traffic"
+missing.curl = "curl is not installed; scan (blockcheck2) needs it"
+
+[doctor.nfqueue]
+ok = "the kernel accepts nftables queue rules"
+fail = "the kernel rejected a test queue rule (NFQUEUE support missing?): %v"
+
+[doctor.engine]
+ok = "zapret2 %s in %s"
+missing = "the zapret2 engine is not installed"
+old = "installed engine %s differs from the pinned zapret2 %s"
+
+[doctor.strategy]
+ok = "saved strategy matches the pinned engine"
+old = "saved strategy used engine %s; pinned engine is %s"
+
+[doctor.lsm]
+ok = "SELinux %s, AppArmor enabled: %t"
+enforcing = "SELinux is enforcing; %d denial(s) for nfqws2/splitdpi in %s"
+enforcing_clean = "SELinux is enforcing; 0 denials for nfqws2/splitdpi in %s"
+enforcing_nolog = "SELinux is enforcing; cannot read the audit log or dmesg to count denials: %v"
+
+[doctor.conflict]
+none = "no other DPI-bypass tools found"
+process = "%s is running (another DPI-bypass tool); stop it and its service first"
+dir = "%s exists (an old zapret install)"
+dir_pkg = "%s exists (probably a distro package); remove that package with your package manager"
+resolv = "/etc/resolv.conf is immutable (set by another tool); DNS changes will fail"
+
+[doctor.init]
+ok = "init system: %s"
+other = "unknown init system: service mode unsupported; use `splitdpi run`"
+
+[doctor.ipv6]
+yes = "global IPv6 present (default route and address)"
+no = "no global IPv6; scans test IPv4 only"
+
+[doctor.dns]
+ok = "no DNS poisoning detected for enabled apps"
+poisoned = "DNS poisoning for %s: %s"
+
+[cmd.run]
+help = "Run the bypass in the foreground (Ctrl-C stops it and removes the rules)."
+
+[cmd.stop]
+help = "Stop the running bypass."
+
+[cmd.status]
+help = "Show whether the bypass runs, with strategy, engine, apps and the last error."
+
+[cmd.revert]
+help = "Remove every splitdpi firewall rule and run file ([--purge] also config and data)."
+
+[run]
+usage = "Usage: splitdpi run [--service]"
+conflict = "Another DPI-bypass tool is running. Stop it first, then run splitdpi again."
+no_strategy = "No strategy configured yet. Run `splitdpi scan` first."
+already = "splitdpi is already running (%s). Use `splitdpi stop` first."
+crash_loop = "nfqws2 kept crashing, so splitdpi stopped and removed its rules. See `splitdpi status` for the error."
+bad_config = "%s: %v"
+
+[stop]
+usage = "Usage: splitdpi stop"
+stopped = "Stopped."
+not_running = "splitdpi is not running."
+timeout = "splitdpi did not stop within 10 s. Run `sudo splitdpi revert`."
+
+[status]
+usage = "Usage: splitdpi status"
+state = "State: %s"
+process = "Mode: %s, pid %d, since %s"
+strategy = "Strategy: %s (%s)"
+no_strategy = "No strategy yet: run `splitdpi scan`."
+engine = "Engine: zapret2 %s"
+apps = "Apps: %s"
+last_error = "Last error: %s"
+dns = "DNS redirect is on: VPN split-DNS and LAN hostnames may break. Turn it off with `sudo splitdpi dns off`."
+
+[cmd.dns]
+help = "Send DNS (port 53) through the built-in DNS-over-HTTPS forwarder (on | off)."
+
+[dns]
+usage = "Usage: splitdpi dns on | off"
+on = "DNS redirect is on. It applies on the next start."
+off = "DNS redirect is off. It applies on the next start."
+restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
+
+[revert]
+usage = "Usage: splitdpi revert [--rules-only] [--purge]"
+removed = "Removed %s"
+clean = "Revert complete, system is clean: no splitdpi rules or run files are left."
+leftover = "Still present: %s"
+not_clean = "Revert did not finish; the items above are still present."
+
+[cmd.enable]
+help = "Install and start splitdpi as a service that also starts on boot."
+
+[cmd.disable]
+help = "Stop the service and remove it."
+
+[cmd.logs]
+help = "Show the service log ([-f] keeps following it)."
+
+[service]
+enable_usage = "Usage: splitdpi enable"
+disable_usage = "Usage: splitdpi disable"
+logs_usage = "Usage: splitdpi logs [-f]"
+enabled = "Service enabled and running. It also starts on boot."
+disabled = "Service stopped and removed."
+not_enabled = "The service is not enabled."
+unsupported = "Service mode is not supported on this init system. Use `splitdpi run` instead."
+no_binary = "The service needs the splitdpi binary at %s. Install it first: sudo install -m 755 ./splitdpi %s"
+not_started = "The service did not start within 10 s. See `sudo splitdpi logs` and `sudo splitdpi status`."
+no_logs = "No service log yet."
+
+[state]
+running = "running"
+stopped = "stopped"
+failed = "failed"
+
+[mode]
+foreground = "foreground"
+service = "service"
+scan = "scan"
+
+[tui]
+process = "%s, pid %d"
+state = "State"
+strategy = "Strategy"
+strategy_none = "none, run setup"
+engine = "Engine"
+apps = "Apps"
+dns = "DNS"
+dns_on = "redirected; VPN split-DNS and LAN hostnames may break"
+probe = "Probe"
+reachable = "reachable"
+blocked = "blocked"
+last_error = "Last error"
+none = "none"
+running_here = "running in this window"
+probing = "Checking the apps' sites..."
+confirm_quit = "Stop bypass and quit? [y] yes  [n] no"
+logs = "Logs"
+logs_empty = "Nothing logged yet."
+
+[tui.act]
+run = "Run"
+stop = "Stop"
+setup = "Setup"
+apps = "Apps"
+probe = "Probe"
+logs = "Logs"
+back = "Back"
+quit = "Quit"
+toggle = "Toggle"
+cancel = "Cancel"
+strategy = "Strategy"
+choose = "Choose"
+add_site = "Add a site"
+remove = "Remove"
+
+[tui.wiz]
+title = "Setup"
+checking = "Checking this machine..."
+doctor = "These problems must be fixed first:"
+check_again = "Check again"
+lookup_ask = "Find your ISP and country by asking %s? This sends one request to that site."
+look_up = "Look it up"
+looking_up = "Asking %s..."
+pick_isp = "Choose my ISP"
+pick = "Which internet provider do you use?"
+not_listed = "Not listed: try generic strategies"
+choose = "Choose"
+detected = "Your ISP: %s (AS%d, %s)"
+apps = "Which apps should work?"
+no_apps = "Choose at least one app."
+scan = "Try ready-made strategies (fast)"
+scan_site = "Scan a site with blockcheck2"
+scan_site_go = "Scan"
+which_site = "Which site should open? Enter one address; blockcheck2 looks for the simplest strategy that opens it. This can take a long time."
+ipv4 = "This machine has no global IPv6, so only IPv4 is tested."
+ipv46 = "This machine has IPv6, so both IPv4 and IPv6 are tested."
+scanning = "Looking for a strategy that works. This can take a few minutes."
+cancel = "Cancel"
+cancelled = "Scan cancelled. Nothing was changed."
+scan_again = "Try again"
+how = "How should splitdpi run?"
+run_now = "Run now"
+at_boot = "Start at boot"
+enabling = "Installing the service..."
+
+[tui.apps_screen]
+title = "Apps, sites and exclusions"
+site_broke = "A site broke"
+which_site = "Which site broke? Paste its address; splitdpi will leave it alone."
+exclude = "Exclude"
+excluded = "Never touched by the bypass:"
+sites = "Your sites, always bypassed:"
+which_add = "Which site is blocked? Paste its address; splitdpi will always handle it."
+add = "Add"
+
+[tui.strategy_screen]
+title = "Strategy"
+pick = "Choose the strategy splitdpi uses. It applies on the next start."
+
+[disclaimer]
+title = "Before you start"
+accept = "I understand"
+body = "SplitDPI changes how this computer sends some network traffic, so that it passes deep packet inspection. Whether using such a tool is allowed depends on where you are; check the rules that apply to you. You use SplitDPI on your own responsibility, and it comes without any warranty."
+
+[supervisor]
+started = "nfqws2 started (pid %d)"
+restarting = "nfqws2 stopped (%v); restarting in %s"
+crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving up"
+
+[engine.err]
+install = "Engine install failed: %v"
+checksum = "SHA-256 mismatch: the archive is not zapret2 %s (corrupted or wrong file). The installed engine was not changed."
+arch = "Unsupported architecture %s (supported: amd64, arm64)."

@@ -1,0 +1,4 @@
+#!/bin/sh
+/usr/local/bin/splitdpi revert --rules-only
+[ "$1" = 3 ] && sv down splitdpi
+exit 0
