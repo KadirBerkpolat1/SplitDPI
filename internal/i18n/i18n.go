@@ -15,7 +15,10 @@ var locales embed.FS
 
 var supported = []string{"en", "tr", "ru"}
 
-var messages map[string]string
+var (
+	messages map[string]string
+	current  string
+)
 
 // Detect picks the UI language: flag, then LC_ALL, LC_MESSAGES, LANG, then en.
 // The first non-empty value decides; an unsupported language yields en.
@@ -49,7 +52,11 @@ func Init(lang string) {
 		}
 		maps.Copy(messages, m)
 	}
+	current = lang
 }
+
+// Lang is the language Init loaded.
+func Lang() string { return current }
 
 // parse returns one embedded locale as flat dotted keys; a missing locale is empty.
 func parse(lang string) (map[string]string, error) {

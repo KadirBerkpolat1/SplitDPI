@@ -10,35 +10,72 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 )
 
-func logsActions() []action {
-	return []action{
-		{Key: "esc", Label: i18n.T("tui.act.back"), CLI: "sudo splitdpi logs -f", Do: func(m *Model) tea.Cmd {
-			*m = m.leave()
-			return nil
-		}},
-		{Key: "q", Label: i18n.T("tui.act.quit"), Do: (*Model).quit},
-	}
+// The logs page: the service log (like `splitdpi logs -f`) and the output
+// of a bypass run from this TUI, in one buffer.
+type logsPage struct{}
+
+type (
+	logTickMsg struct{}
+	logEndMsg  struct{}
+)
+
+func (logsPage) Title() string { return i18n.T("shell.menu.logs") }
+func (logsPage) Hint() string  { return i18n.T("shell.hint.logs") }
+
+func (logsPage) Actions(Model) []action {
+	return []action{{CLI: "sudo splitdpi logs -f"}}
 }
 
-// openLogs streams the service log (like `splitdpi logs -f`) into the same
-// buffer that receives the output of a bypass run from this TUI.
-func (m *Model) openLogs() tea.Cmd {
-	ctx, cancel := context.WithCancel(m.ctx)
-	m.scr, m.focus, m.logCancel = scrLogs, 0, cancel
-	b, w := m.b, m.logs
-	stream := func() tea.Msg {
-		b.Logs(ctx, true, w)
-		return logEndMsg{}
+func (logsPage) Key(m Model, _ tea.KeyMsg, _ string) (Model, tea.Cmd, bool) { return m, nil, false }
+
+// Open starts the log stream unless it runs; it runs until it ends or the
+// TUI quits, so the lines are not read twice.
+func (logsPage) Open(m *Model) tea.Cmd {
+	var stream tea.Cmd
+	if m.logCancel == nil {
+		ctx, cancel := context.WithCancel(m.ctx)
+		m.logCancel = cancel
+		b, w := m.b, m.logs
+		stream = func() tea.Msg {
+			b.Logs(ctx, true, w)
+			return logEndMsg{}
+		}
 	}
-	return tea.Batch(stream, m.every(500*time.Millisecond, func(time.Time) tea.Msg { return logTickMsg{} }))
+	var tick tea.Cmd
+	if !m.logTicking {
+		m.logTicking = true
+		tick = m.logTick()
+	}
+	return batch(stream, tick)
 }
 
-func (m Model) logsView() string {
-	lines := []string{titleStyle.Render(i18n.T("tui.logs")), ""}
-	room := m.height - len(lines) - 5 // footer
-	got := m.logs.Last(max(room, 1))
+func (m Model) logTick() tea.Cmd {
+	return m.every(500*time.Millisecond, func(time.Time) tea.Msg { return logTickMsg{} })
+}
+
+// Update redraws the page while it is shown.
+func (logsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
+	switch msg.(type) {
+	case logTickMsg:
+		if m.page == pgLogs {
+			return m, m.logTick(), true
+		}
+		m.logTicking = false
+		return m, nil, true
+	case logEndMsg:
+		if m.logCancel != nil {
+			m.logCancel()
+			m.logCancel = nil // the next Open tries again
+		}
+		return m, nil, true
+	}
+	return m, nil, false
+}
+
+func (logsPage) View(m Model, w, h int) string {
+	got := m.logs.Last(max(h, 1))
 	if len(got) == 0 {
-		got = []string{mutedStyle.Render(i18n.T("tui.logs_empty"))}
+		return mutedStyle.Render(i18n.T("tui.logs_empty"))
 	}
-	return strings.Join(append(lines, got...), "\n")
+	return strings.Join(scroll(got, len(got)-1, h, w), "\n")
 }

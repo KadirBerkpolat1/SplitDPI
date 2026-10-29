@@ -7,14 +7,17 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
-// The apps, sites & exclusions screen: toggle apps, add or remove the user's
-// own sites (`splitdpi sites`), and "a site broke" adds an exclusion
+// The sites page: toggle apps, add or remove the user's own sites
+// (`splitdpi sites`), and "a site broke" adds an exclusion
 // (`splitdpi exclude add`).
+type sitesPage struct{}
+
 type appsScreen struct {
 	apps     []presets.App
 	sites    []string
@@ -39,8 +42,18 @@ type (
 	}
 )
 
-func (m *Model) openApps() tea.Cmd {
-	m.scr, m.focus, m.note = scrApps, 0, ""
+func (sitesPage) Title() string            { return i18n.T("shell.menu.sites") }
+func (sitesPage) Hint() string             { return i18n.T("shell.hint.sites") }
+func (sitesPage) Open(m *Model) tea.Cmd    { m.openApps(); return nil }
+func (sitesPage) Actions(m Model) []action { return m.appsActions() }
+
+func (sitesPage) Key(m Model, k tea.KeyMsg, _ string) (Model, tea.Cmd, bool) { return m.appsKey(k) }
+
+func (sitesPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) { return m.appsUpdate(msg) }
+
+func (sitesPage) View(m Model, w, h int) string { return m.appsView(w, h) }
+
+func (m *Model) openApps() {
 	set := m.b.PresetsList()
 	a := appsScreen{input: textinput.New()}
 	for _, id := range slices.Sorted(maps.Keys(set.Apps)) {
@@ -59,7 +72,6 @@ func (m *Model) openApps() tea.Cmd {
 		m.note = errText(err)
 	}
 	m.apps = a
-	return nil
 }
 
 func (m Model) appEnabled(id string) bool { return slices.Contains(m.cfg.Apps, id) }
@@ -77,8 +89,6 @@ func (a appsScreen) site() (string, bool) {
 
 func (m Model) appsActions() []action {
 	a := m.apps
-	back := action{Key: "esc", Label: i18n.T("tui.act.back"), Do: func(m *Model) tea.Cmd { *m = m.leave(); return nil }}
-	quit := action{Key: "q", Label: i18n.T("tui.act.quit"), Do: (*Model).quit}
 	cancel := action{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { return nil }} // appsKey cancels
 	switch {
 	case a.typing && a.addSite:
@@ -86,7 +96,7 @@ func (m Model) appsActions() []action {
 	case a.typing:
 		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.exclude"), CLI: "sudo splitdpi exclude add " + a.input.Value(), Do: (*Model).excludeTyped}, cancel}
 	}
-	// The first action follows the cursor, so focus keeps its place.
+	// The second action follows the cursor, so focus keeps its place.
 	first := action{Key: "space", Label: i18n.T("tui.act.toggle"), Do: (*Model).toggleApp}
 	if d, ok := a.site(); ok {
 		first = action{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi sites remove " + d, Do: (*Model).removeSite}
@@ -99,16 +109,15 @@ func (m Model) appsActions() []action {
 	}
 	startTyping := func(site bool) func(m *Model) tea.Cmd {
 		return func(m *Model) tea.Cmd {
-			m.apps.typing, m.apps.addSite, m.focus = true, site, 0
+			m.apps.typing, m.apps.addSite, m.focus, m.inPage = true, site, 0, true
 			m.apps.input.SetValue("")
 			return m.apps.input.Focus()
 		}
 	}
 	return []action{
-		first,
 		{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(true)},
-		{Key: "b", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(false)},
-		back, quit,
+		first,
+		{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(false)},
 	}
 }
 
@@ -236,41 +245,47 @@ func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m Model) appsView() string {
+// appsView lists apps, the user's sites and the exclusions in one list,
+// each with what it is; the bypass applies to the marked ones.
+func (m Model) appsView(w, h int) string {
 	a := m.apps
-	lines := []string{titleStyle.Render(i18n.T("tui.apps_screen.title")), ""}
-	for i, app := range a.apps {
-		line := cursorMark(i == a.cursor && !a.typing) + checkbox(m.appEnabled(app.ID)) + " " + app.Name
+	type entry struct {
+		on         bool
+		name, what string
+	}
+	var entries []entry
+	for _, app := range a.apps {
+		what := i18n.T("shell.sites.app")
 		if app.Note != "" {
-			line += mutedStyle.Render("  " + app.Note)
+			what += ", " + app.Note
 		}
-		lines = append(lines, line)
+		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, what})
 	}
-	lines = append(lines, "", i18n.T("tui.apps_screen.sites"))
-	if len(a.sites) == 0 {
-		lines = append(lines, mutedStyle.Render("  "+i18n.T("tui.none")))
+	for _, d := range a.sites {
+		entries = append(entries, entry{true, d, i18n.T("shell.sites.yours")})
 	}
-	for i, d := range a.sites {
-		lines = append(lines, cursorMark(len(a.apps)+i == a.cursor && !a.typing)+d)
+	for _, d := range a.excluded {
+		entries = append(entries, entry{false, d, i18n.T("shell.sites.excluded")})
 	}
-	lines = append(lines, "", i18n.T("tui.apps_screen.excluded"))
-	if len(a.excluded) == 0 {
-		lines = append(lines, mutedStyle.Render("  "+i18n.T("tui.none")))
+	nameW := 0
+	for _, e := range entries {
+		nameW = max(nameW, lipgloss.Width(e.name))
 	}
-	room := m.height - len(lines) - 7
-	shown := a.excluded
-	if room > 0 && len(shown) > room {
-		shown = shown[len(shown)-room:]
+	nameW = min(nameW, w/2)
+	lines := make([]string, len(entries))
+	for i, e := range entries {
+		name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW).Render(e.name)
+		lines[i] = m.cursorMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name + "  " + mutedStyle.Render(e.what)
 	}
-	for _, d := range shown {
-		lines = append(lines, "  "+d)
-	}
+	var prompt []string
 	if a.typing {
-		prompt := i18n.T("tui.apps_screen.which_site")
+		q := i18n.T("tui.apps_screen.which_site")
 		if a.addSite {
-			prompt = i18n.T("tui.apps_screen.which_add")
+			q = i18n.T("tui.apps_screen.which_add")
 		}
-		lines = append(lines, "", prompt, a.input.View())
+		prompt = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
+		prompt = append([]string{""}, prompt...)
 	}
-	return strings.Join(lines, "\n")
+	lines = scroll(lines, a.cursor, h-len(prompt), w)
+	return strings.Join(append(lines, prompt...), "\n")
 }

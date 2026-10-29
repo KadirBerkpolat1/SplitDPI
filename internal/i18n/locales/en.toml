@@ -281,27 +281,22 @@ none = "none"
 running_here = "running in this window"
 probing = "Checking the apps' sites..."
 confirm_quit = "Stop bypass and quit? [y] yes  [n] no"
-logs = "Logs"
 logs_empty = "Nothing logged yet."
 
 [tui.act]
 run = "Run"
 stop = "Stop"
 setup = "Setup"
-apps = "Apps"
 probe = "Probe"
-logs = "Logs"
 back = "Back"
 quit = "Quit"
 toggle = "Toggle"
 cancel = "Cancel"
-strategy = "Strategy"
 choose = "Choose"
 add_site = "Add a site"
 remove = "Remove"
 
 [tui.wiz]
-title = "Setup"
 checking = "Checking this machine..."
 doctor = "These problems must be fixed first:"
 check_again = "Check again"
@@ -331,17 +326,13 @@ at_boot = "Start at boot"
 enabling = "Installing the service..."
 
 [tui.apps_screen]
-title = "Apps, sites and exclusions"
 site_broke = "A site broke"
 which_site = "Which site broke? Paste its address; splitdpi will leave it alone."
 exclude = "Exclude"
-excluded = "Never touched by the bypass:"
-sites = "Your sites, always bypassed:"
 which_add = "Which site is blocked? Paste its address; splitdpi will always handle it."
 add = "Add"
 
 [tui.strategy_screen]
-title = "Strategy"
 pick = "Choose the strategy splitdpi uses. It applies on the next start."
 
 [disclaimer]
@@ -353,6 +344,80 @@ body = "SplitDPI changes how this computer sends some network traffic, so that i
 started = "nfqws2 started (pid %d)"
 restarting = "nfqws2 stopped (%v); restarting in %s"
 crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving up"
+
+[shell]
+too_small = "Enlarge the terminal to at least %dx%d."
+to_menu = "Menu"
+
+[shell.menu]
+status = "Status"
+sites = "Sites"
+strategy = "Strategy"
+scan = "Scan"
+logs = "Logs"
+settings = "Settings"
+
+[shell.hint]
+status = "is the bypass running, and how"
+sites = "sites the bypass always handles"
+strategy = "how packets are changed to pass the filter"
+scan = "find a strategy that works on your line"
+logs = "what the bypass has been doing"
+settings = "how SplitDPI behaves"
+
+[shell.pill]
+running = "RUNNING"
+stopped = "STOPPED"
+failed = "FAILED"
+
+[shell.key]
+enter = "Enter"
+esc = "Esc"
+space = "Space"
+tab = "Tab"
+
+[shell.help]
+key = "Help"
+page = "Keys on %s"
+global = "Everywhere"
+arrows = "Move in the menu, or in the page's list"
+open = "From the menu, go into the page; in a page, Tab picks an action and Enter runs it"
+back = "Back to the menu"
+click = "Click"
+click_does = "Opens a menu entry"
+toggle = "Opens or closes this help"
+close = "Esc or ? closes this help."
+
+[shell.confirm]
+changes = "This will:"
+undo = "To undo it later, run:"
+yes = "Yes, go ahead"
+no = "Cancel"
+
+[shell.enable]
+title = "Start SplitDPI at boot?"
+service = "Install the splitdpi service for this system's init (systemd, OpenRC or runit)."
+boot = "Start the bypass now and after every reboot."
+rules = "While it runs, add firewall (nftables) rules that send matching traffic through nfqws2."
+
+[shell.sites]
+app = "app"
+yours = "added by you"
+excluded = "excluded, never touched"
+
+[shell.scan]
+intro = "The setup checks this machine, finds your internet provider, then tries ready-made strategies or scans one site with blockcheck2."
+start = "Start the setup"
+
+[shell.settings]
+lang = "Language"
+lang_to = "Switch to %s"
+lang_saved = "Language saved."
+
+[shell.lang]
+en = "English"
+tr = "Türkçe"
+ru = "Русский"
 
 [engine.err]
 install = "Engine install failed: %v"

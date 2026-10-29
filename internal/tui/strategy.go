@@ -5,12 +5,15 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
 
-// The strategy screen: choose a preset strategy (`splitdpi strategy set`).
+// The strategy page: choose a preset strategy (`splitdpi strategy set`).
+type strategyPage struct{}
+
 type strategyScreen struct {
 	list   []ops.StrategyChoice
 	cursor int
@@ -22,8 +25,10 @@ type strategySetMsg struct {
 	err     error
 }
 
-func (m *Model) openStrategy() tea.Cmd {
-	m.scr, m.focus, m.note = scrStrategy, 0, ""
+func (strategyPage) Title() string { return i18n.T("shell.menu.strategy") }
+func (strategyPage) Hint() string  { return i18n.T("shell.hint.strategy") }
+
+func (strategyPage) Open(m *Model) tea.Cmd {
 	list, cur, err := m.b.StrategyList()
 	m.strat = strategyScreen{list: list}
 	if err != nil {
@@ -35,17 +40,13 @@ func (m *Model) openStrategy() tea.Cmd {
 	return nil
 }
 
-func (m Model) strategyActions() []action {
+func (strategyPage) Actions(m Model) []action {
 	s := m.strat
 	cli := ""
 	if s.cursor < len(s.list) {
 		cli = "sudo splitdpi strategy set " + s.list[s.cursor].Strategy.ID
 	}
-	return []action{
-		{Key: "enter", Label: i18n.T("tui.act.choose"), CLI: cli, Do: (*Model).chooseStrategy},
-		{Key: "esc", Label: i18n.T("tui.act.back"), Do: func(m *Model) tea.Cmd { *m = m.leave(); return nil }},
-		{Key: "q", Label: i18n.T("tui.act.quit"), Do: (*Model).quit},
-	}
+	return []action{{Key: "enter", Label: i18n.T("tui.act.choose"), CLI: cli, Do: (*Model).chooseStrategy}}
 }
 
 func (m *Model) chooseStrategy() tea.Cmd {
@@ -60,7 +61,7 @@ func (m *Model) chooseStrategy() tea.Cmd {
 	}
 }
 
-func (m Model) strategyUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
+func (strategyPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 	set, ok := msg.(strategySetMsg)
 	if !ok {
 		return m, nil, false
@@ -76,8 +77,8 @@ func (m Model) strategyUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 	return m, m.refresh(), true
 }
 
-// strategyKey moves the cursor; false means not handled.
-func (m Model) strategyKey(s string) (Model, tea.Cmd, bool) {
+// Key moves the cursor.
+func (strategyPage) Key(m Model, _ tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
 	st := &m.strat
 	n := len(st.list)
 	switch s {
@@ -95,24 +96,23 @@ func (m Model) strategyKey(s string) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m Model) strategyView() string {
+func (strategyPage) View(m Model, w, h int) string {
 	s := m.strat
-	lines := []string{titleStyle.Render(i18n.T("tui.strategy_screen.title")), "", i18n.T("tui.strategy_screen.pick"), ""}
+	head := strings.Split(lipgloss.NewStyle().Width(w).Render(i18n.T("tui.strategy_screen.pick")), "\n")
+	head = append(head, "")
 	width := 0
 	for _, ch := range s.list {
 		width = max(width, len(ch.Strategy.ID))
 	}
-	// Footer: blank line, up to two key lines, CLI echo, note.
-	room := max(m.height-len(lines)-5, 1)
-	start := 0
-	if len(s.list) > room {
-		start = min(max(s.cursor-room/2, 0), len(s.list)-room)
+	blank := strings.Repeat(" ", lipgloss.Width(m.g.on))
+	lines := make([]string, len(s.list))
+	for i, ch := range s.list {
+		mark := blank
+		if m.cfg.Strategy != nil && m.cfg.Strategy.ID == ch.Strategy.ID {
+			mark = goodStyle.Render(m.g.on)
+		}
+		lines[i] = m.cursorMark(i == s.cursor) + mark + " " + ch.Strategy.ID +
+			strings.Repeat(" ", width-len(ch.Strategy.ID)) + mutedStyle.Render("  "+ch.From())
 	}
-	for i := start; i < min(start+room, len(s.list)); i++ {
-		ch := s.list[i]
-		current := m.cfg.Strategy != nil && m.cfg.Strategy.ID == ch.Strategy.ID
-		lines = append(lines, cursorMark(i == s.cursor)+checkbox(current)+" "+ch.Strategy.ID+
-			strings.Repeat(" ", width-len(ch.Strategy.ID))+mutedStyle.Render("  "+ch.From()))
-	}
-	return strings.Join(lines, "\n")
+	return strings.Join(append(head, scroll(lines, s.cursor, h-len(head), w)...), "\n")
 }

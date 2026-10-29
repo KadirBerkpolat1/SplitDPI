@@ -72,3 +72,18 @@ func TestLangFlag(t *testing.T) {
 	out, _ := run(t, 1000, "--lang", "en", "--help")
 	has(t, out, "Usage")
 }
+
+// The language saved in the TUI's settings wins over the environment, and
+// --lang over both.
+func TestLangFromConfig(t *testing.T) {
+	o := &ops.Ops{P: paths.Under(t.TempDir()), Euid: func() int { return 1000 }, GOARCH: "amd64"}
+	if err := o.SetLang("tr"); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	Main([]string{"doctor"}, &out, &out, o)
+	has(t, out.String(), "Bu komut root yetkisi ister")
+	out.Reset()
+	Main([]string{"--lang", "en", "doctor"}, &out, &out, o)
+	has(t, out.String(), "needs root")
+}
