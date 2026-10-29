@@ -68,8 +68,8 @@ uses; it only saves the choice, and the CLI commands stay as they are.
 - **Left:** the menu: Status, Sites, Strategy, Scan, Logs and Settings. Use the
   arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
   the menu.
-- **Right:** the chosen page. Settings holds the language, encrypted DNS and
-  removing SplitDPI.
+- **Right:** the chosen page. Settings holds the language, the run mode,
+  encrypted DNS and removing SplitDPI.
 - **Bottom:** the keys of the page and, for the selected action, the command
   that does the same thing, so anything you do in the UI can be scripted.
 
