@@ -145,6 +145,20 @@ func runSites(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		}
 		fmt.Fprintln(w, i18n.T("sites.removed", args[1]))
 		return nil
+	case len(args) == 2 && args[0] == "import":
+		added, skipped, err := o.SitesImport(args[1])
+		if err != nil {
+			return err
+		}
+		printSkipped(w, "", skipped)
+		fmt.Fprintln(w, i18n.T("sites_import.added", len(added)))
+		return nil
 	}
 	return usageError(i18n.T("sites.usage"))
+}
+
+func printSkipped(w io.Writer, indent string, skipped []ops.ImportSkip) {
+	for _, s := range skipped {
+		fmt.Fprintln(w, indent+i18n.T("sites_import.skipped", s.Line, s.Text))
+	}
 }

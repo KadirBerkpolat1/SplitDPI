@@ -66,7 +66,8 @@ betik yazabilirsiniz.
 | `splitdpi enable` / `disable` | Servisi kurup başlatır ya da durdurup kaldırır. |
 | `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ya da günlüğünü gösterir. |
 | `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
-| `splitdpi sites list\|add ALAN\|remove ALAN` | Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir. |
+| `splitdpi sites list\|add ALAN\|remove ALAN\|import DOSYA` | Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir; `import`, her satırda bir alan adı olan bir metin dosyasındaki tüm alan adlarını ekler. |
+| `splitdpi takeover [--yes]` | Başka bir zapret ya da zapret2 kurulumunu bulur ve SplitDPI'ye geçişin neyi değiştireceğini gösterir; `--yes` sitelerini alır, servisini durdurur ve açılışta başlamasını kapatır. |
 | `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da birini seçer. |
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
@@ -140,7 +141,9 @@ nfqws2 durursa trafik değiştirilmeden geçer.
 `sudo splitdpi revert`, SplitDPI'yi durdurur, servisini kaldırır, tablosunu ve
 çalışma dosyalarını siler, sonra geride bir şey kalmadığını denetler. Sonunda
 temiz olduğunu yazar ya da kalanları listeler. `--purge` ayarları ve verileri
-de siler. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar dosyası onu
+de siler. `takeover` başka bir zapret kurulumunu kapattıysa geri alma onun
+servisini yeniden açar; `takeover` o kurulumun dosyalarını asla silmez ya da
+değiştirmez. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar dosyası onu
 engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları yerinde kalır
 ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar tüm trafiği
 geçirir.

@@ -40,7 +40,7 @@ help = "Uygulama profillerini listeler, açar veya kapatır (list | enable ID | 
 help = "Engel aşmanın hiç dokunmayacağı alan adlarını yönetir (list | add ALAN | remove ALAN)."
 
 [cmd.sites]
-help = "Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir (list | add ALAN | remove ALAN)."
+help = "Engel aşmanın her zaman uygulanacağı kendi engelli sitelerinizi yönetir (list | add ALAN | remove ALAN | import DOSYA)."
 
 [cmd.strategy]
 help = "Hazır stratejileri listeler ya da birini seçer (list | set ID)."
@@ -113,7 +113,7 @@ empty = "Alan adı verilmedi."
 invalid = "%q geçerli bir alan adı değil."
 
 [sites]
-usage = "Kullanım: splitdpi sites list | add ALAN | remove ALAN"
+usage = "Kullanım: splitdpi sites list | add ALAN | remove ALAN | import DOSYA"
 added = "%s sitelerinize eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
 removed = "%s sitelerinizden çıkarıldı. Uygulamak için splitdpi'yi yeniden başlatın."
 
@@ -359,3 +359,37 @@ body = "SplitDPI, bu bilgisayarın bazı ağ trafiğini derin paket incelemesind
 started = "nfqws2 başladı (pid %d)"
 restarting = "nfqws2 durdu (%v); %s sonra yeniden başlatılıyor"
 crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralları kaldırıldı, vazgeçildi"
+
+[cmd.takeover]
+help = "Başka bir zapret kurulumundan splitdpi'ye geçer: sitelerini devralır ve onu kapatır (takeover [--yes])."
+
+[sites_import]
+added = "Sitelerinize %d yeni site eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+skipped = "%d. satır atlandı, alan adı değil: %s"
+
+[takeover]
+usage = "Kullanım: splitdpi takeover [--yes]"
+none = "Bu bilgisayarda başka bir zapret kurulumu bulunamadı."
+found = "%s bulundu:"
+dir = "kurulu olduğu yer: %s"
+service = "servis: %s (%s)"
+no_service = "servisi yok"
+boot = "açılışta başlıyor"
+running = "şu an çalışıyor"
+not_running = "çalışmıyor"
+hostlist = "site listesi: %s"
+plan = "splitdpi takeover --yes şunları yapacak:"
+plan_import = "%s içindeki siteleri sitelerinize ekleyecek"
+plan_stop = "%s servisini durduracak"
+plan_disable = "%s servisinin açılışta başlamasını kapatacak"
+plan_manual = "%s durdurulamayacak: bir servis dışında çalışıyor, onu kendiniz durdurun"
+plan_nothing = "hiçbir şeyi değiştirmeyecek: çalışmıyor, açılışta başlamıyor ve site listesi yok"
+untouched = "Diğer aracın hiçbir dosyası silinmez ya da değiştirilmez; sudo splitdpi revert onu yeniden açar."
+confirm = "Bunu yapmak için çalıştırın: %s"
+imported = "%d yeni site eklendi (kaynak: %s)"
+did_stop = "%s servisi durduruldu"
+did_disable = "%s artık açılışta başlamayacak"
+still_running = "%s bir servis dışında çalışmayı sürdürüyor: splitdpi'yi başlatmadan önce onu kendiniz durdurun"
+done = "Tamam. Kurmak ve başlatmak için splitdpi'yi açın: sudo splitdpi"
+restored = "Yeniden açıldı: %s"
+conflict = "%s çalışıyor (zapret, başka bir DPI engel aşma aracı); splitdpi onu kapatıp sitelerini devralabilir"

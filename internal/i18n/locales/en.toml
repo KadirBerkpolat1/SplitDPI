@@ -35,7 +35,7 @@ help = "List, enable or disable app profiles (list | enable ID | disable ID)."
 help = "Manage domains never touched by the bypass (list | add DOMAIN | remove DOMAIN)."
 
 [cmd.sites]
-help = "Manage your own blocked sites, which the bypass always handles (list | add DOMAIN | remove DOMAIN)."
+help = "Manage your own blocked sites, which the bypass always handles (list | add DOMAIN | remove DOMAIN | import FILE)."
 
 [cmd.strategy]
 help = "List the preset strategies or choose one (list | set ID)."
@@ -108,7 +108,7 @@ empty = "No domain given."
 invalid = "%q is not a valid domain name."
 
 [sites]
-usage = "Usage: splitdpi sites list | add DOMAIN | remove DOMAIN"
+usage = "Usage: splitdpi sites list | add DOMAIN | remove DOMAIN | import FILE"
 added = "Added %s to your sites. Restart splitdpi to apply."
 removed = "Removed %s from your sites. Restart splitdpi to apply."
 
@@ -359,3 +359,37 @@ crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving u
 install = "Engine install failed: %v"
 checksum = "SHA-256 mismatch: the archive is not zapret2 %s (corrupted or wrong file). The installed engine was not changed."
 arch = "Unsupported architecture %s (supported: amd64, arm64)."
+
+[cmd.takeover]
+help = "Switch from another zapret install to splitdpi: take over its sites and turn it off (takeover [--yes])."
+
+[sites_import]
+added = "Added %d new sites to your sites. Restart splitdpi to apply."
+skipped = "Line %d skipped, not a domain: %s"
+
+[takeover]
+usage = "Usage: splitdpi takeover [--yes]"
+none = "No other zapret install found on this computer."
+found = "Found %s:"
+dir = "installed in %s"
+service = "service: %s (%s)"
+no_service = "no service"
+boot = "starts on boot"
+running = "running now"
+not_running = "not running"
+hostlist = "its site list: %s"
+plan = "splitdpi takeover --yes will:"
+plan_import = "add the sites from %s to your sites"
+plan_stop = "stop the %s service"
+plan_disable = "keep %s from starting on boot"
+plan_manual = "not stop %s: it runs outside a service, so stop it yourself"
+plan_nothing = "change nothing: it is not running, does not start on boot and has no site list"
+untouched = "No files of the other tool are deleted or edited; sudo splitdpi revert turns it back on."
+confirm = "To do this, run: %s"
+imported = "added %d new sites from %s"
+did_stop = "stopped the %s service"
+did_disable = "%s no longer starts on boot"
+still_running = "%s still runs outside a service: stop it yourself before starting splitdpi"
+done = "Done. Open splitdpi to set it up and start it: sudo splitdpi"
+restored = "Turned back on: %s"
+conflict = "%s is running (zapret, another DPI-bypass tool); splitdpi can switch it off and keep its sites"

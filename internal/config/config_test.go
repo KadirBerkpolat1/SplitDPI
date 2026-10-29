@@ -102,6 +102,19 @@ func TestListAddAfterLineWithoutNewline(t *testing.T) {
 	}
 }
 
+func TestListAddMany(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.txt")
+	if err := os.WriteFile(path, []byte("foo.com"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.AddToList(path, "bar.com", "foo.com", "baz.com", "bar.com"); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(path); string(raw) != "foo.com\nbar.com\nbaz.com\n" {
+		t.Fatalf("file %q", raw)
+	}
+}
+
 // The autohostlist is owned by the nfqws2 user; replacing it must not take that away.
 func TestListKeepsModeAndOwner(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "autohostlist.txt")

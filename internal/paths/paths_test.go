@@ -17,6 +17,7 @@ func TestUnder(t *testing.T) {
 	p := paths.Under("/tmp/r")
 	eq(t, p.ConfigFile, "/tmp/r/etc/splitdpi/config.toml")
 	eq(t, p.AutoHostlist, "/tmp/r/var/lib/splitdpi/autohostlist.txt")
+	eq(t, p.TakeoverFile, "/tmp/r/var/lib/splitdpi/takeover.json")
 	eq(t, p.StatusFile, "/tmp/r/run/splitdpi/status.json")
 	eq(t, p.SystemdUnit, "/tmp/r/etc/systemd/system/splitdpi.service")
 	eq(t, p.RunitLink, "/tmp/r/var/service/splitdpi")
