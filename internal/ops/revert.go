@@ -18,7 +18,8 @@ type RevertReport struct {
 
 // Revert removes the service (stop, disable, remove files), stops a running
 // supervisor, deletes our nft table, turns back on what Takeover turned off
-// and clears RunDir; purge also removes ConfigDir and StateDir. rulesOnly
+// and clears RunDir; purge also removes ConfigDir and StateDir, but keeps
+// StateDir while a service Takeover turned off is still off. rulesOnly
 // deletes only the table: it runs inside
 // the service's own stop (ExecStopPost), where calling the service manager
 // would deadlock. It uses only paths and the fixed table name, never config,
@@ -52,7 +53,11 @@ func (o *Ops) Revert(ctx context.Context, rulesOnly, purge bool) RevertReport {
 		o.restoreTakeover(ctx, &r)
 		dirs = append(dirs, o.P.RunDir)
 		if purge {
-			dirs = append(dirs, o.P.ConfigDir, o.P.StateDir)
+			dirs = append(dirs, o.P.ConfigDir)
+			// A record still there lists services that are still off; the next revert needs it.
+			if _, err := os.Stat(o.P.TakeoverFile); os.IsNotExist(err) {
+				dirs = append(dirs, o.P.StateDir)
+			}
 		}
 	}
 	for _, d := range dirs {

@@ -294,6 +294,41 @@ func TestTakeoverGzipHostlist(t *testing.T) {
 	}
 }
 
+// A purge (uninstall) must keep the record of a service it failed to turn
+// back on, so the next run can still restore it.
+func TestPurgeKeepsUnrestoredTakeover(t *testing.T) {
+	ctx := context.Background()
+	o, f := takeoverOps(t, systemdZapret2(), map[string]string{"systemctl is-enabled zapret2": "enabled"})
+	found, err := o.DetectForeign(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.Takeover(ctx, found[0]); err != nil {
+		t.Fatal(err)
+	}
+	f.out["systemctl enable zapret2"] = "Failed to enable unit: Access denied"
+	rep := o.Revert(ctx, false, true)
+	if !slices.ContainsFunc(rep.Leftover, func(l string) bool { return strings.HasPrefix(l, "zapret2 (systemd): ") }) {
+		t.Errorf("failed restore not reported: %+v", rep)
+	}
+	if _, err := os.Stat(o.P.TakeoverFile); err != nil {
+		t.Fatalf("purge removed the record of a service still off: %v", err)
+	}
+	if _, err := os.Stat(o.P.ConfigDir); !os.IsNotExist(err) {
+		t.Errorf("config dir not purged: %v", err)
+	}
+
+	delete(f.out, "systemctl enable zapret2")
+	f.calls = nil
+	rep = o.Revert(ctx, false, true)
+	if !slices.Equal(f.calls, []string{"systemctl enable zapret2", "systemctl start zapret2"}) || len(rep.Leftover) != 0 {
+		t.Errorf("second purge: calls %q, report %+v", f.calls, rep)
+	}
+	if _, err := os.Stat(o.P.StateDir); !os.IsNotExist(err) {
+		t.Errorf("state dir not purged once restored: %v", err)
+	}
+}
+
 func TestCorruptTakeoverRecord(t *testing.T) {
 	ctx := context.Background()
 	o, f := takeoverOps(t, systemdZapret2(), map[string]string{"systemctl is-enabled zapret2": "enabled"})
