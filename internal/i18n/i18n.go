@@ -104,3 +104,14 @@ func T(key string, args ...any) string {
 	}
 	return fmt.Sprintf(msg, args...)
 }
+
+// N is T for a message about n things: key_one when n is 1, else key_many,
+// formatted with n and then args.
+func N(key string, n int, args ...any) string {
+	if n == 1 {
+		key += "_one"
+	} else {
+		key += "_many"
+	}
+	return T(key, append([]any{n}, args...)...)
+}

@@ -61,7 +61,8 @@ help = "Подобрать рабочую DPI-стратегию для ваше
 usage = "Использование: splitdpi scan [--asn N] [--country CC] [--apps id,id] [--site ДОМЕН] [--blockcheck-only] [--no-blockcheck] [--dns keep|auto|ПРОВАЙДЕР] [-v]"
 site_ipv4 = "Сканирование %s через blockcheck2 только по IPv4: на этом компьютере нет глобального IPv6."
 site_ipv46 = "Сканирование %s через blockcheck2 по IPv4 и IPv6."
-verify = "Повторная проверка %d стратегий blockcheck2 на ваших приложениях и сайтах; сохранится первая, которая открывает их все."
+verify_one = "Повторная проверка %d стратегии blockcheck2 на ваших приложениях и сайтах; она сохранится, если откроет их все."
+verify_many = "Повторная проверка %d стратегий blockcheck2 на ваших приложениях и сайтах; сохранится первая, которая открывает их все."
 locked = "splitdpi уже запущен. Сначала остановите его: sudo splitdpi stop"
 no_strategy = "Рабочая стратегия не найдена."
 winner = "Выбрана стратегия: %s (источник: %s)"
@@ -84,7 +85,8 @@ usage = "Использование: splitdpi presets list | update | check КА
 update.usage = "Использование: splitdpi presets update"
 check.usage = "Использование: splitdpi presets check КАТАЛОГ"
 check.no_dir = "%s не является каталогом."
-check.bad = "Будут пропущены файлы (%d); исправьте их."
+check.bad_one = "Будет пропущен %d файл; исправьте его."
+check.bad_many = "Будут пропущены файлы (%d); исправьте их."
 check.empty = "Файлы приложений не найдены; это не каталог пресетов."
 check.ok = "Пресеты в порядке: версия %s, провайдеров: %d, приложений: %d."
 update.fetching = "Загрузка %s"
@@ -132,7 +134,8 @@ help = "Проверить, есть ли на этом компьютере в�
 [doctor]
 usage = "Использование: splitdpi doctor"
 fix = "исправление: %s"
-blockers = "doctor нашёл препятствий: %d. Устраните их перед запуском splitdpi."
+blockers_one = "doctor нашёл %d препятствие. Устраните его перед запуском splitdpi."
+blockers_many = "doctor нашёл препятствий: %d. Устраните их перед запуском splitdpi."
 
 [doctor.root]
 ok = "запущено от root"
@@ -163,7 +166,8 @@ old = "сохранённая стратегия найдена с движко�
 
 [doctor.lsm]
 ok = "SELinux %s, AppArmor включён: %t"
-enforcing = "SELinux в режиме enforcing; отказов для nfqws2/splitdpi: %d (источник: %s)"
+enforcing_one = "SELinux в режиме enforcing; %d отказ для nfqws2/splitdpi (источник: %s)"
+enforcing_many = "SELinux в режиме enforcing; отказов для nfqws2/splitdpi: %d (источник: %s)"
 enforcing_clean = "SELinux в режиме enforcing; отказов для nfqws2/splitdpi: 0 (источник: %s)"
 enforcing_nolog = "SELinux в режиме enforcing; не удалось прочитать ни журнал audit, ни dmesg, чтобы посчитать отказы: %v"
 
@@ -487,7 +491,8 @@ telegram = "Прямые подключения Telegram к IP-адресам (M
 help = "Перейти на splitdpi с другой установки zapret: забрать её сайты и выключить её (takeover [--yes])."
 
 [sites_import]
-added = "К вашим сайтам добавлено новых: %d. Перезапустите splitdpi, чтобы применить."
+added_one = "К вашим сайтам добавлен %d новый сайт. Перезапустите splitdpi, чтобы применить."
+added_many = "К вашим сайтам добавлено новых: %d. Перезапустите splitdpi, чтобы применить."
 skipped = "Строка %d пропущена, это не домен: %s"
 
 [takeover]
@@ -509,7 +514,8 @@ plan_manual = "не остановит %s: он работает вне служ
 plan_nothing = "ничего не изменит: он не запущен, не стартует при загрузке и не имеет списка сайтов"
 untouched = "Файлы другого инструмента не удаляются и не изменяются; sudo splitdpi revert включит его обратно."
 confirm = "Чтобы выполнить, запустите: %s"
-imported = "добавлено новых сайтов: %d (из %s)"
+imported_one = "добавлен %d новый сайт (из %s)"
+imported_many = "добавлено новых сайтов: %d (из %s)"
 did_stop = "служба %s остановлена"
 did_disable = "%s больше не запускается при загрузке"
 still_running = "%s по-прежнему работает вне службы: остановите его сами, прежде чем запускать splitdpi"
@@ -570,8 +576,6 @@ import = "Сайты из %s будут добавлены в ваши сайт�
 stop = "Служба %s (%s) будет остановлена."
 boot = "Автозапуск %s при загрузке будет выключен."
 untouched = "Его файлы не будут удалены или изменены."
-imported_one = "новых сайтов из %[2]s: %[1]d"
-imported_many = "новых сайтов из %[2]s: %[1]d"
 skipped_one = "Строк его списка пропущено (не домены): %d; они есть в журнале."
 skipped_many = "Строк его списка пропущено (не домены): %d; они есть в журнале."
 report = "Переход на SplitDPI:"

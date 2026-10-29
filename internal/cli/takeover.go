@@ -38,7 +38,7 @@ func runTakeover(ctx context.Context, o *ops.Ops, w io.Writer, args []string) er
 		}
 		r, err := o.Takeover(ctx, f)
 		if len(r.Added) > 0 || (f.Hostlist != "" && err == nil) {
-			fmt.Fprintln(w, "  "+i18n.T("takeover.imported", len(r.Added), f.Hostlist))
+			fmt.Fprintln(w, "  "+i18n.N("takeover.imported", len(r.Added), f.Hostlist))
 			printSkipped(w, "    ", r.Skipped)
 		}
 		if r.Stopped {

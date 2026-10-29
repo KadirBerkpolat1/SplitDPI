@@ -380,7 +380,7 @@ func TestSELinuxAuditLogDenial(t *testing.T) {
 	}, "\n"))}
 	f.out["dmesg"] = `audit: type=1400 avc:  denied  { write } comm="splitdpi"` + "\n" + `audit: type=1400 avc:  denied  { read } comm="nfqws2"`
 	msg := one(t, doctor.Run(context.Background(), f.env), "lsm", doctor.Warn).Msg
-	has(t, msg, "1 denial(s)")
+	has(t, msg, "1 denial for")
 	has(t, msg, "/var/log/audit/audit.log")
 }
 

@@ -98,10 +98,10 @@ func (m *Model) takeover(todo []ops.Foreign) tea.Cmd {
 			r, err := b.Takeover(ctx, f)
 			var did []string
 			if len(r.Added) > 0 || (f.Hostlist != "" && err == nil) {
-				did = append(did, plural("takeover_tui.imported", len(r.Added), f.Hostlist))
+				did = append(did, i18n.N("takeover.imported", len(r.Added), f.Hostlist))
 			}
 			if len(r.Skipped) > 0 {
-				did = append(did, plural("takeover_tui.skipped", len(r.Skipped)))
+				did = append(did, i18n.N("takeover_tui.skipped", len(r.Skipped)))
 				for _, s := range r.Skipped {
 					fmt.Fprintf(w, "%s:%d: %s\n", f.Hostlist, s.Line, s.Text)
 				}

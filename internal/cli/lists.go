@@ -151,7 +151,7 @@ func runSites(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 			return err
 		}
 		printSkipped(w, "", skipped)
-		fmt.Fprintln(w, i18n.T("sites_import.added", len(added)))
+		fmt.Fprintln(w, i18n.N("sites_import.added", len(added)))
 		return nil
 	}
 	return usageError(i18n.T("sites.usage"))

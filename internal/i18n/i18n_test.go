@@ -32,3 +32,15 @@ func TestMissingKey(t *testing.T) {
 	i18n.Init("en")
 	eq(t, i18n.T("no.such"), "!no.such!")
 }
+
+func TestN(t *testing.T) {
+	i18n.Init("en")
+	for n, want := range map[int]string{
+		0: "added 0 new sites from /x",
+		1: "added 1 new site from /x",
+		2: "added 2 new sites from /x",
+	} {
+		eq(t, i18n.N("takeover.imported", n, "/x"), want)
+	}
+	eq(t, i18n.N("no.such", 1), "!no.such_one!")
+}

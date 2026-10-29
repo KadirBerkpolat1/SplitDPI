@@ -27,7 +27,7 @@ func runPresetsCheck(_ context.Context, _ *ops.Ops, w io.Writer, args []string) 
 	}
 	switch {
 	case len(s.Warnings) > 0:
-		return errors.New(i18n.T("presets.check.bad", len(s.Warnings)))
+		return errors.New(i18n.N("presets.check.bad", len(s.Warnings)))
 	case len(s.Apps) == 0:
 		return errors.New(i18n.T("presets.check.empty"))
 	}
