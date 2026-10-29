@@ -200,6 +200,13 @@ func (f *fake) AcceptDisclaimer() error {
 	return nil
 }
 func (f *fake) SetLang(lang string) error { f.record("lang " + lang); return nil }
+func (f *fake) SetRunMode(mode config.RunMode) error {
+	f.record("run mode " + string(mode))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cfg.RunMode = mode
+	return nil
+}
 
 func (f *fake) SitesImport(path string) ([]string, []ops.ImportSkip, error) {
 	f.record("sites import " + path)

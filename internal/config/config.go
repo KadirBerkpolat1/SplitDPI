@@ -21,6 +21,15 @@ const (
 	ModeApps  Mode = "apps"
 )
 
+// RunMode is how the TUI's run key starts the bypass; CLI commands ignore it.
+type RunMode string
+
+const (
+	RunWindow     RunMode = "window"     // in the TUI's process, until it quits
+	RunBackground RunMode = "background" // run --background, until reboot
+	RunBoot       RunMode = "boot"       // enable: as a service, at every boot
+)
+
 type Strategy struct {
 	ID      string `toml:"id"`
 	Source  string `toml:"source"`
@@ -43,6 +52,7 @@ type Config struct {
 	DNSProtocol        dns.Protocol `toml:"dns_protocol"`
 	IPInfoURL          string       `toml:"ipinfo_url"`
 	DisclaimerAccepted bool         `toml:"disclaimer_accepted"`
+	RunMode            RunMode      `toml:"run_mode"`
 }
 
 func Default() Config {
@@ -53,6 +63,7 @@ func Default() Config {
 		DNSProvider: dns.Off,
 		DNSProtocol: dns.DoH,
 		IPInfoURL:   "https://ipinfo.io/json",
+		RunMode:     RunWindow,
 	}
 }
 
@@ -100,6 +111,11 @@ func Load(p paths.Paths) (Config, error) {
 	}
 	if !meta.IsDefined("dns_protocol") {
 		c.DNSProtocol = dns.DoH
+	}
+	// A run mode this version does not know falls back to the default
+	// instead of failing: only the TUI reads it.
+	if c.RunMode != RunBackground && c.RunMode != RunBoot {
+		c.RunMode = RunWindow
 	}
 	if !dns.Valid(c.DNSProvider) {
 		return Config{}, fmt.Errorf("%s: invalid dns_provider %q", filepath.Base(p.ConfigFile), c.DNSProvider)

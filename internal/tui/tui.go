@@ -53,6 +53,7 @@ type Backend interface {
 	Enable(ctx context.Context) error
 	AcceptDisclaimer() error
 	SetLang(lang string) error
+	SetRunMode(mode config.RunMode) error
 
 	SitesImport(path string) ([]string, []ops.ImportSkip, error)
 	DetectForeign(ctx context.Context) ([]ops.Foreign, error)

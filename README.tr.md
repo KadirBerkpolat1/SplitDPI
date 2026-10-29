@@ -61,8 +61,10 @@ Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
 (`b` ya da `sudo splitdpi run --background`) çalışırsa terminal kapansa da
 sürer, bilgisayar yeniden başlayınca kapanır; arayüz engel aşmayı kendisi
 çalıştırırken çıkarsanız onu arka plana almayı önerir. Her açılışta
-(`sudo splitdpi enable`) servis olarak çalışır. Hangisi olursa olsun
-`sudo splitdpi stop` durdurur.
+(`sudo splitdpi enable`) servis olarak çalışır. Durum sayfasındaki `r`
+tuşunun bunlardan hangisini kullanacağı Ayarlar → Çalıştırma biçimi'nden
+seçilir; seçmek yalnızca tercihi kaydeder, komutlar olduğu gibi kalır.
+Hangisi olursa olsun `sudo splitdpi stop` durdurur.
 
 ## Terminal arayüzü
 

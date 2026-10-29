@@ -33,6 +33,20 @@ func TestSetLang(t *testing.T) {
 	}
 }
 
+func TestSetRunMode(t *testing.T) {
+	o := &Ops{P: paths.Under(t.TempDir())}
+	if err := o.SetLang("tr"); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.SetRunMode(config.RunBoot); err != nil {
+		t.Fatal(err)
+	}
+	c, err := config.Load(o.P)
+	if err != nil || c.RunMode != config.RunBoot || c.Lang != "tr" {
+		t.Errorf("got %+v, %v", c, err)
+	}
+}
+
 func TestSites(t *testing.T) {
 	o := &Ops{P: paths.Under(t.TempDir())}
 	if list, err := o.SitesList(); err != nil || len(list) != 0 {

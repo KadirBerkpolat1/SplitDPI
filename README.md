@@ -57,7 +57,9 @@ There are three ways to keep the bypass on. In the UI window (`r`, or
 session (`b`, or `sudo splitdpi run --background`) it keeps running after the
 terminal closes and stops at reboot; quitting the UI while it runs the bypass
 offers to move it there. At every boot (`sudo splitdpi enable`) it runs as a
-service. `sudo splitdpi stop` stops any of them.
+service. Settings → Run mode chooses which of the three `r` on the Status page
+uses; it only saves the choice, and the CLI commands stay as they are.
+`sudo splitdpi stop` stops any of them.
 
 ## The terminal UI
 

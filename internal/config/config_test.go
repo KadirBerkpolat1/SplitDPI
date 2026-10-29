@@ -92,6 +92,30 @@ func TestDNSInvalid(t *testing.T) {
 	}
 }
 
+// A missing or unknown run_mode is window, as before there was a choice.
+func TestRunMode(t *testing.T) {
+	if config.Default().RunMode != config.RunWindow {
+		t.Errorf("default %q", config.Default().RunMode)
+	}
+	for text, want := range map[string]config.RunMode{
+		"":                            config.RunWindow,
+		"mode = \"broad\"\n":          config.RunWindow,
+		"run_mode = \"window\"\n":     config.RunWindow,
+		"run_mode = \"background\"\n": config.RunBackground,
+		"run_mode = \"boot\"\n":       config.RunBoot,
+		"run_mode = \"service\"\n":    config.RunWindow,
+		"run_mode = \"\"\n":           config.RunWindow,
+	} {
+		c, err := loadText(t, text)
+		if err != nil {
+			t.Fatalf("%q: %v", text, err)
+		}
+		if c.RunMode != want {
+			t.Errorf("%q: %q, want %q", text, c.RunMode, want)
+		}
+	}
+}
+
 // Saving a migrated config writes the new keys and drops `dns`.
 func TestDNSSaveDropsOldKey(t *testing.T) {
 	p := paths.Under(t.TempDir())

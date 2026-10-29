@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
@@ -58,11 +59,25 @@ func (statusPage) Actions(m Model) []action {
 	case m.bypassOn():
 		acts = append(acts, action{Key: "s", Label: i18n.T("tui.act.stop"), CLI: "sudo splitdpi stop", Do: (*Model).stop})
 	case m.canStart():
-		acts = append(acts,
-			action{Key: "r", Label: i18n.T("tui.act.run"), CLI: "sudo splitdpi run", Do: (*Model).runNow},
-			action{Key: "b", Label: i18n.T("background_tui.act"), CLI: "sudo splitdpi run --background", Do: (*Model).runBackground})
+		acts = append(acts, m.runAction())
+		if m.runMode() != config.RunBackground { // else r already does it
+			acts = append(acts, action{Key: "b", Label: i18n.T("background_tui.act"), CLI: runModeCLI(config.RunBackground), Do: (*Model).runBackground})
+		}
 	}
 	return append(acts, action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps})
+}
+
+// runAction is r: it starts the bypass the way the run mode in Settings says.
+func (m Model) runAction() action {
+	mode := m.runMode()
+	a := action{Key: "r", Label: i18n.T("tui.act.run"), CLI: runModeCLI(mode), Do: (*Model).runNow}
+	switch mode {
+	case config.RunBackground:
+		a.Label, a.Do = i18n.T("run_mode.run_background"), (*Model).runBackground
+	case config.RunBoot:
+		a.Label, a.Do = i18n.T("run_mode.run_boot"), (*Model).confirmEnable
+	}
+	return a
 }
 
 func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
@@ -304,7 +319,11 @@ func (statusPage) View(m Model, w, _ int) string {
 		lines = append(lines, badStyle.Render(m.stErr.Error()))
 	}
 	if m.canStart() {
-		lines = append(lines, "", lipgloss.NewStyle().Width(w).Render(hint("b", i18n.T("background_tui.hint"))))
+		k := "b"
+		if m.runMode() == config.RunBackground {
+			k = "r"
+		}
+		lines = append(lines, "", lipgloss.NewStyle().Width(w).Render(hint(k, i18n.T("background_tui.hint"))))
 	}
 	return strings.Join(lines, "\n")
 }

@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -20,6 +21,7 @@ type settingsPage struct{}
 type settingsScreen struct {
 	cursor      int
 	dns         *dnsPicker // open while choosing the encrypted DNS
+	runMode     *int       // the run mode picker's cursor, while it is open
 	result      []string   // what the last uninstall removed or left
 	uninstalled bool
 }
@@ -40,6 +42,7 @@ type setting struct {
 
 var settings = []setting{
 	{label: func() string { return i18n.T("shell.settings.lang") }, value: langValue, actions: langActions},
+	{label: func() string { return i18n.T("run_mode.label") }, value: runModeValue, actions: runModeActions},
 	{label: func() string { return i18n.T("settings_dns.label") }, value: dnsValue, actions: dnsActions},
 	{label: func() string { return i18n.T("settings_uninstall.label") }, value: uninstallValue, actions: uninstallActions},
 }
@@ -51,7 +54,11 @@ var langs = []string{"en", "tr"}
 const repoURL = "github.com/KadirBerkpolat1/SplitDPI"
 
 type (
-	langMsg   struct{ err error }
+	langMsg    struct{ err error }
+	runModeMsg struct {
+		mode config.RunMode
+		err  error
+	}
 	dnsSetMsg struct {
 		name    string
 		proto   dns.Protocol
@@ -69,7 +76,7 @@ func (settingsPage) Title() string { return i18n.T("shell.menu.settings") }
 func (settingsPage) Hint() string  { return i18n.T("shell.hint.settings") }
 
 func (settingsPage) Open(m *Model) tea.Cmd {
-	m.settings.dns = nil
+	m.settings.dns, m.settings.runMode = nil, nil
 	return nil
 }
 
@@ -79,13 +86,18 @@ func (settingsPage) Actions(m Model) []action {
 		return []action{{Key: "esc", Label: i18n.T("tui.act.quit")}} // every key quits
 	case m.settings.dns != nil:
 		return m.dnsPickerActions()
+	case m.settings.runMode != nil:
+		return m.runModePickerActions()
 	}
 	return settings[m.settings.cursor].actions(m)
 }
 
 func (settingsPage) Key(m Model, _ tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
-	if m.settings.dns != nil {
+	switch {
+	case m.settings.dns != nil:
 		return m.dnsPickerKey(s)
+	case m.settings.runMode != nil:
+		return m.runModePickerKey(s)
 	}
 	n := len(settings)
 	switch s {
@@ -106,6 +118,14 @@ func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		if msg.err != nil {
 			m.note = errText(msg.err)
 		}
+		return m, nil, true
+	case runModeMsg:
+		if msg.err != nil {
+			m.note = errText(msg.err)
+			return m, nil, true
+		}
+		m.cfg.RunMode = msg.mode
+		m.note = i18n.T("run_mode.saved", runModeName(msg.mode))
 		return m, nil, true
 	case dnsSetMsg:
 		switch {
@@ -156,6 +176,8 @@ func (settingsPage) View(m Model, w, h int) string {
 		return lipgloss.NewStyle().Width(w).MaxHeight(h).Render(strings.Join(lines, "\n"))
 	case s.dns != nil:
 		return m.dnsPickerView(w, h)
+	case s.runMode != nil:
+		return m.runModePickerView(w, h)
 	}
 	labelW := 0
 	for _, st := range settings {
@@ -185,6 +207,116 @@ func langActions(Model) []action {
 		b := m.b
 		return func() tea.Msg { return langMsg{b.SetLang(next)} }
 	}}}
+}
+
+// The run modes in the picker's order.
+var runModes = []config.RunMode{config.RunWindow, config.RunBackground, config.RunBoot}
+
+// runMode is the saved run mode; window while the config cannot be read.
+func (m Model) runMode() config.RunMode {
+	if m.cfg.RunMode == "" {
+		return config.RunWindow
+	}
+	return m.cfg.RunMode
+}
+
+func runModeName(mode config.RunMode) string { return i18n.T("run_mode." + string(mode)) }
+
+// runModeCLI is the command that starts the bypass the way the status
+// page's r does in mode.
+func runModeCLI(mode config.RunMode) string {
+	switch mode {
+	case config.RunBackground:
+		return "sudo splitdpi run --background"
+	case config.RunBoot:
+		return "sudo splitdpi enable"
+	}
+	return "sudo splitdpi run"
+}
+
+func runModeValue(m Model) string { return runModeName(m.runMode()) }
+
+func runModeActions(m Model) []action {
+	return []action{{Key: "enter", Label: i18n.T("run_mode.change"), CLI: runModeCLI(m.runMode()), Do: func(m *Model) tea.Cmd {
+		c := max(slices.Index(runModes, m.runMode()), 0)
+		m.settings.runMode, m.focus = &c, 0
+		return nil
+	}}}
+}
+
+func (m Model) runModePickerActions() []action {
+	mode := runModes[*m.settings.runMode]
+	return []action{
+		{Key: "enter", Label: i18n.T("tui.act.choose"), CLI: runModeCLI(mode), Do: (*Model).chooseRunMode},
+		{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { m.settings.runMode = nil; return nil }},
+	}
+}
+
+// runModePickerKey moves the cursor and leaves enter to the footer; other
+// keys do nothing while the picker is open.
+func (m Model) runModePickerKey(s string) (Model, tea.Cmd, bool) {
+	c, n := *m.settings.runMode, len(runModes)
+	switch s {
+	case "up", "k":
+		c = (c + n - 1) % n
+	case "down", "j":
+		c = (c + 1) % n
+	case "esc":
+		m.settings.runMode = nil
+		return m, nil, true
+	case "enter", "tab", "shift+tab", "left", "right":
+		return m, nil, false
+	}
+	m.settings.runMode = &c
+	return m, nil, true
+}
+
+// chooseRunMode only saves the choice, so it needs no confirm: nothing
+// starts or stops until r is pressed.
+func (m *Model) chooseRunMode() tea.Cmd {
+	mode := runModes[*m.settings.runMode]
+	m.settings.runMode = nil
+	b := m.b
+	return func() tea.Msg { return runModeMsg{mode, b.SetRunMode(mode)} }
+}
+
+func (m Model) runModePickerView(w, h int) string {
+	head := append(strings.Split(lipgloss.NewStyle().Width(w).Render(i18n.T("run_mode.head")), "\n"), "")
+	names, notes := make([]string, len(runModes)), make([]string, len(runModes))
+	for i, r := range runModes {
+		names[i], notes[i] = runModeName(r), i18n.T("run_mode."+string(r)+"_note")
+	}
+	cur := m.runMode()
+	lines, at := m.choiceList(names, notes, func(i int) bool { return runModes[i] == cur }, *m.settings.runMode, w)
+	return strings.Join(append(head, scroll(lines, at, h-len(head), w)...), "\n")
+}
+
+// choiceList lays out a picker's choices, each name with its note wrapped
+// beside it and the one in use marked. It returns the lines and the first
+// line of the choice under the cursor.
+func (m Model) choiceList(names, notes []string, inUse func(i int) bool, cursor, w int) ([]string, int) {
+	nameW := 0
+	for _, n := range names {
+		nameW = max(nameW, lipgloss.Width(n))
+	}
+	blank := strings.Repeat(" ", lipgloss.Width(m.g.on))
+	pre := lipgloss.Width(m.cursorMark(false)) + lipgloss.Width(blank) + 1 + nameW + 2
+	note := lipgloss.NewStyle().Width(max(w-pre, 10))
+	var lines []string
+	at := 0
+	for i, n := range names {
+		mark := blank
+		if inUse(i) {
+			mark = goodStyle.Render(m.g.on)
+		}
+		if i == cursor {
+			at = len(lines)
+		}
+		name := lipgloss.NewStyle().Width(nameW + 2).Render(n)
+		left := m.listMark(i == cursor) + mark + " " + name
+		lines = append(lines, strings.Split(lipgloss.JoinHorizontal(lipgloss.Top, left, mutedStyle.Render(note.Render(notes[i]))), "\n")...)
+	}
+	return lines, at
 }
 
 // dnsName is the shown name of a dns_provider id.
@@ -323,27 +455,14 @@ func (m Model) dnsPickerView(w, h int) string {
 		head = append(head, strings.Split(lipgloss.NewStyle().Width(w).Render(warnStyle.Render(i18n.T("settings_dns.dot_note"))), "\n")...)
 	}
 	head = append(head, "")
-	nameW := 0
-	for _, d := range p.list {
-		nameW = max(nameW, lipgloss.Width(d.Name))
-	}
-	blank := strings.Repeat(" ", lipgloss.Width(m.g.on))
-	pre := lipgloss.Width(m.cursorMark(false)) + lipgloss.Width(blank) + 1 + nameW + 2
-	note := lipgloss.NewStyle().Width(max(w-pre, 10))
-	var lines []string
-	at := 0
+	names, notes := make([]string, len(p.list)), make([]string, len(p.list))
 	for i, d := range p.list {
-		mark := blank
-		if d.ID == m.cfg.DNSProvider || d.ID == dns.Off && !m.cfg.DNSOn() {
-			mark = goodStyle.Render(m.g.on)
-		}
-		if i == p.cursor {
-			at = len(lines)
-		}
-		name := lipgloss.NewStyle().Width(nameW + 2).Render(d.Name)
-		left := m.listMark(i == p.cursor) + mark + " " + name
-		lines = append(lines, strings.Split(lipgloss.JoinHorizontal(lipgloss.Top, left, mutedStyle.Render(note.Render(d.Note))), "\n")...)
+		names[i], notes[i] = d.Name, d.Note
 	}
+	lines, at := m.choiceList(names, notes, func(i int) bool {
+		id := p.list[i].ID
+		return id == m.cfg.DNSProvider || id == dns.Off && !m.cfg.DNSOn()
+	}, p.cursor, w)
 	return strings.Join(append(head, scroll(lines, at, h-len(head), w)...), "\n")
 }
 

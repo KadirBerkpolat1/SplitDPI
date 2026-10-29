@@ -296,7 +296,10 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.note = errText(msg.err)
 			return m, nil, true
 		}
-		m.finishWizard()
+		// The status page's r enables too; it leaves the wizard alone.
+		if m.page == pgScan && m.wiz.step == wDone {
+			m.finishWizard()
+		}
 		m.note = i18n.T("service.enabled")
 		return m, m.refresh(), true
 	}

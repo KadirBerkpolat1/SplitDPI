@@ -8,12 +8,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
 
 const (
-	rowDNS = iota + 1
+	rowRunMode = iota + 1
+	rowDNS
 	rowUninstall
 )
 
@@ -301,15 +303,28 @@ func TestSettingsFit80x24(t *testing.T) {
 		f.st.State = "running"
 		f.cfg.DNSProvider = "auto"
 		views := map[string]string{}
-		m := goTo(t, newModel(t, f), pgSettings)
-		views["rows"] = m.View()
-		p := press(t, press(t, m, "down"), "enter")
+		views["rows"] = goTo(t, newModel(t, f), pgSettings).View()
+		r := toSetting(t, f, rowRunMode)
+		views["run mode row"] = r.View()
+		r = press(t, r, "enter")
+		views["run mode picker"] = r.View()
+		views["run mode saved"] = press(t, press(t, r, "down"), "enter").View()
+		for _, mode := range runModes {
+			if !strings.Contains(flat(pageText(views["run mode picker"])), i18n.T("run_mode."+string(mode)+"_note")) {
+				t.Errorf("%s run mode picker: the %s note is cut off:\n%s", lang, mode, views["run mode picker"])
+			}
+		}
+		if !strings.Contains(flat(views["run mode saved"]), i18n.T("run_mode.saved", i18n.T("run_mode.background"))) {
+			t.Errorf("%s run mode saved: the note is cut off:\n%s", lang, views["run mode saved"])
+		}
+		f.cfg.RunMode = config.RunWindow
+		p := press(t, toSetting(t, f, rowDNS), "enter")
 		views["picker"] = p.View()
 		p = press(t, press(t, p, "down"), "t")
 		views["picker dot"] = p.View()
 		views["dns confirm"] = press(t, p, "enter").View()
 		f.systemDNS = "dnscrypt-proxy"
-		s := press(t, press(t, m, "down"), "enter")
+		s := press(t, toSetting(t, f, rowDNS), "enter")
 		views["picker system"] = s.View()
 		s = press(t, press(t, s, "down"), "t")
 		views["picker dot system"] = s.View()
@@ -320,7 +335,7 @@ func TestSettingsFit80x24(t *testing.T) {
 			}
 		}
 		f.systemDNS = ""
-		u := press(t, press(t, press(t, m, "down"), "down"), "enter")
+		u := press(t, toSetting(t, f, rowUninstall), "enter")
 		views["uninstall confirm"] = u.View()
 		views["uninstalled"] = press(t, u, "y").View()
 		f.uninstallErr = ops.ErrUninstallIncomplete
