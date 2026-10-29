@@ -22,12 +22,12 @@ type confirm struct {
 
 func (m Model) dialogKey(s string) (tea.Model, tea.Cmd) {
 	switch s {
-	case "y", "enter":
+	case "y", "e", "enter":
 		yes := m.dialog.yes
 		m.dialog = nil
 		cmd := yes(&m)
 		return m, cmd
-	case "n", "esc":
+	case "n", "h", "esc":
 		m.dialog = nil
 	}
 	return m, nil
@@ -51,6 +51,6 @@ func (m Model) dialogView() string {
 		head = c.undoHead
 	}
 	lines = append(lines, "", head, "   "+commandStyle.Render(c.undo), "",
-		hint("y", i18n.T("shell.confirm.yes"))+"   "+hint("n", i18n.T("shell.confirm.no")))
+		hint(i18n.T("confirm_keys.yes"), i18n.T("shell.confirm.yes"))+"   "+hint(i18n.T("confirm_keys.no"), i18n.T("shell.confirm.no")))
 	return m.popup(strings.Join(lines, "\n"))
 }

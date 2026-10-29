@@ -298,7 +298,7 @@ func TestSettingsFit80x24(t *testing.T) {
 			}
 		}
 		for _, name := range []string{"dns confirm", "uninstall confirm"} {
-			if !strings.Contains(views[name], "n "+i18n.T("shell.confirm.no")) {
+			if !strings.Contains(views[name], i18n.T("confirm_keys.no")+" "+i18n.T("shell.confirm.no")) {
 				t.Errorf("%s %s: the y/n line is cut off:\n%s", lang, name, views[name])
 			}
 		}

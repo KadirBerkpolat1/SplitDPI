@@ -542,3 +542,7 @@ restore = "SplitDPI'nin kapattığı bir zapret servisi varsa yeniden açılır.
 no_undo = "Bu geri alınamaz: ayarlarınız ve site listeniz de silinir. SplitDPI'yi yeniden kurmak için şuradaki README'de bulunan kurulum komutunu kullanın:"
 working = "SplitDPI kaldırılıyor..."
 any_key = "SplitDPI artık bu bilgisayarda yok. Bu pencereyi kapatmak için herhangi bir tuşa basın."
+
+[confirm_keys]
+yes = "e"
+no = "h"

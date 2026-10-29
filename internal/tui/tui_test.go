@@ -501,7 +501,7 @@ func TestConfirmDialog(t *testing.T) {
 	}
 	m = ask(m)
 	v := m.View()
-	for _, want := range []string{"Do the thing?", "This will:", "• First change", "To undo it later, run:", "sudo splitdpi undo-it", "y Yes, go ahead", "n Cancel"} {
+	for _, want := range []string{"Do the thing?", "This will:", "• First change", "To undo it later, run:", "sudo splitdpi undo-it", "y Yes, go ahead   n Cancel"} {
 		has(t, v, want)
 	}
 	for _, l := range strings.Split(v, "\n") {
@@ -524,6 +524,25 @@ func TestConfirmDialog(t *testing.T) {
 	m = press(t, ask(m), "y")
 	if m.dialog != nil || yes != 1 {
 		t.Fatalf("y: dialog %v, confirmed %d times", m.dialog, yes)
+	}
+
+	defer i18n.Init("en")
+	i18n.Init("tr")
+	m = ask(m)
+	v = m.View()
+	has(t, v, "e Evet, devam et   h Vazgeç")
+	for _, l := range strings.Split(v, "\n") {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("tr dialog line %d wide: %q", lipgloss.Width(l), l)
+		}
+	}
+	m = press(t, m, "h")
+	if m.dialog != nil || yes != 1 {
+		t.Fatalf("h: dialog %v, confirmed %d times", m.dialog, yes)
+	}
+	m = press(t, ask(m), "e")
+	if m.dialog != nil || yes != 2 {
+		t.Fatalf("e: dialog %v, confirmed %d times", m.dialog, yes)
 	}
 }
 
@@ -657,6 +676,34 @@ func TestRunNowAsksBeforeQuit(t *testing.T) {
 	<-done
 	m = settle(t, m, cmd)
 	_ = m
+}
+
+// A run started and stopped in the TUI is over: quitting has nothing to stop.
+func TestQuitAfterStoppedRun(t *testing.T) {
+	f := newFake()
+	m := newModel(t, f)
+	m, cmd := update(t, m, key("r"))
+	done := make(chan Model)
+	go func() { done <- settle(t, m, cmd) }()
+	<-f.runStart
+	m, cmd = update(t, m, key("s"))
+	if f.runCtx.Err() == nil {
+		t.Fatal("s did not cancel the run")
+	}
+	m = settle(t, m, cmd)
+	m, _ = update(t, m, runDoneMsg{})
+	<-done
+	if m.running {
+		t.Fatal("still running after the run ended")
+	}
+	m, cmd = update(t, m, key("q"))
+	if cmd == nil {
+		t.Fatal("q does not quit after the run stopped")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("q does not quit after the run stopped")
+	}
+	m.stopRun()
 }
 
 func trSet() presets.Set {

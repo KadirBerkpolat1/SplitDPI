@@ -119,11 +119,18 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx)).Run()
-	if fm, ok := final.(Model); ok && fm.runFinished != nil {
-		fm.runCancel()
-		<-fm.runFinished
+	if fm, ok := final.(Model); ok {
+		fm.stopRun()
 	}
 	return err
+}
+
+// stopRun stops the bypass this TUI still runs and waits until its rules are gone.
+func (m Model) stopRun() {
+	if m.runCancel != nil {
+		m.runCancel()
+		<-m.runFinished
+	}
 }
 
 func (m Model) Init() tea.Cmd { return m.tick() }
