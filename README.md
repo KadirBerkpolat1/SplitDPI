@@ -5,16 +5,18 @@ Linux when your ISP blocks them with deep packet inspection (DPI). It finds a
 [zapret2](https://github.com/bol-van/zapret2) strategy that works on your ISP,
 runs it on demand or as a service, and removes every trace with one command.
 
-**Status:** v0.1.0, the first public release. Tested on a real Türk Telekom
-connection and in Debian, Fedora and Alpine VMs; see
-[the release checklist](docs/release-checklist.md).
+**Status:** v0.2.0. v0.1.0 was tested on a real Türk Telekom connection and in
+Debian, Fedora and Alpine VMs. The features added in v0.2.0 are covered by
+automated tests and by CI on six distros, but were not retested on a real
+connection or in VMs; see [the release checklist](docs/release-checklist.md).
 
 [Türkçe](README.tr.md)
 
 If you use keift/zapret today, SplitDPI replaces it. It runs zapret2 instead of
 the end-of-life zapret v1, tries ISP presets before a full blockcheck2 scan,
 leaves your DNS and firewall configuration alone, and works on immutable
-distros and with SELinux enforcing.
+distros and with SELinux enforcing. `splitdpi takeover` switches an existing
+zapret or zapret2 install over to SplitDPI.
 
 ## Supported systems
 
@@ -40,16 +42,32 @@ zapret2-flake or zapret2-nix instead.
 ## Quick start
 
 ```sh
-curl -fsSLO https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh
-sudo sh install.sh        # verifies and installs /usr/local/bin/splitdpi
-sudo splitdpi             # opens the terminal UI; press w to start the setup
+curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh | sudo sh
+sudo splitdpi
 ```
 
-The setup checks your system, finds your ISP, asks which apps should work,
-tests strategies, and then runs SplitDPI now or at every boot. The terminal
-UI has a menu on the left (Status, Sites, Strategy, Scan, Logs, Settings) and
-the chosen page on the right; `?` lists the keys. Every page shows the command
-that does the same thing, so you can script it.
+The install script verifies the download's checksum and installs
+`/usr/local/bin/splitdpi`. `sudo splitdpi` opens the terminal UI; press `w` to
+start the setup. The setup checks your system, installs the zapret2 engine
+itself, finds your ISP, asks which apps should work, tests strategies, and then
+runs SplitDPI now or at every boot.
+
+## The terminal UI
+
+- **Top:** the name and version, and a status pill on the right that shows
+  whether the bypass is running, stopped or failed.
+- **Left:** the menu: Status, Sites, Strategy, Scan, Logs and Settings. Use the
+  arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
+  the menu.
+- **Right:** the chosen page. Settings holds the language, encrypted DNS and
+  removing SplitDPI.
+- **Bottom:** the keys of the page and, for the selected action, the command
+  that does the same thing, so anything you do in the UI can be scripted.
+
+`?` lists every key. Before anything that changes the system, a dialog says what
+will change and how to undo it; answer `y` or `n` (`e` or `h` in Turkish). On
+the Linux console or with a non-UTF-8 locale the UI draws with plain ASCII. It
+needs a terminal of at least 80x24.
 
 ## Commands
 
@@ -57,28 +75,29 @@ that does the same thing, so you can script it.
 |---|---|
 | `splitdpi` | Opens the terminal UI. |
 | `splitdpi doctor` | Checks the system and lists anything that blocks SplitDPI. |
-| `splitdpi engine install [--from FILE]` | Installs the pinned zapret2 release after checking its SHA-256. |
-| `splitdpi detect` | Looks up your ISP and lists its preset strategies. |
-| `splitdpi scan [--site DOMAIN]` | Tries the presets, then blockcheck2, and saves the strategy that works; `--site` runs only blockcheck2, on that one site. |
-| `splitdpi probe` | Tests whether each enabled app's sites and your own sites are reachable. |
+| `splitdpi engine install [--from FILE]` / `engine status` | Installs the pinned zapret2 release after checking its SHA-256, or shows the installed one. |
+| `splitdpi detect [--asn N] [--country CC]` | Looks up your ISP and lists its preset strategies. |
+| `splitdpi scan [--site DOMAIN] [--dns keep\|auto\|PROVIDER] [--apps ID,ID] [--asn N] [--country CC] [--blockcheck-only\|--no-blockcheck] [-v]` | Finds a strategy that works and saves it; see [Finding a strategy](#finding-a-strategy). |
+| `splitdpi probe [--apps ID,ID] [-v]` | Tests whether each enabled app's sites and your own sites are reachable, and says why one is not. |
+| `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one without a scan. |
 | `splitdpi run` | Runs in this terminal; Ctrl-C stops it and removes its rules. |
 | `splitdpi enable` / `disable` | Installs and starts the service, or stops and removes it. |
 | `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
-| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles; `import` adds every domain in a text file, one per line. |
-| `splitdpi takeover [--yes]` | Finds another zapret or zapret2 install and shows what switching to SplitDPI changes; `--yes` imports its sites, stops its service and turns off its start on boot. |
-| `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one. |
+| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
+| `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install over to SplitDPI. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Turns encrypted DNS on or off; without an argument, shows the current choice. |
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
-| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Sends DNS through a built-in encrypted DNS forwarder (DoH, or DoT with `--dot`); without an argument, shows the current choice. |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
 | `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
+| `splitdpi version` | Prints the version. |
 
 All commands except `--help`, `version` and `presets list` need root. Add
 `--lang tr` or `--lang en` to pick a language; otherwise SplitDPI uses the
 language chosen under Settings in the terminal UI, or else follows `LANG`.
 
-## Your own sites and strategy
+## Your sites
 
 If a site you need is blocked and no app profile covers it, add it. SplitDPI
 then handles it from the first packet, and `probe` and `scan` test it too:
@@ -87,18 +106,57 @@ then handles it from the first packet, and `probe` and `scan` test it too:
 sudo splitdpi sites add pastebin.com
 ```
 
-`splitdpi strategy list` shows every preset strategy and marks the one in use;
-`sudo splitdpi strategy set ID` picks another without a scan. The terminal UI
-does both on its Sites and Strategy pages.
-Restart SplitDPI to apply either change.
+To add many at once, put them in a text file, one per line, and run
+`sudo splitdpi sites import FILE`. Lines starting with `#` are comments, and
+`*.example.com` or `.example.com` mean `example.com`; lines that are not a
+domain are skipped and listed. The Sites page of the terminal UI turns apps on
+and off and adds or removes sites. Restart SplitDPI to apply a change.
 
-To skip the presets and search for a strategy for one site, run
-`sudo splitdpi scan --site pastebin.com` or choose "Scan a site with
-blockcheck2" in the setup. blockcheck2 tests that site over IPv4, and
-over IPv6 too if this machine has it. blockcheck2 results are re-tested on your
-apps and sites before one is saved: SplitDPI keeps the simplest one that opens
-all of them, preferring those that work on both IPv4 and IPv6, and adds the
-site to your sites. This takes longer than the preset trials.
+## Switching from zapret or zapret2
+
+`sudo splitdpi takeover` looks for another zapret or zapret2 install, such as
+the one keift's installer sets up: its directory under `/opt`, its service and
+its running processes. It shows what switching would change, without changing
+anything. `sudo splitdpi takeover --yes` then adds the sites from its
+user list to your sites, stops its service and turns off its start on boot.
+It never deletes or edits that install's files, and `sudo splitdpi revert`
+turns its service back on. If such a tool is still running, `run` refuses to
+start, because both would handle the same traffic.
+
+## Finding a strategy
+
+`sudo splitdpi scan` first tries your ISP's preset strategies on your apps and
+sites, and runs blockcheck2 only if none works. It saves the strategy that
+works.
+
+- **One site.** To skip the presets and search for a strategy for one site,
+  run `sudo splitdpi scan --site pastebin.com`, or choose "Scan a site with
+  blockcheck2" in the setup. blockcheck2 tests that site over IPv4, and over
+  IPv6 too if this machine has it. Its results are re-tested on your apps and
+  sites before one is saved: SplitDPI keeps the simplest one that opens all of
+  them, preferring those that work on both IPv4 and IPv6, and adds the site to
+  your sites. This takes longer than the preset trials.
+- **Poisoned DNS.** Before blockcheck2 runs, `scan` checks whether your ISP's
+  DNS answers for its domains are poisoned. If they are, it asks whether to
+  turn on encrypted DNS (automatic) and keep it on. When nobody can answer,
+  pass `--dns auto` (or a provider) to turn it on, or `--dns keep` to go on
+  without it.
+- **Other options.** `--apps` tests only the given apps, `--asn` and `--country`
+  skip the ISP lookup, `--blockcheck-only` skips the presets, `--no-blockcheck`
+  stops after them, and `-v` shows the raw error of every failed test.
+- **Why it failed.** `scan` and `probe` say in plain words why a site did not
+  open (the connection was cut, it timed out, DNS or the secure connection
+  failed, or something else answered) and what to try next.
+- **Sharing the result.** When `scan` saves a strategy, it prints a link that
+  opens a prefilled issue in
+  [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
+  your AS number, ISP, country, the strategy and the versions. Nothing is sent
+  until you submit the issue, and it never contains your IP address or your own
+  sites.
+
+`splitdpi strategy list` shows every preset strategy and marks the one in use;
+`sudo splitdpi strategy set ID` picks another without a scan. The Strategy page
+of the terminal UI does the same. Restart SplitDPI to apply it.
 
 ## A site broke
 
@@ -112,6 +170,26 @@ sudo splitdpi exclude add https://www.example-bank.com/
 In the terminal UI, press `e` on the Sites page.
 
 SplitDPI ships exclusion lists for common Turkish sites already.
+
+## Encrypted DNS
+
+Some ISPs poison DNS answers; `doctor` and `probe` detect it. With encrypted
+DNS on, SplitDPI sends port 53 traffic through a forwarder inside itself to one
+of these providers:
+
+| Choice | What it does |
+|---|---|
+| `auto` | Cloudflare, then Google, then Quad9: the first one that answers. |
+| `cloudflare`, `google` | No filtering. |
+| `quad9` | Also blocks known malware and phishing domains. |
+| `adguard` | Also blocks ads and trackers. |
+
+It uses DNS-over-HTTPS by default; `--dot` picks DNS-over-TLS, which uses port
+853 and is blocked by some ISPs. `sudo splitdpi dns off` turns it off. The
+choice applies on the next start, and Settings in the terminal UI offers the
+same choices. It changes no resolver settings and disappears with the
+`inet splitdpi` table. While it is on, VPN split DNS and local hostnames may
+stop resolving.
 
 ## How it works, and what to expect
 
@@ -127,14 +205,6 @@ unmodified.
   MTProto connections to raw IP addresses are not.
 - **Discord voice.** The voice preset is applied but not verified on a real
   call yet. `scan` says so; report whether it works for you.
-- **DNS.** Some ISPs poison DNS answers. `doctor` and `probe` detect it.
-  `splitdpi dns auto` (or a provider: `cloudflare`, `google`, `quad9`,
-  `adguard`, which also blocks ads and trackers) sends port 53 through an
-  encrypted DNS forwarder inside SplitDPI; it changes no resolver settings and
-  disappears with the table. While it is on, VPN split DNS and local
-  hostnames may stop resolving. `scan` checks blockcheck2's domains first
-  and, if they are poisoned, offers to turn it on (`--dns auto` when not
-  interactive).
 
 ## Revert guarantee
 
@@ -142,16 +212,18 @@ unmodified.
 and its runtime files, and then checks that nothing is left. It prints
 `clean`, or lists what remains. `--purge` also removes its settings and data.
 If `takeover` switched off another zapret install, revert turns its service
-back on; `takeover` never deletes or edits that install's files.
-Revert never reads the configuration, so a broken config cannot block it. If
-SplitDPI is killed, its queue rules stay in place but let all traffic through
-until you run `revert` or start it again.
+back on. Revert never reads the configuration, so a broken config cannot block
+it. If SplitDPI is killed, its queue rules stay in place but let all traffic
+through until you run `revert` or start it again.
 
 ## Removing SplitDPI
 
 `sudo splitdpi uninstall` lists what it would remove and changes nothing.
 `sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
-the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove.
+the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove;
+run it again once that is fixed. Settings in the terminal UI does the same
+after showing the list. It cannot be undone: to use SplitDPI again, install it
+again as in [Quick start](#quick-start).
 
 ## Where presets come from
 
@@ -160,12 +232,8 @@ The ISP strategies started from
 Taşkın (MIT). Other MIT-licensed collections, such as
 [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs),
 are used to cross-check them. Each ISP file records in its `reported` field
-when its strategies were last seen working on a real connection. When `scan`
-saves a working strategy, it prints a link that opens a prefilled issue in
-[SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
-your AS number, ISP, country, the strategy and the versions. Nothing is sent
-until you submit the issue, and it never contains your IP address or your own
-sites.
+when its strategies were last seen working on a real connection; the links
+`scan` prints feed these files.
 
 ## Reporting a strategy
 

@@ -40,6 +40,7 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 - **Discord voice** uses a substitute fake blob and has not been tested on a
   real call. In Türkiye voice currently works without UDP desync, so the UDP
   profile is not needed there today.
+
 ## Before the first public release
 
 - [x] Turkish copy reviewed (`internal/i18n/locales/tr.toml`, `README.tr.md`).
@@ -52,3 +53,23 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
       (2026-10-29: release `2026-10-29`; `splitdpi presets update` fetched it,
       and `scripts/import-presets.sh 2026-10-29` left `internal/presets/data`
       unchanged.)
+
+## v0.2.0
+
+Tick these on the release commit, with the date.
+
+- [ ] `go vet ./...` passes.
+- [ ] `go test -count=1 ./...` passes.
+- [ ] `sudo -E SPLITDPI_BIN=/tmp/splitdpi go test -tags integration ./test/integration/...`
+      passes after `go build -o /tmp/splitdpi ./cmd/splitdpi`.
+- [ ] `splitdpi presets check internal/presets/data` exits 0.
+- [ ] CI is green, all 9 jobs: `test`, `integration`, `build` and the six
+      `distros` jobs (Debian 13, Fedora, Arch, openSUSE Tumbleweed, Alpine,
+      Void glibc).
+
+By Berk's decision, the real-connection and VM retests under
+[On real systems](#on-real-systems) were skipped for v0.2.0. The v0.1.0
+results there still hold for what they covered; the features new in v0.2.0
+(the terminal UI, `sites import`, `takeover`, encrypted DNS providers and
+DNS-over-TLS, the DNS check in `scan`, plain-language errors, the share link
+and `uninstall`) are covered only by automated tests and CI.
