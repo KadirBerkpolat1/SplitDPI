@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
@@ -61,6 +62,10 @@ type fake struct {
 	importErr     error
 	foreign       []ops.Foreign
 	takeoverRep   ops.TakeoverReport
+
+	plan         ops.UninstallPlan
+	uninstallRep ops.UninstallReport
+	uninstallErr error
 }
 
 func newFake() *fake {
@@ -205,16 +210,27 @@ func (f *fake) Takeover(ctx context.Context, fr ops.Foreign) (ops.TakeoverReport
 	return f.takeoverRep, nil
 }
 
-func (f *fake) count(s string) int {
+func (f *fake) DNSProviders() []ops.DNSProvider {
+	out := []ops.DNSProvider{
+		{ID: dns.Off, Name: i18n.T("dns2.off_name"), Note: i18n.T("dns2.off_note")},
+		{ID: dns.Auto, Name: i18n.T("dns2.auto_name"), Note: i18n.T("dns2.auto_note")},
+	}
+	for _, p := range dns.Providers {
+		out = append(out, ops.DNSProvider{ID: p.ID, Name: p.Name, Note: i18n.T("dns2.note_" + p.ID)})
+	}
+	return out
+}
+func (f *fake) SetDNS(provider string, proto dns.Protocol) (bool, error) {
+	f.record("dns " + provider + " " + string(proto))
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	n := 0
-	for _, c := range f.calls {
-		if c == s {
-			n++
-		}
-	}
-	return n
+	f.cfg.DNSProvider, f.cfg.DNSProtocol = provider, proto
+	return f.st.State == "running", nil
+}
+func (f *fake) UninstallPlan() ops.UninstallPlan { return f.plan }
+func (f *fake) Uninstall(ctx context.Context) (ops.UninstallReport, error) {
+	f.record("uninstall")
+	return f.uninstallRep, f.uninstallErr
 }
 
 func newModel(t *testing.T, f *fake) Model {
@@ -530,7 +546,7 @@ func TestConfirmDialog(t *testing.T) {
 	}
 	m = ask(m)
 	v := m.View()
-	for _, want := range []string{"Do the thing?", "This will:", "• First change", "To undo it later, run:", "sudo splitdpi undo-it", "y Yes, go ahead", "n Cancel"} {
+	for _, want := range []string{"Do the thing?", "This will:", "• First change", "To undo it later, run:", "sudo splitdpi undo-it", "y Yes, go ahead   n Cancel"} {
 		has(t, v, want)
 	}
 	for _, l := range strings.Split(v, "\n") {
@@ -553,6 +569,25 @@ func TestConfirmDialog(t *testing.T) {
 	m = press(t, ask(m), "y")
 	if m.dialog != nil || yes != 1 {
 		t.Fatalf("y: dialog %v, confirmed %d times", m.dialog, yes)
+	}
+
+	defer i18n.Init("en")
+	i18n.Init("tr")
+	m = ask(m)
+	v = m.View()
+	has(t, v, "e Evet, devam et   h Vazgeç")
+	for _, l := range strings.Split(v, "\n") {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("tr dialog line %d wide: %q", lipgloss.Width(l), l)
+		}
+	}
+	m = press(t, m, "h")
+	if m.dialog != nil || yes != 1 {
+		t.Fatalf("h: dialog %v, confirmed %d times", m.dialog, yes)
+	}
+	m = press(t, ask(m), "e")
+	if m.dialog != nil || yes != 2 {
+		t.Fatalf("e: dialog %v, confirmed %d times", m.dialog, yes)
 	}
 }
 
@@ -686,6 +721,34 @@ func TestRunNowAsksBeforeQuit(t *testing.T) {
 	<-done
 	m = settle(t, m, cmd)
 	_ = m
+}
+
+// A run started and stopped in the TUI is over: quitting has nothing to stop.
+func TestQuitAfterStoppedRun(t *testing.T) {
+	f := newFake()
+	m := newModel(t, f)
+	m, cmd := update(t, m, key("r"))
+	done := make(chan Model)
+	go func() { done <- settle(t, m, cmd) }()
+	<-f.runStart
+	m, cmd = update(t, m, key("s"))
+	if f.runCtx.Err() == nil {
+		t.Fatal("s did not cancel the run")
+	}
+	m = settle(t, m, cmd)
+	m, _ = update(t, m, runDoneMsg{})
+	<-done
+	if m.running {
+		t.Fatal("still running after the run ended")
+	}
+	m, cmd = update(t, m, key("q"))
+	if cmd == nil {
+		t.Fatal("q does not quit after the run stopped")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("q does not quit after the run stopped")
+	}
+	m.stopRun()
 }
 
 func trSet() presets.Set {
@@ -1189,7 +1252,7 @@ func TestSitesImport(t *testing.T) {
 		t.Fatalf("calls %q", f.calls)
 	}
 	v := m.View()
-	has(t, v, "Added 2 sites, skipped 2 lines.")
+	has(t, v, "Added 2 sites. Skipped 2 lines. Restart splitdpi to apply.")
 	has(t, v, "rutracker.org")
 	has(t, v, "Skipped lines, not a domain:")
 	has(t, v, "line 3: not a domain!")
@@ -1220,6 +1283,9 @@ func TestSitesImportCancelAndMissingFile(t *testing.T) {
 	if m.apps.typing || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "sites import") }) {
 		t.Fatalf("esc: typing %v calls %q", m.apps.typing, f.calls)
 	}
+	f.importAdded, f.importSkipped = []string{"one.example"}, []ops.ImportSkip{{Line: 2, Text: "?"}}
+	m = press(t, typeText(t, press(t, m, "i"), "/tmp/one.txt"), "enter")
+	has(t, m.View(), "Added 1 site. Skipped 1 line. Restart splitdpi to apply.")
 	f.importErr = &fs.PathError{Op: "open", Path: "/tmp/none.txt", Err: fs.ErrNotExist}
 	m = press(t, typeText(t, press(t, m, "i"), "/tmp/none.txt"), "enter")
 	has(t, m.View(), "There is no file /tmp/none.txt.")
@@ -1325,7 +1391,7 @@ func TestTakeoverNoticeAndConfirm(t *testing.T) {
 	for _, s := range []string{
 		"Switched to SplitDPI:",
 		"added 2 new sites from /opt/zapret2/ipset/zapret-hosts-user.txt",
-		"1 lines of its list were not domains and were skipped",
+		"1 line of its list was not a domain and was skipped",
 		"stopped the zapret2 service",
 		"zapret2 no longer starts on boot",
 	} {
@@ -1336,6 +1402,40 @@ func TestTakeoverNoticeAndConfirm(t *testing.T) {
 	}
 	has(t, m.View(), "Done. The other tool is off")
 	has(t, m.logs.String(), "/opt/zapret2/ipset/zapret-hosts-user.txt:4: 1.2.3.4/24")
+}
+
+// The longest confirm on Durum fits 80x24 in Turkish down to its keys.
+func TestTakeoverConfirmFitsTurkish(t *testing.T) {
+	defer i18n.Init("en")
+	i18n.Init("tr")
+	f := newFake()
+	f.foreign = []ops.Foreign{zapret2()}
+	m := newModel(t, f)
+	m = press(t, settle(t, m, m.Init()), "z")
+	v := m.View()
+	for _, want := range []string{
+		"zapret2 yerine SplitDPI kullanılsın mı?",
+		"zapret2 servisinin açılışta başlaması kapatılacak.",
+		"dokunulmayacak: hiçbir şey silinmeyecek",
+		"ya da değiştirilmeyecek.",
+		"sudo splitdpi revert",
+		"e Evet, devam et   h Vazgeç",
+	} {
+		has(t, v, want)
+	}
+	for _, l := range strings.Split(v, "\n") {
+		if lipgloss.Width(l) > 80 {
+			t.Errorf("%d columns: %q", lipgloss.Width(l), l)
+		}
+	}
+	m = press(t, m, "h")
+	if m.dialog != nil || f.count("takeover zapret2") != 0 {
+		t.Fatalf("h: dialog %v calls %q", m.dialog, f.calls)
+	}
+	press(t, press(t, m, "z"), "e")
+	if f.count("takeover zapret2") != 1 {
+		t.Errorf("e: calls %q", f.calls)
+	}
 }
 
 func TestTakeoverManualStop(t *testing.T) {
