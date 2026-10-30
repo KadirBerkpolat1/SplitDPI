@@ -98,6 +98,7 @@ needs a terminal of at least 80x24.
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install over to SplitDPI. |
 | `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Turns encrypted DNS on or off; without an argument, shows the current choice. |
+| `splitdpi config [get KEY\|set KEY VALUE\|reset KEY]` | Lists the settings with their defaults, or shows, changes or resets one. |
 | `splitdpi presets list\|update` | Shows or refreshes the preset data. |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
 | `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
@@ -106,6 +107,15 @@ needs a terminal of at least 80x24.
 All commands except `--help`, `version` and `presets list` need root. Add
 `--lang tr` or `--lang en` to pick a language; otherwise SplitDPI uses the
 language chosen under Settings in the terminal UI, or else follows `LANG`.
+
+`splitdpi config` covers the settings of the Settings page: `lang`,
+`run_mode` (`window`, `background`, `boot`), `mode` (`broad` handles every
+blocked site it learns plus your sites, `apps` only enabled apps and your
+sites), `skip_ifaces` (interfaces never touched, as a comma list such as
+`'wg*,tun*'`), `ipinfo_url` (the https service that finds your provider) and
+`qnum` (the NFQUEUE number, 0-65535; no other program may use it). A running
+SplitDPI picks up `mode`, `skip_ifaces` and `qnum` when it restarts. Encrypted
+DNS stays under `splitdpi dns`.
 
 ## Your sites
 

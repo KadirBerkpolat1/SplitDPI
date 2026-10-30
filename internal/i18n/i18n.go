@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -54,6 +55,9 @@ func Init(lang string) {
 	}
 	current = lang
 }
+
+// Supported lists the UI languages.
+func Supported() []string { return slices.Clone(supported) }
 
 // Lang is the language Init loaded.
 func Lang() string { return current }

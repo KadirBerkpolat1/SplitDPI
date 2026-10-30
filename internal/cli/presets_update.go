@@ -14,14 +14,13 @@ func runPresetsUpdate(ctx context.Context, o *ops.Ops, w io.Writer, args []strin
 	if len(args) != 0 {
 		return usageError(i18n.T("presets.update.usage"))
 	}
-	url := presets.UpdateURL
-	fmt.Fprintln(w, i18n.T("presets.update.fetching", url))
-	set, err := presets.Update(ctx, o.HTTP, o.P, url)
+	fmt.Fprintln(w, i18n.T("presets.update.fetching", presets.UpdateURL))
+	version, apps, err := o.PresetsUpdate(ctx)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, i18n.T("presets.update.done", set.Version, len(set.Apps)))
-	for _, wn := range set.Warnings {
+	fmt.Fprintln(w, i18n.T("presets.update.done", version, apps))
+	for _, wn := range o.PresetsList().Warnings {
 		fmt.Fprintln(w, "  "+wn)
 	}
 	return nil

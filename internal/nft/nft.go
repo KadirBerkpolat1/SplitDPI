@@ -37,9 +37,13 @@ type RulesetInput struct {
 
 var (
 	tableRe = regexp.MustCompile(`^[a-z0-9_]+$`)
-	ifaceRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,15}\*?$`)
+	ifaceRe = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,15}\*?$`)
 	portRe  = regexp.MustCompile(`^[0-9]{1,5}(-[0-9]{1,5})?$`)
 )
+
+// ValidIface reports whether name is an interface name, optionally ending in
+// the nft wildcard "*", that Ruleset accepts.
+func ValidIface(name string) bool { return ifaceRe.MatchString(name) }
 
 // Ruleset renders the table with upstream's post-NAT shapes (common/nft.sh):
 // outgoing first packets queued at postrouting 101, replies at prerouting -101
@@ -56,7 +60,7 @@ func Ruleset(in RulesetInput) (string, error) {
 		return "", fmt.Errorf("DNS redirect port %d is outside 0-65535", in.DNSRedirectPort)
 	}
 	for _, i := range in.SkipIfaces {
-		if !ifaceRe.MatchString(i) {
+		if !ValidIface(i) {
 			return "", fmt.Errorf("invalid interface name %q", i)
 		}
 	}

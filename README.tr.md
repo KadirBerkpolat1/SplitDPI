@@ -104,6 +104,7 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi takeover [--yes]` | Kurulu başka bir zapret ya da zapret2'yi bırakıp SplitDPI'ye geçer. |
 | `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Şifreli DNS'i açar ya da kapatır; argüman verilmezse geçerli seçimi gösterir. |
+| `splitdpi config [get ANAHTAR\|set ANAHTAR DEĞER\|reset ANAHTAR]` | Ayarları varsayılanlarıyla listeler ya da birini gösterir, değiştirir veya varsayılana döndürür. |
 | `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
 | `splitdpi uninstall [--yes]` | SplitDPI'yi, dosyalarını ve programını kaldırır. |
@@ -113,6 +114,16 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz SplitDPI
 terminal arayüzünde Ayarlar'dan seçilen dili, o da yoksa `LANG` değişkenini
 kullanır.
+
+`splitdpi config`, Ayarlar sayfasındaki ayarları kapsar: `lang`, `run_mode`
+(`window`, `background`, `boot`), `mode` (`broad` öğrendiği tüm engelli
+sitelere ve sizin sitelerinize, `apps` yalnızca açık uygulamalara ve sizin
+sitelerinize uygulanır), `skip_ifaces` (hiç dokunulmayacak arayüzler,
+`'wg*,tun*'` gibi virgüllü liste), `ipinfo_url` (sağlayıcınızı bulan https
+servisi) ve `qnum` (NFQUEUE numarası, 0-65535; başka bir program
+kullanmamalı). Çalışan SplitDPI `mode`, `skip_ifaces` ve `qnum`
+değişikliklerini yeniden başlayınca uygular. Şifreli DNS `splitdpi dns`
+altında kalır.
 
 ## Kendi siteleriniz
 
