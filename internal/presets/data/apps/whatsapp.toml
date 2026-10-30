@@ -1,0 +1,7 @@
+schema = 1
+id = "whatsapp"
+name = "WhatsApp"
+quic = true
+hosts = ["wa.me", "whatsapp.com", "whatsapp.net"]
+probe = ["https://www.whatsapp.com/robots.txt"]
+note = "WhatsApp Web, media and the website are covered, but not the phone app's chats and calls: they do not use TLS hostnames."

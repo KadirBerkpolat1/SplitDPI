@@ -484,6 +484,12 @@ scan = "Help others on your provider: share this result with the preset reposito
 
 [appnote]
 telegram = "Telegram's direct connections to IP addresses (MTProto) are not covered."
+instagram = "Instagram voice and video calls use direct UDP and are not covered."
+facebook = "Messenger voice and video calls use direct UDP and are not covered."
+whatsapp = "WhatsApp Web, media and the website are covered, but not the phone app's chats and calls: they do not use TLS hostnames."
+signal = "Signal calls use UDP (3478, 10000 and random ports) and are not covered."
+viber = "Viber's app connects on its own ports (4244, 5242, 5243, 7985) without TLS hostnames, so only the website and downloads are covered."
+roblox = "Roblox game servers use UDP 49152-65535 and are not covered."
 [cmd.takeover]
 help = "Switch from another zapret install to splitdpi: take over its sites and turn it off (takeover [--yes])."
 
@@ -821,3 +827,6 @@ restore = "%s is turned back on."
 kept = "Your settings and site list stay."
 working = "Going back to zapret..."
 done = "Done: the zapret service SplitDPI turned off is on again."
+
+[list_scroll]
+more = "%d more"

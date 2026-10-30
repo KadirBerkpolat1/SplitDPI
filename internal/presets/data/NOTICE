@@ -4,5 +4,10 @@ SplitDPI preset data
   https://github.com/cagritaskn/SplitWire-Turkey @ 6607695700ee27203002a8bdc4ae8685d5d030bb
 - Flowseal/zapret-discord-youtube (MIT): Discord and YouTube host lists, Russia exclude list (from lists/list-exclude.txt)
   https://github.com/Flowseal/zapret-discord-youtube @ c4ad8548bf3f5f7eeadfda263913283d246e132a
+- v2fly/domain-list-community (MIT): app host lists (Instagram, Facebook, WhatsApp,
+  X, Signal, Viber, LinkedIn, TikTok, Pastebin; Telegram, YouTube and Discord additions)
+  https://github.com/v2fly/domain-list-community @ 1daade8c4bb957d21d1f5c09c2b050d699e8e96c
+- 1andrevich/Re-filter-lists (MIT): byteoversea.com for TikTok (community.lst)
+  https://github.com/1andrevich/Re-filter-lists
 - alimali54/zapret-win-turkey: origin of winws2 preset strings (credit only)
 - zapret2 (MIT, bol-van): engine and built-in desync blobs

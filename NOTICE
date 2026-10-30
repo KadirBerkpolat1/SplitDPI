@@ -34,6 +34,18 @@ Copyright (c) 2026 dmfrpro
 Licensed under the MIT License.
 Used: extra Discord voice ports and the built-in-blob fallback.
 
+v2fly/domain-list-community (https://github.com/v2fly/domain-list-community)
+at 1daade8c4bb957d21d1f5c09c2b050d699e8e96c
+Copyright (c) 2018-2019 V2Ray
+Licensed under the MIT License.
+Used: Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn, TikTok and
+Pastebin hosts; the added Telegram, YouTube and Discord hosts.
+
+1andrevich/Re-filter-lists (https://github.com/1andrevich/Re-filter-lists)
+Copyright (c) 2024 Andrevich
+Licensed under the MIT License.
+Used: the TikTok host byteoversea.com (community.lst).
+
 alimali54/zapret-win-turkey (https://github.com/alimali54/zapret-win-turkey)
 Published without a license. Credited as the origin of the Turkish zapret2
 strategy strings that SplitWire-Turkey carries.

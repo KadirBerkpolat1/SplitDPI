@@ -1,6 +1,6 @@
 schema = 1
 id = "telegram"
 name = "Telegram"
-hosts = ["telegram.org", "t.me", "telegram.me", "web.telegram.org"]
+hosts = ["cdn-telegram.org", "comments.app", "graph.org", "t.me", "tdesktop.com", "telegra.ph", "telegram-cdn.org", "telegram.dog", "telegram.me", "telegram.org", "telegram.space", "telesco.pe", "tg.dev"]
 probe = ["https://web.telegram.org/"]
 note = "MTProto to raw IPs is not covered"

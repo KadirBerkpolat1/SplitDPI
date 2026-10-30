@@ -484,6 +484,12 @@ scan = "Aynı sağlayıcıyı kullananlara yardım edin: bu sonucu hazır ayar d
 
 [appnote]
 telegram = "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor."
+instagram = "Instagram'daki sesli ve görüntülü aramalar doğrudan UDP kullanır ve kapsanmıyor."
+facebook = "Messenger'daki sesli ve görüntülü aramalar doğrudan UDP kullanır ve kapsanmıyor."
+whatsapp = "WhatsApp Web, medya ve web sitesi kapsanıyor; telefon uygulamasındaki sohbetler ve aramalar TLS alan adı kullanmadığı için kapsanmıyor."
+signal = "Signal aramaları UDP kullanır (3478, 10000 ve rastgele portlar) ve kapsanmıyor."
+viber = "Viber uygulaması TLS alan adı olmadan kendi portlarından (4244, 5242, 5243, 7985) bağlanır; bu yüzden yalnızca web sitesi ve indirmeler kapsanıyor."
+roblox = "Roblox oyun sunucuları UDP 49152-65535 kullanır ve kapsanmıyor."
 [cmd.takeover]
 help = "Başka bir zapret kurulumundan splitdpi'ye geçer: sitelerini devralır ve onu kapatır (takeover [--yes])."
 
@@ -821,3 +827,6 @@ restore = "%s yeniden açılacak."
 kept = "Ayarlarınız ve site listeniz silinmeyecek."
 working = "zapret'e geri dönülüyor..."
 done = "Tamam: SplitDPI'nin kapattığı zapret servisi yeniden açık."
+
+[list_scroll]
+more = "%d daha"

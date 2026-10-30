@@ -283,6 +283,10 @@ nfqws2 durursa trafik değiştirilmeden geçer.
   yeniden deneyin.
 - **Telegram.** Yalnızca Telegram'ın web ve API alan adları kapsanır.
   Uygulamaların doğrudan IP adreslerine yaptığı MTProto bağlantıları kapsanmaz.
+- **Aramalar ve uygulama protokolleri.** Instagram, Messenger, WhatsApp ve
+  Signal'daki sesli ve görüntülü aramalar, Roblox oyun sunucuları ve WhatsApp
+  ile Viber telefon uygulamalarının kendi bağlantıları TLS alan adı taşımaz; bu
+  yüzden kapsanmaz. Siteler sayfası bunu her uygulamanın yanında belirtir.
 - **Discord sesli görüşme.** Ses hazır ayarı uygulanır ama henüz gerçek bir
   görüşmede doğrulanmadı. `scan` bunu belirtir; sizde çalışıp çalışmadığını
   bildirin.
@@ -362,9 +366,15 @@ sorumluluğunuzda kullanırsınız ve hiçbir garanti verilmez.
 - [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey), Çağrı
   Taşkın (MIT): sağlayıcı stratejileri, hariç tutma listesi ve Roblox adresleri.
 - [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)
-  (MIT): Discord ve YouTube adresleri ile Discord ses ayarları.
+  (MIT): Discord ve YouTube adresleri, Discord ses ayarları ve Rusya hariç
+  tutma listesi.
 - [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT): ek
   Discord ses portları.
+- [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
+  (MIT): Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn, TikTok ve
+  Pastebin adresleri ile Telegram, YouTube ve Discord'a eklenen adresler.
+- [1andrevich/Re-filter-lists](https://github.com/1andrevich/Re-filter-lists)
+  (MIT): bir TikTok adresi.
 - alimali54/zapret-win-turkey: Türkçe zapret2 stratejilerinin kaynağı.
 
 Lisanslar için [NOTICE](NOTICE) dosyasına bakın. SplitDPI MIT lisanslıdır.

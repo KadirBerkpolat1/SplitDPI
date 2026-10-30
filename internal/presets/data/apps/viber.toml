@@ -1,0 +1,6 @@
+schema = 1
+id = "viber"
+name = "Viber"
+hosts = ["viber.com"]
+probe = ["https://www.viber.com/robots.txt"]
+note = "Viber's app connects on its own ports (4244, 5242, 5243, 7985) without TLS hostnames, so only the website and downloads are covered."
