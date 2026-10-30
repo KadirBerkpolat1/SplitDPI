@@ -5,7 +5,7 @@ Linux when your ISP blocks them with deep packet inspection (DPI). It finds a
 [zapret2](https://github.com/bol-van/zapret2) strategy that works on your ISP,
 runs it on demand or as a service, and removes every trace with one command.
 
-**Status:** v0.2.5. v0.1.0 was tested on a real Türk Telekom connection and in
+**Status:** v0.2.6. v0.1.0 was tested on a real Türk Telekom connection and in
 Debian, Fedora and Alpine VMs. The features added since v0.2.0 are
 covered by automated tests and by CI on six distros, but were not retested on a
 real connection or in VMs; see [the release checklist](docs/release-checklist.md).
