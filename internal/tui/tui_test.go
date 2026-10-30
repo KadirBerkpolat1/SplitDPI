@@ -477,13 +477,13 @@ func TestHeader(t *testing.T) {
 	f := newFake()
 	v := newModel(t, f).View()
 	head := strings.Split(v, "\n")[0]
-	if !strings.HasPrefix(head, "◆ SplitDPI v0.1.0") || !strings.HasSuffix(head, "● STOPPED") || lipgloss.Width(head) != 80 {
+	if !strings.HasPrefix(head, "◆ SplitDPI v0.1.0") || !strings.HasSuffix(head, " ○ STOPPED ") || lipgloss.Width(head) != 80 {
 		t.Errorf("header %q", head)
 	}
 	f.st.State = "failed"
-	has(t, newModel(t, f).View(), "● FAILED")
+	has(t, newModel(t, f).View(), " ● FAILED ")
 	f.st.State = "running"
-	has(t, newModel(t, f).View(), "● RUNNING")
+	has(t, newModel(t, f).View(), " ● RUNNING ")
 }
 
 func TestStatusSetupOnlyWithoutStrategy(t *testing.T) {
@@ -546,12 +546,10 @@ func TestMenuNavigation(t *testing.T) {
 	if m.page != pgSites || m.apps.cursor != 1 {
 		t.Errorf("down in the page: page %d cursor %d; want the cursor to move", m.page, m.apps.cursor)
 	}
-	has(t, m.View(), "Esc Menu")
 	m = press(t, m, "esc")
 	if m.inPage || m.page != pgSites {
 		t.Errorf("esc: inPage %v page %d", m.inPage, m.page)
 	}
-	has(t, m.View(), "↑↓ Menu")
 	m = press(t, m, "tab")
 	if !m.inPage {
 		t.Error("tab did not move focus into the page")
@@ -637,7 +635,8 @@ func TestGlyphsFor(t *testing.T) {
 func TestASCIIFallback(t *testing.T) {
 	u := unicodeGlyphs
 	symbols := u.border.Top + u.border.Left + u.border.TopLeft + u.border.TopRight + u.border.BottomLeft + u.border.BottomRight +
-		u.logo + u.dot + u.cursor + u.on + u.off + u.fail + u.bullet + u.sep + u.menuKeys
+		u.logo + u.dot + u.dotOff + u.cursor + u.menuMark + u.on + u.off + u.fail + u.bullet + u.sep + u.menuKeys +
+		u.bar[0] + u.bar[1] + u.bar[2]
 	for _, ascii := range []bool{true, false} {
 		for name, v := range pageViews(t, func(m Model) Model {
 			if ascii {
@@ -1317,7 +1316,7 @@ func TestSitesLayoutTurkish(t *testing.T) {
 		"◆ SplitDPI v0.1.0",
 		"╭──────────────╮╭",
 		"│   Durum      ││ Siteler  · engel aşmanın her zaman uygulandığı siteler",
-		"│ ▸ Siteler    ││",
+		"│ ▌ Siteler    ││",
 		"│   Strateji   ││   ✓ Discord       uygulama", // the menu has focus: one cursor
 		"│   Tarama     ││   ✓ YouTube       uygulama",
 		"│   Günlük     ││   ✓ pastebin.com  sizin eklediğiniz",
@@ -1327,20 +1326,23 @@ func TestSitesLayoutTurkish(t *testing.T) {
 			t.Errorf("line %d = %q, want prefix %q", i, lines[i], want)
 		}
 	}
-	if !strings.HasSuffix(lines[0], "● ÇALIŞIYOR") {
+	if !strings.HasSuffix(lines[0], " ● ÇALIŞIYOR ") {
 		t.Errorf("header %q", lines[0])
 	}
-	keys := lines[21] + "\n" + lines[22]
-	has(t, lines[21], "a Site ekle")
-	has(t, keys, "e Bir site bozuldu")
-	has(t, keys, "i Dosyadan al")
-	has(t, keys, "↑↓ Menü")
-	has(t, lines[22], "q Çık")
+	if strings.TrimSpace(lines[20]) != "" {
+		t.Errorf("toast line %q, want empty", lines[20])
+	}
+	has(t, lines[21], " a Site ekle ")
+	has(t, lines[21], " e Bir site bozuldu ")
+	if !strings.HasSuffix(lines[21], " ? Yardım   q Çık ") {
+		t.Errorf("dock row 1 %q, want ? and q at the right", lines[21])
+	}
+	has(t, lines[22], " i Dosyadan al ")
 	if lines[23] != "$ sudo splitdpi sites add DOMAIN" {
 		t.Errorf("CLI line %q", lines[23])
 	}
-	if n := strings.Count(m.View(), "▸"); n != 1 {
-		t.Errorf("%d cursors with the menu focused, want 1", n)
+	if n := strings.Count(m.View(), "▸"); n != 0 {
+		t.Errorf("%d list cursors with the menu focused, want 0", n)
 	}
 	m = press(t, m, "enter")
 	if l := strings.Split(m.View(), "\n")[4]; !strings.HasPrefix(l, "│   Strateji   ││ ▸ ✓ Discord       uygulama") {

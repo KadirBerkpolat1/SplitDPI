@@ -596,7 +596,7 @@ func (m Model) dnsPickerActions() []action {
 	}
 }
 
-// dnsPickerKey moves the cursor and leaves the action keys to the footer;
+// dnsPickerKey moves the cursor and leaves the action keys to the dock;
 // other keys do nothing while the picker is open.
 func (m Model) dnsPickerKey(s string) (Model, tea.Cmd, bool) {
 	p := *m.settings.dns

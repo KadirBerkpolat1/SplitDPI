@@ -1,6 +1,6 @@
 // Package tui is the terminal UI. It is a thin layer over ops:
-// every action is an ops call, and the footer shows the CLI command that
-// does the same thing.
+// every action is an ops call, and the command line under the dock shows the
+// CLI command that does the same thing.
 package tui
 
 import (
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
@@ -99,7 +100,7 @@ type Model struct {
 
 	page   int  // the selected menu entry
 	inPage bool // keys go to the page instead of the menu
-	focus  int  // the page action the footer highlights
+	focus  int  // the page action the dock highlights
 	help   bool
 	dialog *confirm
 	ask    *dnsAsk // the scan's encrypted DNS question
@@ -293,7 +294,7 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // do runs the action bound to s. In a page, tab and the arrows move the
-// footer focus and enter runs the focused action.
+// dock's focus and enter runs the focused action.
 func (m Model) do(acts []action, s string) (tea.Model, tea.Cmd) {
 	if n := len(acts); m.inPage && n > 0 {
 		switch s {
@@ -330,10 +331,28 @@ func (m *Model) selectPage(i int) tea.Cmd {
 	return pages[i].Open(m)
 }
 
-// mouse selects the menu entry under a left click.
+// mouse handles a left click: a dock button does what its key does, the pill
+// starts or stops the bypass, and a menu entry is selected.
 func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft ||
-		m.confirmQuit || m.dialog != nil || m.ask != nil || m.help || m.showDisclaimer() || m.tooSmall() || m.settings.uninstalled {
+		m.confirmQuit || m.dialog != nil || m.ask != nil || m.help || m.tooSmall() || m.settings.uninstalled {
+		return m, nil
+	}
+	if b, ok := m.buttonAt(msg.X, msg.Y); ok {
+		// A page's button acts in the page, as its key does there.
+		if !b.global && !m.showDisclaimer() {
+			m.inPage = true
+		}
+		return m.key(keyMsg(b.key))
+	}
+	if m.showDisclaimer() {
+		return m, nil
+	}
+	if msg.Y == 0 && msg.X >= m.width-lipgloss.Width(m.pill()) {
+		if a, ok := m.pillAction(); ok {
+			cmd := a.Do(&m)
+			return m, cmd
+		}
 		return m, nil
 	}
 	i := msg.Y - menuTop
@@ -343,6 +362,21 @@ func (m Model) mouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	m.inPage = false
 	cmd := m.selectPage(i)
 	return m, cmd
+}
+
+// keyMsg is the key press that an action's key name stands for.
+func keyMsg(k string) tea.KeyMsg {
+	switch k {
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "tab":
+		return tea.KeyMsg{Type: tea.KeyTab}
+	case "space":
+		return tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
 
 // quit leaves the TUI, but first asks when it runs the bypass itself.

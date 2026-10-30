@@ -746,7 +746,7 @@ func (m Model) wizardView(width, h int) string {
 		if w.shared != "" {
 			head = append(head, "", i18n.T("scan_page.share"), ansi.Hardwrap(w.shared, width, false))
 		}
-		// The question repeats the footer keys; it gives way to the link.
+		// The question repeats the dock's keys; it gives way to the link.
 		how := append(slices.Clone(head), "", i18n.T("tui.wiz.how"))
 		if lipgloss.Height(lipgloss.NewStyle().Width(width).Render(strings.Join(how, "\n"))) <= h {
 			head = how

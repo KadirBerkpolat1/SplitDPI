@@ -57,7 +57,7 @@ func (statusPage) Actions(m Model) []action {
 	}
 	switch {
 	case m.bypassOn():
-		acts = append(acts, action{Key: "s", Label: i18n.T("tui.act.stop"), CLI: "sudo splitdpi stop", Do: (*Model).stop})
+		acts = append(acts, m.stopAction())
 	case m.canStart():
 		acts = append(acts, m.runAction())
 		if m.runMode() != config.RunBackground { // else r already does it
@@ -65,6 +65,10 @@ func (statusPage) Actions(m Model) []action {
 		}
 	}
 	return append(acts, action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps})
+}
+
+func (m Model) stopAction() action {
+	return action{Key: "s", Label: i18n.T("tui.act.stop"), CLI: "sudo splitdpi stop", Do: (*Model).stop}
 }
 
 // runAction is r: it starts the bypass the way the run mode in Settings says.
@@ -235,14 +239,18 @@ func (m Model) probeSummary(w int) []string {
 		}
 		return strings.Compare(a.name, b.name)
 	})
-	parts := []string{i18n.T("probe_summary.open", open, len(m.probe))}
+	parts := []string{goodStyle.Render(i18n.T("probe_summary.open", open, len(m.probe)))}
 	if len(blocked) > 0 {
 		parts = append(parts, badStyle.Render(i18n.T("probe_summary.blocked", len(blocked))))
 	}
 	if untested > 0 {
-		parts = append(parts, mutedStyle.Render(i18n.T("probe_summary.untested", untested)))
+		parts = append(parts, neutralStyle.Render(i18n.T("probe_summary.untested", untested)))
 	}
-	lines := []string{row(w, i18n.T("tui.probe"), joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), w-labelStyle.GetWidth()))}
+	value := w - labelStyle.GetWidth()
+	lines := []string{
+		row(w, i18n.T("tui.probe"), m.reachBar([3]int{open, len(blocked), untested}, min(value, 40))),
+		row(w, "", joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), value)),
+	}
 	shown := blocked[:min(len(blocked), 3)]
 	for _, b := range shown {
 		lines = append(lines, row(w, "", badStyle.Render(m.g.fail)+" "+b.name+"  "+badStyle.Render(i18n.T("probe_short."+string(b.cat)))))
@@ -256,6 +264,40 @@ func (m Model) probeSummary(w int) []string {
 		lines = append(lines, row(w, i18n.T("probe_tui.todo"), probeTodo(blocked[0].cat)))
 	}
 	return lines
+}
+
+// reachBar is a bar width cells wide, split in proportion to the open,
+// blocked and untested counts.
+func (m Model) reachBar(counts [3]int, width int) string {
+	styles := [3]lipgloss.Style{goodStyle, badStyle, neutralStyle}
+	var b strings.Builder
+	for i, n := range barCells(counts, width) {
+		b.WriteString(styles[i].Render(strings.Repeat(m.g.bar[i], n)))
+	}
+	return b.String()
+}
+
+// barCells splits width cells in proportion to counts. A non-zero count gets
+// at least one cell; the rounding goes to the largest count.
+func barCells(counts [3]int, width int) [3]int {
+	var cells [3]int
+	total := counts[0] + counts[1] + counts[2]
+	if total == 0 {
+		return cells
+	}
+	used, big := 0, 0
+	for i, n := range counts {
+		cells[i] = n * width / total
+		if n > 0 && cells[i] == 0 {
+			cells[i] = 1
+		}
+		used += cells[i]
+		if n > counts[big] {
+			big = i
+		}
+	}
+	cells[big] += width - used
+	return cells
 }
 
 // joinWrapped joins parts with sep in lines of at most width cells, breaking

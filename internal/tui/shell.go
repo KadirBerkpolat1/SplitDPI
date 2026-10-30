@@ -10,15 +10,24 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 )
 
-// One accent, used for the title, the focused action and the CLI echo; the
-// rest is the terminal's own colors. Lip Gloss drops colors on terminals
-// without them and when NO_COLOR is set.
+// One accent, used for the title, the keys, the primary button and the CLI
+// echo; three state colors; and the backgrounds of the dock's buttons, the
+// menu's selected entry and the pill. Each color is truecolor with 256- and
+// 16-color fallbacks, and has a variant for light terminals. Lip Gloss drops
+// colors on terminals without them and when NO_COLOR is set.
 var (
-	accent = lipgloss.AdaptiveColor{Light: "25", Dark: "74"}
-	muted  = lipgloss.AdaptiveColor{Light: "243", Dark: "245"}
-	good   = lipgloss.AdaptiveColor{Light: "28", Dark: "71"}
-	warn   = lipgloss.AdaptiveColor{Light: "130", Dark: "179"}
-	bad    = lipgloss.AdaptiveColor{Light: "124", Dark: "167"}
+	accent    = tone("#f2a65a", "215", "#a5520f", "130", "3")
+	good      = tone("#93c98a", "114", "#2e7d32", "28", "2")
+	bad       = tone("#e5787f", "174", "#b3261e", "124", "1")
+	neutral   = tone("#8a93a3", "246", "#596273", "242", "7")
+	muted     = tone("#79818f", "244", "#5f6673", "243", "8")
+	text      = tone("#d9dee8", "253", "#1e222c", "235", "7")
+	selBg     = tone("#2c3343", "236", "#dde3ee", "254", "0")
+	buttonBg  = tone("#252a36", "235", "#e6e9ef", "255", "0")
+	primaryBg = tone("#3a2c1c", "94", "#f6e3cc", "223", "8")
+	pillOnBg  = tone("#24412a", "22", "#dcefd8", "194", "0")
+	pillOffBg = tone("#3a2a2c", "52", "#f6dcdc", "224", "0")
+	warn      = lipgloss.AdaptiveColor{Light: "130", Dark: "179"}
 
 	titleStyle   = lipgloss.NewStyle().Bold(true).Foreground(accent)
 	keyStyle     = lipgloss.NewStyle().Bold(true).Foreground(accent)
@@ -29,7 +38,15 @@ var (
 	goodStyle    = lipgloss.NewStyle().Foreground(good)
 	warnStyle    = lipgloss.NewStyle().Foreground(warn)
 	badStyle     = lipgloss.NewStyle().Foreground(bad)
+	neutralStyle = lipgloss.NewStyle().Foreground(neutral)
 )
+
+func tone(dark, dark256, light, light256, ansi string) lipgloss.CompleteAdaptiveColor {
+	return lipgloss.CompleteAdaptiveColor{
+		Dark:  lipgloss.CompleteColor{TrueColor: dark, ANSI256: dark256, ANSI: ansi},
+		Light: lipgloss.CompleteColor{TrueColor: light, ANSI256: light256, ANSI: ansi},
+	}
+}
 
 const (
 	appName   = "SplitDPI"
@@ -41,28 +58,41 @@ const (
 
 func (m Model) tooSmall() bool { return m.width < minWidth || m.height < minHeight }
 
-// View is the header, the menu and the page side by side, and the footer.
+// View is the header, the menu and the page side by side, the toast, the
+// dock and the command line.
 func (m Model) View() string {
 	if m.tooSmall() {
 		return ansi.Truncate(i18n.T("shell.too_small", minWidth, minHeight), m.width, "")
 	}
-	foot := m.footer()
-	h := m.height - 1 - lipgloss.Height(foot)
+	rows, _ := m.dock()
+	toast := m.toast()
+	foot := strings.Join(rows, "\n") + "\n" + m.cmdLine()
+	h := m.height - 1 - lipgloss.Height(toast) - lipgloss.Height(foot)
 	var body string
 	if m.showDisclaimer() {
 		body = m.frame(m.width, h, true, titleStyle.Render(i18n.T("disclaimer.title"))+"\n\n"+m.disclaimerView(m.width-4))
 	} else {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, m.menuBox(h), m.pageBox(m.width-menuWidth, h))
 	}
+	var box string
 	switch {
 	case m.dialog != nil:
-		body = overlay(body, m.dialogView(), menuWidth, m.width)
+		box = m.dialogView()
 	case m.ask != nil:
-		body = overlay(body, m.dnsAskView(), menuWidth, m.width)
+		box = m.dnsAskView()
 	case m.help:
-		body = overlay(body, m.helpView(), menuWidth, m.width)
+		box = m.helpView()
 	}
-	return m.header() + "\n" + body + "\n" + foot
+	// A box taller than the page may cover the toast too, never the dock.
+	top := body + "\n" + toast
+	switch {
+	case box == "":
+	case lipgloss.Height(box) > h:
+		top = overlay(top, box, menuWidth, m.width)
+	default:
+		top = overlay(body, box, menuWidth, m.width) + "\n" + toast
+	}
+	return m.header() + "\n" + top + "\n" + foot
 }
 
 // header is the name and version left, the bypass state right.
@@ -72,14 +102,33 @@ func (m Model) header() string {
 	return left + strings.Repeat(" ", max(m.width-lipgloss.Width(left)-lipgloss.Width(right), 1)) + right
 }
 
+// pill is the bypass state; a click on it starts or stops the bypass as the
+// Status page does.
 func (m Model) pill() string {
+	label, fg, bg := m.g.dotOff+" "+i18n.T("shell.pill.stopped"), bad, pillOffBg
 	switch {
 	case m.bypassOn():
-		return goodStyle.Bold(true).Render(m.g.dot + " " + i18n.T("shell.pill.running"))
+		label, fg, bg = m.g.dot+" "+i18n.T("shell.pill.running"), good, pillOnBg
 	case m.st.State == "failed":
-		return badStyle.Bold(true).Render(m.g.dot + " " + i18n.T("shell.pill.failed"))
+		label = m.g.dot + " " + i18n.T("shell.pill.failed")
 	}
-	return mutedStyle.Bold(true).Render(m.g.dot + " " + i18n.T("shell.pill.stopped"))
+	s := lipgloss.NewStyle().Bold(true).Foreground(fg)
+	if m.g.ascii {
+		return s.Render(label)
+	}
+	return s.Background(bg).Padding(0, 1).Render(label)
+}
+
+// pillAction is what a click on the pill does: Status's stop, or its start
+// in the run mode, with the confirmation that start asks for.
+func (m Model) pillAction() (action, bool) {
+	switch {
+	case m.bypassOn():
+		return m.stopAction(), true
+	case m.canStart():
+		return m.runAction(), true
+	}
+	return action{}, false
 }
 
 // frame draws content in a w x h box; the focused box has the accent border.
@@ -95,9 +144,14 @@ func (m Model) frame(w, h int, focused bool, content string) string {
 func (m Model) menuBox(h int) string {
 	lines := make([]string, len(pages))
 	for i, p := range pages {
-		lines[i] = "  " + p.Title()
-		if i == m.page {
-			lines[i] = titleStyle.Render(m.g.cursor + " " + p.Title())
+		switch {
+		case i != m.page:
+			lines[i] = "  " + p.Title()
+		case m.g.ascii:
+			lines[i] = titleStyle.Render(m.g.menuMark + " " + p.Title())
+		default:
+			lines[i] = lipgloss.NewStyle().Foreground(accent).Background(selBg).Render(m.g.menuMark) +
+				lipgloss.NewStyle().Bold(true).Foreground(text).Background(selBg).Width(menuWidth-5).Render(" "+p.Title())
 		}
 	}
 	return m.frame(menuWidth, h, !m.inPage, strings.Join(lines, "\n"))
@@ -111,55 +165,140 @@ func (m Model) pageBox(w, h int) string {
 	return m.frame(w, h, m.inPage, title+"\n\n"+p.View(m, width, h-4))
 }
 
-// footer lists the page's keys and the global ones, echoes the focused
-// action's CLI command, and shows the last action's result or a pending
-// question.
-func (m Model) footer() string {
-	var acts []action
+// actions are the keys of what the screen shows: the first-start notice or
+// the selected page.
+func (m Model) actions() []action {
 	if m.showDisclaimer() {
-		acts = disclaimerActions()
-	} else {
-		acts = pages[m.page].Actions(m)
+		return disclaimerActions()
 	}
-	var keys []string
-	for i, a := range acts {
-		if a.Key == "" {
-			continue
-		}
-		k := keyStyle.Render(keyName(a.Key)) + " " + a.Label
-		if m.inPage && i == m.focus {
-			k = focusStyle.Render(keyName(a.Key) + " " + a.Label)
-		}
-		keys = append(keys, k)
-	}
-	// A page that binds esc is typing or busy; its own keys are all that apply.
-	if !m.showDisclaimer() && !slices.ContainsFunc(acts, func(a action) bool { return a.Key == "esc" }) {
-		nav := m.g.menuKeys
-		if m.inPage {
-			nav = keyName("esc")
-		}
-		keys = append(keys, hint(nav, i18n.T("shell.to_menu")), hint("?", i18n.T("shell.help.key")), hint("q", i18n.T("tui.act.quit")))
-	}
-	lines := packKeys(keys, m.width)
-	if m.focus < len(acts) && acts[m.focus].CLI != "" {
-		lines = append(lines, ansi.Truncate(mutedStyle.Render("$ ")+commandStyle.Render(acts[m.focus].CLI), m.width, "…"))
-	} else {
-		lines = append(lines, "")
-	}
+	return pages[m.page].Actions(m)
+}
+
+// toast is the last action's result or a pending question, over the dock.
+func (m Model) toast() string {
 	note := lipgloss.NewStyle().Width(m.width).MaxHeight(3)
 	switch {
 	case m.confirmQuit:
-		lines = append(lines, note.Render(warnStyle.Render(i18n.T("background_tui.quit"))+"\n"+
-			hint(i18n.T("confirm_keys.yes"), i18n.T("background_tui.quit_stop"))+"   "+
-			hint("b", i18n.T("background_tui.quit_background"))+"   "+
-			hint(i18n.T("confirm_keys.no"), i18n.T("background_tui.quit_cancel"))))
+		return note.Render(warnStyle.Render(i18n.T("background_tui.quit")) + "\n" +
+			hint(i18n.T("confirm_keys.yes"), i18n.T("background_tui.quit_stop")) + "   " +
+			hint("b", i18n.T("background_tui.quit_background")) + "   " +
+			hint(i18n.T("confirm_keys.no"), i18n.T("background_tui.quit_cancel")))
 	case m.note != "":
-		lines = append(lines, note.Render(m.note))
+		return note.Foreground(accent).Render(m.note)
 	}
-	return strings.Join(lines, "\n")
+	return ""
+}
+
+// cmdLine echoes the CLI command of the focused action, the first one
+// unless tab moved the focus.
+func (m Model) cmdLine() string {
+	acts := m.actions()
+	if m.focus < len(acts) && acts[m.focus].CLI != "" {
+		return ansi.Truncate(mutedStyle.Render("$ ")+commandStyle.Render(acts[m.focus].CLI), m.width, "…")
+	}
+	return ""
 }
 
 func hint(key, label string) string { return keyStyle.Render(key) + " " + mutedStyle.Render(label) }
+
+// button is one cell of the dock: a click on it does what its key does.
+type button struct {
+	key, label       string
+	primary, focused bool
+	global           bool // ? and q, which leave the focus where it is
+	row, x, width    int
+}
+
+// dock lays the screen's actions out as buttons from the left, the first
+// one as the primary, with ? and q at the right of the first row. Buttons
+// that do not fit go on to further rows whole; a label is never cut.
+func (m Model) dock() ([]string, []button) {
+	acts := m.actions()
+	var btns []button
+	for i, a := range acts {
+		if a.Key != "" {
+			btns = append(btns, button{key: a.Key, label: a.Label, primary: len(btns) == 0, focused: m.inPage && i == m.focus})
+		}
+	}
+	// A page that binds esc is typing or busy; its own keys are all that apply.
+	var globals []button
+	if !m.showDisclaimer() && !slices.ContainsFunc(acts, func(a action) bool { return a.Key == "esc" }) {
+		globals = []button{
+			{key: "?", label: i18n.T("shell.help.key"), global: true},
+			{key: "q", label: i18n.T("tui.act.quit"), global: true},
+		}
+	}
+	room := m.width
+	if len(globals) > 0 {
+		gx := m.width + 1
+		for i := len(globals) - 1; i >= 0; i-- {
+			globals[i].width = globals[i].cells()
+			gx -= globals[i].width + 1
+			globals[i].x = gx
+		}
+		room = gx - 2
+	}
+	row, end := 0, 0
+	for i := range btns {
+		b := &btns[i]
+		b.width = b.cells()
+		x := end
+		if x > 0 {
+			x++
+		}
+		limit := m.width
+		if row == 0 {
+			limit = room
+		}
+		if x+b.width > limit && (end > 0 || row == 0) {
+			row, x = row+1, 0
+		}
+		b.row, b.x, end = row, x, x+b.width
+	}
+	all := append(btns, globals...)
+	rows := make([]string, row+1)
+	ends := make([]int, row+1)
+	for _, b := range all {
+		rows[b.row] += strings.Repeat(" ", b.x-ends[b.row]) + m.buttonView(b)
+		ends[b.row] = b.x + b.width
+	}
+	return rows, all
+}
+
+// cells is the width of a button: its key and label with a cell of padding,
+// or the brackets, on either side.
+func (b button) cells() int { return lipgloss.Width(keyName(b.key)) + lipgloss.Width(b.label) + 3 }
+
+func (m Model) buttonView(b button) string {
+	label := lipgloss.NewStyle()
+	if b.focused {
+		label = focusStyle
+	}
+	if m.g.ascii {
+		return "[" + keyStyle.Render(keyName(b.key)) + " " + label.Render(b.label) + "]"
+	}
+	bg := buttonBg
+	if b.primary {
+		bg = primaryBg
+	}
+	if !b.focused {
+		label = label.Foreground(text)
+	}
+	pad := lipgloss.NewStyle().Background(bg).Render(" ")
+	return pad + keyStyle.Background(bg).Render(keyName(b.key)) + pad + label.Background(bg).Render(b.label) + pad
+}
+
+// buttonAt is the dock button at the cell x, y of the screen.
+func (m Model) buttonAt(x, y int) (button, bool) {
+	rows, btns := m.dock()
+	r := y - (m.height - 1 - len(rows))
+	for _, b := range btns {
+		if b.row == r && x >= b.x && x < b.x+b.width {
+			return b, true
+		}
+	}
+	return button{}, false
+}
 
 // keyName is how a key is written on screen.
 func keyName(k string) string {
@@ -168,24 +307,6 @@ func keyName(k string) string {
 		return i18n.T("shell.key." + k)
 	}
 	return k
-}
-
-// packKeys lays "k Label" items out in lines of at most width columns,
-// never splitting an item.
-func packKeys(keys []string, width int) []string {
-	var lines []string
-	cur := ""
-	for _, k := range keys {
-		switch {
-		case cur == "":
-			cur = k
-		case lipgloss.Width(cur)+2+lipgloss.Width(k) > width:
-			lines, cur = append(lines, cur), k
-		default:
-			cur += "  " + k
-		}
-	}
-	return append(lines, cur)
 }
 
 // row is one "label  value" line of a page width wide; a long value wraps

@@ -161,7 +161,7 @@ func (m Model) doctorViewActions() []action {
 	}
 }
 
-// doctorViewKey leaves r to the footer; other keys do nothing here.
+// doctorViewKey leaves r to the dock; other keys do nothing here.
 func (m Model) doctorViewKey(s string) (Model, tea.Cmd, bool) {
 	switch s {
 	case "esc":

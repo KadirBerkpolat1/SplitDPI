@@ -354,8 +354,6 @@ crash_loop = "nfqws2 %[2]s içinde %[1]d kez çöktü; güvenlik duvarı kuralla
 
 [shell]
 too_small = "Terminali en az %dx%d boyutuna büyütün."
-to_menu = "Menü"
-
 [shell.menu]
 status = "Durum"
 sites = "Siteler"
@@ -391,7 +389,7 @@ arrows = "Menüde ya da sayfadaki listede gezinir"
 open = "Menüden sayfaya geçer; sayfada Tab bir eylem seçer, Enter onu çalıştırır"
 back = "Menüye döner"
 click = "Tıklama"
-click_does = "Menüdeki bir sayfayı açar"
+click_does = "Bir sayfayı açar ya da düğmeye basar"
 toggle = "Bu yardımı açar ya da kapatır"
 close = "Esc ya da ? bu yardımı kapatır."
 

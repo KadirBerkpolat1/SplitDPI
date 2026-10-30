@@ -349,8 +349,6 @@ crash_loop = "nfqws2 failed %d times within %s; firewall rules removed, giving u
 
 [shell]
 too_small = "Enlarge the terminal to at least %dx%d."
-to_menu = "Menu"
-
 [shell.menu]
 status = "Status"
 sites = "Sites"
@@ -386,7 +384,7 @@ arrows = "Move in the menu, or in the page's list"
 open = "From the menu, go into the page; in a page, Tab picks an action and Enter runs it"
 back = "Back to the menu"
 click = "Click"
-click_does = "Opens a menu entry"
+click_does = "Opens a menu entry or presses a button"
 toggle = "Opens or closes this help"
 close = "Esc or ? closes this help."
 

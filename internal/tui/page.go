@@ -9,7 +9,7 @@ type page interface {
 	Hint() string  // what the page is for, next to its title
 	// Open runs when the menu selects the page.
 	Open(m *Model) tea.Cmd
-	// Actions are the page's keys; the footer lists them with their CLI.
+	// Actions are the page's keys; the dock shows them as buttons.
 	Actions(m Model) []action
 	// Key sees keys first while the page has focus; false means not handled.
 	Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool)
@@ -32,7 +32,8 @@ const (
 )
 
 // action is one thing the user can do on a page. CLI is the command that
-// does the same outside the TUI; the footer shows it for the focused action.
+// does the same outside the TUI; the command line shows it for the focused
+// action.
 // An action without a key only carries the CLI command.
 type action struct {
 	Key, Label, CLI string

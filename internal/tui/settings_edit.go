@@ -89,7 +89,7 @@ func (m Model) pickerActions() []action {
 	}
 }
 
-// pickerKey moves the cursor and leaves enter to the footer; other keys do
+// pickerKey moves the cursor and leaves enter to the dock; other keys do
 // nothing while the picker is open.
 func (m Model) pickerKey(s string) (Model, tea.Cmd, bool) {
 	p := *m.settings.pick
@@ -229,7 +229,7 @@ func (m Model) textActions() []action {
 	}
 }
 
-// textKey feeds the input; enter is the footer's save.
+// textKey feeds the input; enter is the dock's save.
 func (m Model) textKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	switch k.String() {
 	case "enter":

@@ -89,11 +89,14 @@ func TestOneCursorWhileMenuFocused(t *testing.T) {
 		}
 		in := strings.Count(m.View(), m.g.cursor)
 		m = press(t, m, "esc")
-		if n := strings.Count(m.View(), m.g.cursor); n != 1 {
-			t.Errorf("%s with the menu focused: %d cursors, want 1:\n%s", pages[pg].Title(), n, m.View())
+		if n := strings.Count(m.View(), m.g.cursor); n != 0 {
+			t.Errorf("%s with the menu focused: %d list cursors, want 0:\n%s", pages[pg].Title(), n, m.View())
 		}
-		if lists[pg] && in != 2 {
-			t.Errorf("%s in the page: %d cursors, want the menu's and the list's:\n%s", pages[pg].Title(), in, m.View())
+		if n := strings.Count(m.View(), m.g.menuMark); n != 1 {
+			t.Errorf("%s: %d menu marks, want 1:\n%s", pages[pg].Title(), n, m.View())
+		}
+		if lists[pg] && in != 1 {
+			t.Errorf("%s in the page: %d list cursors, want 1:\n%s", pages[pg].Title(), in, m.View())
 		}
 	}
 }

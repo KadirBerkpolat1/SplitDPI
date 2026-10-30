@@ -64,7 +64,8 @@ uses; it only saves the choice, and the CLI commands stay as they are.
 ## The terminal UI
 
 - **Top:** the name and version, and a status pill on the right that shows
-  whether the bypass is running, stopped or failed.
+  whether the bypass is running, stopped or failed. Clicking the pill starts
+  or stops the bypass as the Status page does.
 - **Left:** the menu: Status, Sites, Strategy, Scan, Logs and Settings. Use the
   arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
   the menu.
@@ -74,8 +75,10 @@ uses; it only saves the choice, and the CLI commands stay as they are.
   service), Maintenance (update presets, install the engine, check the
   system, switch from or back to zapret, uninstall) and Advanced (queue
   number). `/` searches the list; Esc clears the search.
-- **Bottom:** the keys of the page and, for the selected action, the command
-  that does the same thing, so anything you do in the UI can be scripted.
+- **Bottom:** the result of the last action; under it the page's actions as
+  buttons with their keys (`?` Help and `q` Quit on the right), where a click
+  does what the key does; and last the command that does the selected action,
+  so anything you do in the UI can be scripted.
 
 `?` lists every key. Before anything that changes the system, a dialog says what
 will change and how to undo it; answer `y` or `n` (`e` or `h` in Turkish). On

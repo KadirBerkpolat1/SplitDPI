@@ -9,30 +9,35 @@ import (
 // glyphs are the drawing characters; the ASCII set is for terminals that
 // cannot show box drawing or symbols.
 type glyphs struct {
+	ascii    bool // no symbols and no background colors: buttons are [k Label]
 	border   lipgloss.Border
 	logo     string
 	dot      string
+	dotOff   string // the pill while the bypass is off
 	cursor   string
+	menuMark string // the menu's selected entry
 	on, off  string // a toggle or a list entry the bypass applies to, or not
 	fail     string // a failed check
 	bullet   string
 	sep      string
 	menuKeys string
+	bar      [3]string // the reachability bar: open, blocked, not tested
 }
 
 var (
 	unicodeGlyphs = glyphs{
 		border: lipgloss.RoundedBorder(),
-		logo:   "◆", dot: "●", cursor: "▸", on: "✓", off: "✗", fail: "✗",
-		bullet: "•", sep: "·", menuKeys: "↑↓",
+		logo:   "◆", dot: "●", dotOff: "○", cursor: "▸", menuMark: "▌", on: "✓", off: "✗", fail: "✗",
+		bullet: "•", sep: "·", menuKeys: "↑↓", bar: [3]string{"█", "▓", "░"},
 	}
 	asciiGlyphs = glyphs{
+		ascii: true,
 		border: lipgloss.Border{
 			Top: "-", Bottom: "-", Left: "|", Right: "|",
 			TopLeft: "+", TopRight: "+", BottomLeft: "+", BottomRight: "+",
 		},
-		logo: "*", dot: "*", cursor: ">", on: "[x]", off: "[ ]", fail: "FAIL",
-		bullet: "-", sep: "-", menuKeys: "j/k",
+		logo: "*", dot: "*", dotOff: "*", cursor: ">", menuMark: ">", on: "[x]", off: "[ ]", fail: "FAIL",
+		bullet: "-", sep: "-", menuKeys: "j/k", bar: [3]string{"#", "x", "-"},
 	}
 )
 

@@ -100,7 +100,7 @@ func TestSitesNoAddressMuted(t *testing.T) {
 	f, _ := manyProbes()
 	f.sites = []string{"a-blocked.example", "cdn0.example"}
 	m := goTo(t, press(t, newModel(t, f), "p"), pgSites)
-	const mutedFG, badFG = "38;5;245m", "38;5;167m"
+	const mutedFG, badFG = "38;5;244m", "38;5;174m"
 	var sawMuted, sawBad bool
 	for _, l := range strings.Split(pages[pgSites].View(m, 76, 30), "\n") {
 		switch {

@@ -69,7 +69,8 @@ Hangisi olursa olsun `sudo splitdpi stop` durdurur.
 ## Terminal arayüzü
 
 - **Üstte:** adı ve sürümü, sağda da engel aşmanın çalışıp çalışmadığını ya
-  da hata verip vermediğini gösteren durum etiketi.
+  da hata verip vermediğini gösteren durum etiketi. Etikete tıklamak engel
+  aşmayı Durum sayfasındaki gibi başlatır ya da durdurur.
 - **Solda:** menü: Durum, Siteler, Strateji, Tarama, Günlük ve Ayarlar. Ok
   tuşlarıyla ya da fareyle tıklayarak seçin; Enter veya Tab sayfaya girer, Esc
   menüye döner.
@@ -80,7 +81,9 @@ Hangisi olursa olsun `sudo splitdpi stop` durdurur.
   motoru kurma, sistemi denetleme, zapret'ten geçme ya da ona geri dönme,
   kaldırma) ve Gelişmiş (kuyruk numarası). `/` listede arar; Esc aramayı
   temizler.
-- **Altta:** sayfanın kısayolları ve seçili işi yapan komut. Arayüzde
+- **Altta:** son işin sonucu; altında sayfanın işleri, tuşlarıyla birlikte
+  düğmeler halinde (sağda `?` Yardım ve `q` Çık). Bir düğmeye tıklamak tuşuna
+  basmakla aynı işi yapar. En altta seçili işi yapan komut durur; arayüzde
   yaptığınız her şeyi böylece bir betikle de yapabilirsiniz.
 
 `?` tüm kısayolları listeler. Sistemi değiştiren her işten önce bir pencere
