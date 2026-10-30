@@ -6,7 +6,7 @@ derin paket incelemesiyle (DPI) engellediğinde bunları Linux'ta yeniden
 stratejisi bulur, onu istediğinizde ya da servis olarak çalıştırır ve tek
 komutla geride iz bırakmadan kaldırır.
 
-**Durum:** v0.2.4. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
+**Durum:** v0.2.5. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
 Fedora, Alpine sanal makinelerinde denendi. v0.2.0'dan bu yana gelen
 özellikler otomatik testlerle ve altı dağıtımda çalışan CI ile sınanıyor; gerçek
 bir bağlantıda ya da sanal makinelerde yeniden denenmedi. Ayrıntılar
