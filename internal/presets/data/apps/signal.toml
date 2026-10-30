@@ -1,0 +1,6 @@
+schema = 1
+id = "signal"
+name = "Signal"
+hosts = ["signal.art", "signal.group", "signal.link", "signal.me", "signal.org", "signal.tube"]
+probe = ["https://updates.signal.org/desktop/latest-linux.yml"]
+note = "Signal calls use UDP (3478, 10000 and random ports) and are not covered."

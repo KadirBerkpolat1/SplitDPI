@@ -85,6 +85,14 @@ func (m *Model) openApps() {
 	for _, id := range slices.Sorted(maps.Keys(set.Apps)) {
 		a.apps = append(a.apps, set.Apps[id])
 	}
+	// Enabled apps first; a toggle keeps its row until the page is opened again.
+	off := func(app presets.App) int {
+		if m.appEnabled(app.ID) {
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(a.apps, func(x, y presets.App) int { return off(x) - off(y) })
 	if list, err := m.b.SitesList(); err == nil {
 		a.sites = list
 	} else {
@@ -400,10 +408,6 @@ func (m Model) appsView(w, h int) string {
 			}
 		}
 	}
-	cursorLine := 0
-	if a.cursor < len(first) {
-		cursorLine = first[a.cursor]
-	}
 	var tail []string
 	if a.typing {
 		q := i18n.T("tui.apps_screen.which_site")
@@ -424,7 +428,7 @@ func (m Model) appsView(w, h int) string {
 			tail = append(append(tail, ""), sk...)
 		}
 	}
-	lines = scroll(lines, cursorLine, h-len(tail), w)
+	lines = m.scrollMore(lines, first, a.cursor, h-len(tail), w)
 	return strings.Join(append(lines, tail...), "\n")
 }
 

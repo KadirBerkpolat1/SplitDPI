@@ -1,0 +1,6 @@
+schema = 1
+id = "linkedin"
+name = "LinkedIn"
+quic = true
+hosts = ["licdn.com", "linkedin.com", "lnkd.in"]
+probe = ["https://www.linkedin.com/robots.txt"]

@@ -1,0 +1,5 @@
+schema = 1
+id = "x"
+name = "X (Twitter)"
+hosts = ["t.co", "twimg.com", "twitter.com", "x.com"]
+probe = ["https://x.com/robots.txt", "https://abs.twimg.com/favicons/twitter.3.ico"]

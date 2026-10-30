@@ -262,6 +262,10 @@ unmodified.
   blocked site fail, and later visits work. If a site fails, retry it.
 - **Telegram.** Only Telegram's web and API domains are covered. The apps'
   MTProto connections to raw IP addresses are not.
+- **Calls and app protocols.** Voice and video calls in Instagram, Messenger,
+  WhatsApp and Signal, Roblox game servers, and the WhatsApp and Viber phone
+  apps' own connections carry no TLS hostname, so they are not covered. The
+  Sites page notes this next to each app.
 - **Discord voice.** The voice preset is applied but not verified on a real
   call yet. `scan` says so; report whether it works for you.
 
@@ -317,6 +321,11 @@ warranty.
   (MIT): Discord and YouTube hosts and the Discord voice settings.
 - [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT): the
   extra Discord voice ports.
+- [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
+  (MIT): hosts for Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn,
+  TikTok and Pastebin, and the added Telegram, YouTube and Discord hosts.
+- [1andrevich/Re-filter-lists](https://github.com/1andrevich/Re-filter-lists)
+  (MIT): one TikTok host.
 - alimali54/zapret-win-turkey: the origin of the Turkish zapret2 strategies.
 
 See [NOTICE](NOTICE) for licenses. SplitDPI is MIT-licensed.

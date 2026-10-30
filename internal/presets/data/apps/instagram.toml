@@ -1,0 +1,7 @@
+schema = 1
+id = "instagram"
+name = "Instagram"
+quic = true
+hosts = ["cdninstagram.com", "edge-chat.facebook.com", "fbcdn.net", "ig.me", "instagram.com"]
+probe = ["https://www.instagram.com/robots.txt"]
+note = "Instagram voice and video calls use direct UDP and are not covered."

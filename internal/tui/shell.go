@@ -332,6 +332,60 @@ func scroll(lines []string, cursor, room, width int) []string {
 	return out
 }
 
+// scrollMore is scroll for a list to choose from: a muted "↑ n more" or
+// "↓ n more" line counts the items cut off above or below. first holds each
+// item's first line (nil: one line per item); cursor is an item.
+func (m Model) scrollMore(lines []string, first []int, cursor, room, width int) []string {
+	at := cursor
+	if first != nil {
+		at = 0
+		if cursor < len(first) {
+			at = first[cursor]
+		}
+	}
+	if len(lines) <= room || room < 3 {
+		return scroll(lines, at, room, width)
+	}
+	body := room - 2
+	start := min(max(at-body/2, 0), len(lines)-body)
+	if start == 0 {
+		body++
+	} else if start+body == len(lines) {
+		body++
+		start--
+	}
+	above, below := start, len(lines)-start-body
+	if first != nil {
+		// Start on an item, not under one cut off above; the cursor's item
+		// starts at or after the next one.
+		if i, ok := slices.BinarySearch(first, start); !ok && i < len(first) {
+			body = min(body, len(lines)-first[i])
+			start = first[i]
+		}
+		above, below = 0, 0
+		for _, l := range first {
+			switch {
+			case l < start:
+				above++
+			case l >= start+body:
+				below++
+			}
+		}
+	}
+	more := func(arrow string, n int) string {
+		pad := strings.Repeat(" ", lipgloss.Width(m.g.cursor)+1)
+		return ansi.Truncate(pad+mutedStyle.Render(arrow+" "+i18n.T("list_scroll.more", n)), width, "")
+	}
+	out := scroll(lines[start:start+body], 0, body, width)
+	if start > 0 {
+		out = append([]string{more(m.g.up, above)}, out...)
+	}
+	if start+body < len(lines) {
+		out = append(out, more(m.g.down, below))
+	}
+	return out
+}
+
 func (m Model) cursorMark(on bool) string {
 	if on {
 		return focusStyle.Render(m.g.cursor) + " "

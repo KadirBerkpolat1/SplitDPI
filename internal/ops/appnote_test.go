@@ -22,3 +22,20 @@ func TestAppNote(t *testing.T) {
 		t.Errorf("no data note = %q, want none", got)
 	}
 }
+
+// Every embedded app with a note has it in each UI language.
+func TestEmbeddedAppNotesTranslated(t *testing.T) {
+	defer i18n.Init("en")
+	set := presets.Load(presets.Embedded())
+	for _, lang := range i18n.Supported() {
+		i18n.Init(lang)
+		for id, a := range set.Apps {
+			if a.Note == "" {
+				continue
+			}
+			if i18n.Enum("appnote", id) == id || (lang != "en" && AppNote(a) == a.Note) {
+				t.Errorf("%s: no appnote.%s translation", lang, id)
+			}
+		}
+	}
+}

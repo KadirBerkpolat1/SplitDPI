@@ -1,0 +1,5 @@
+schema = 1
+id = "tiktok"
+name = "TikTok"
+hosts = ["byteoversea.com", "tiktok.com", "tiktokcdn-eu.com", "tiktokcdn-us.com", "tiktokcdn.com", "tiktokv.com", "tiktokv.eu", "tiktokv.us", "tiktokw.eu", "tiktokw.us", "ttwstatic.com"]
+probe = ["https://www.tiktok.com/robots.txt"]

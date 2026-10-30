@@ -1,0 +1,7 @@
+schema = 1
+id = "facebook"
+name = "Facebook / Messenger"
+quic = true
+hosts = ["facebook.com", "facebook.net", "fb.com", "fb.me", "fb.watch", "fbcdn.net", "fbsbx.com", "m.me", "messenger.com"]
+probe = ["https://www.facebook.com/robots.txt", "https://www.messenger.com/robots.txt"]
+note = "Messenger voice and video calls use direct UDP and are not covered."

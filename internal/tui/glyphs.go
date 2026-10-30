@@ -23,6 +23,7 @@ type glyphs struct {
 	menuKeys string
 	ellipsis string    // a page goes on below
 	bar      [3]string // the reachability bar: open, blocked, not tested
+	up, down string    // a list goes on above or below
 }
 
 var (
@@ -30,6 +31,7 @@ var (
 		border: lipgloss.RoundedBorder(),
 		logo:   "◆", dot: "●", dotOff: "○", cursor: "▸", menuMark: "▌", on: "✓", off: "✗", fail: "✗",
 		bullet: "•", sep: "·", menuKeys: "↑↓", ellipsis: "…", bar: [3]string{"█", "▓", "░"},
+		up: "↑", down: "↓",
 	}
 	asciiGlyphs = glyphs{
 		ascii: true,
@@ -39,6 +41,7 @@ var (
 		},
 		logo: "*", dot: "*", dotOff: "*", cursor: ">", menuMark: ">", on: "[x]", off: "[ ]", fail: "FAIL",
 		bullet: "-", sep: "-", menuKeys: "j/k", ellipsis: "...", bar: [3]string{"#", "x", "-"},
+		up: "^", down: "v",
 	}
 )
 

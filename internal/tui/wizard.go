@@ -756,7 +756,11 @@ func (m Model) wizardView(width, h int) string {
 	if len(list) == 0 {
 		return text
 	}
-	return text + "\n" + strings.Join(scroll(list, cursor, h-lipgloss.Height(text), width), "\n")
+	room := h - lipgloss.Height(text)
+	if w.step == wScan { // a log tail, not a list to choose from
+		return text + "\n" + strings.Join(scroll(list, cursor, room, width), "\n")
+	}
+	return text + "\n" + strings.Join(m.scrollMore(list, nil, cursor, room, width), "\n")
 }
 
 // wrapIndented wraps s to width, continuing under its leading spaces.
