@@ -203,9 +203,9 @@ func (m *Model) probeApps() tea.Cmd {
 func probeTodo(c probe.Category) string { return i18n.T("probeerr_tui." + string(c)) }
 
 // probeSummary counts the probed apps and sites that open, are blocked, or
-// have no address to test; it names up to three blocked ones, apps first,
-// and says what to do about the first.
-func (m Model) probeSummary(w int) []string {
+// have no address to test, under a bar of the three if bar; it names the
+// first names blocked ones, apps first, and says what to do about the first.
+func (m Model) probeSummary(w, names int, bar bool) []string {
 	if len(m.probe) == 0 {
 		return nil
 	}
@@ -247,11 +247,15 @@ func (m Model) probeSummary(w int) []string {
 		parts = append(parts, neutralStyle.Render(i18n.T("probe_summary.untested", untested)))
 	}
 	value := w - labelStyle.GetWidth()
-	lines := []string{
-		row(w, i18n.T("tui.probe"), m.reachBar([3]int{open, len(blocked), untested}, min(value, 40))),
-		row(w, "", joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), value)),
+	counts := joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), value)
+	lines := []string{row(w, i18n.T("tui.probe"), counts)}
+	if bar {
+		lines = []string{
+			row(w, i18n.T("tui.probe"), m.reachBar([3]int{open, len(blocked), untested}, min(value, 40))),
+			row(w, "", counts),
+		}
 	}
-	shown := blocked[:min(len(blocked), 3)]
+	shown := blocked[:min(len(blocked), names)]
 	for _, b := range shown {
 		lines = append(lines, row(w, "", badStyle.Render(m.g.fail)+" "+b.name+"  "+badStyle.Render(i18n.T("probe_short."+string(b.cat)))))
 	}
@@ -318,8 +322,46 @@ func joinWrapped(parts []string, sep string, width int) string {
 	return strings.Join(append(lines, cur), "\n")
 }
 
-func (statusPage) View(m Model, w, _ int) string {
+// statusFit is what the status page shows when it is short on rows. The
+// fits are tried in order, each giving up the least needed thing left.
+type statusFit struct {
+	spacers bool // blank lines between the parts
+	names   int  // blocked sites named
+	bar     bool // the reachability bar over the counts
+	hint    bool // what b (or r) does
+}
+
+var statusFits = []statusFit{
+	{true, 3, true, true},
+	{false, 3, true, true},
+	{false, 2, true, true},
+	{false, 1, true, true},
+	{false, 1, false, true},
+	{false, 1, false, false},
+}
+
+// View draws the first fit that takes at most h lines. If none does, the
+// last one is cut to h lines and ends with an ellipsis, so that nothing goes
+// missing unseen.
+func (statusPage) View(m Model, w, h int) string {
+	var lines []string
+	for _, fit := range statusFits {
+		lines = strings.Split(m.statusView(w, fit), "\n")
+		if len(lines) <= h {
+			break
+		}
+	}
+	if len(lines) > h {
+		lines = append(lines[:max(h-1, 0)], mutedStyle.Render(m.g.ellipsis))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) statusView(w int, fit statusFit) string {
 	lines := m.takeoverView(w)
+	if n := len(lines); n > 0 && !fit.spacers {
+		lines = lines[:n-1]
+	}
 	state := i18n.Enum("state", m.st.State)
 	switch {
 	case m.running:
@@ -353,19 +395,22 @@ func (statusPage) View(m Model, w, _ int) string {
 	if m.cfg.DNSOn() {
 		lines = append(lines, row(w, i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
 	}
-	lines = append(lines, m.probeSummary(w)...)
+	lines = append(lines, m.probeSummary(w, fit.names, fit.bar)...)
 	if m.st.LastError != "" {
 		lines = append(lines, row(w, i18n.T("tui.last_error"), badStyle.Render(m.st.LastError)))
 	}
 	if m.stErr != nil {
 		lines = append(lines, badStyle.Render(m.stErr.Error()))
 	}
-	if m.canStart() {
+	if m.canStart() && fit.hint {
 		k := "b"
 		if m.runMode() == config.RunBackground {
 			k = "r"
 		}
-		lines = append(lines, "", lipgloss.NewStyle().Width(w).Render(hint(k, i18n.T("background_tui.hint"))))
+		if fit.spacers {
+			lines = append(lines, "")
+		}
+		lines = append(lines, lipgloss.NewStyle().Width(w).Render(hint(k, i18n.T("background_tui.hint"))))
 	}
 	return strings.Join(lines, "\n")
 }

@@ -21,6 +21,7 @@ type glyphs struct {
 	bullet   string
 	sep      string
 	menuKeys string
+	ellipsis string    // a page goes on below
 	bar      [3]string // the reachability bar: open, blocked, not tested
 }
 
@@ -28,7 +29,7 @@ var (
 	unicodeGlyphs = glyphs{
 		border: lipgloss.RoundedBorder(),
 		logo:   "◆", dot: "●", dotOff: "○", cursor: "▸", menuMark: "▌", on: "✓", off: "✗", fail: "✗",
-		bullet: "•", sep: "·", menuKeys: "↑↓", bar: [3]string{"█", "▓", "░"},
+		bullet: "•", sep: "·", menuKeys: "↑↓", ellipsis: "…", bar: [3]string{"█", "▓", "░"},
 	}
 	asciiGlyphs = glyphs{
 		ascii: true,
@@ -37,7 +38,7 @@ var (
 			TopLeft: "+", TopRight: "+", BottomLeft: "+", BottomRight: "+",
 		},
 		logo: "*", dot: "*", dotOff: "*", cursor: ">", menuMark: ">", on: "[x]", off: "[ ]", fail: "FAIL",
-		bullet: "-", sep: "-", menuKeys: "j/k", bar: [3]string{"#", "x", "-"},
+		bullet: "-", sep: "-", menuKeys: "j/k", ellipsis: "...", bar: [3]string{"#", "x", "-"},
 	}
 )
 
