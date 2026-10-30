@@ -308,6 +308,30 @@ Terminal arayüzünde Ayarlar sayfası da listeyi gösterdikten sonra aynı işi
 yapar. Bu işlem geri alınamaz: SplitDPI'yi yeniden kullanmak için
 [Hızlı başlangıç](#hızlı-başlangıç) bölümündeki gibi yeniden kurun.
 
+## Ülkeler
+
+SplitDPI ülkenizi biliyorsa kurulum, orada SNI ile engellenen uygulamaları
+önceden seçer; SplitDPI'nin aşabildiği engel türü budur. Yalnızca Türkiye
+gerçek bir bağlantıda denendi; diğer satırlar Ağustos–Ekim 2026 arasındaki
+[OONI](https://explorer.ooni.org) ölçümlerine dayanır.
+
+| Ülke | Önceden seçilen uygulamalar | SplitDPI ne yapabilir | Ne yapamaz |
+|---|---|---|---|
+| Türkiye | Discord, Roblox | Gerçek bir Türk Telekom hattında denendi. İki uygulama da DNS ve SNI ile engelli ([OONI](https://explorer.ooni.org/findings/267640924000)). | |
+| Rusya | YouTube, Discord, WhatsApp, X, Viber | Kısmen, denenmedi: bu uygulamalar SNI ile engelli ([OONI](https://ooni.org/post/2024-russia-report)), ama çalışan stratejiler sağlayıcıya göre değişir ve sık bozulur. Düz DNS yanıtları değiştiriliyor, bu yüzden [şifreli DNS](#şifreli-dns)'i açın. | Telegram, Instagram ve Facebook IP adresiyle engelli. Mobil beyaz liste modu ([net4people](https://github.com/net4people/bbs/issues/516)) ve yurt dışı barındırmaya giden bağlantıların yaklaşık 16 KB'den sonra donması ([net4people](https://github.com/net4people/bbs/issues/490)) aşılamaz. |
+| Özbekistan | TikTok | Denenmedi. TikTok SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030202526.825336_UZ_webconnectivity_052c7879728aa664)). | |
+| Pakistan | Signal | Denenmedi. Signal SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030220511.996290_PK_signal_5ac96b6fcef513f4)). | Signal aramaları. Güvenlik duvarı TCP akışlarını birleştirdiği için basit bölme stratejileri işe yaramayabilir. |
+| Umman | Signal, Viber | Denenmedi. İkisi de SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030153230.174668_OM_signal_587cc9ac388c198c)). | Signal ve Viber aramaları. |
+| Myanmar | X, Signal | Denenmedi. İkisi de birkaç sağlayıcıda SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030164419.537459_MM_webconnectivity_04a4276a4ab2ba2c)). | Facebook, Instagram, Messenger ve WhatsApp IP adresiyle engelli ([OONI](https://explorer.ooni.org/m/20261030185034.005475_MM_webconnectivity_feef379ddff0b397)). Signal aramaları. |
+| Tanzanya | Discord, Signal | Denenmedi. İkisi de SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030224510.394340_TZ_signal_ff0333dd53e6a624)). | X ve Telegram'ın web sitesi IP adresiyle engelli ([OONI](https://explorer.ooni.org/m/20261030115612.829938_TZ_webconnectivity_595b8e6a4a66486b)). Signal aramaları. |
+| Suriye | Discord | Denenmedi. Discord iki sağlayıcıda SNI ile engelli; ölçüm sayısı az ([OONI](https://explorer.ooni.org/m/20261013164632.158025_SY_webconnectivity_9e07ffe0537f7f05)). | |
+
+Rusya, Türkiye ve Özbekistan için ayrıca SplitDPI'nin dokunmadığı yerli
+sitelerin (bankalar, devlet portalları gibi) bir listesi gelir.
+
+İran ve Çin desteklenmiyor: oradaki engeller IP adreslerine ve izin listelerine
+dayanır, SplitDPI bunları aşamaz.
+
 ## Hazır ayarlar nereden geliyor
 
 Sağlayıcı stratejilerinin çıkış noktası Çağrı Taşkın'ın

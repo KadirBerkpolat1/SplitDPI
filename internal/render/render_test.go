@@ -188,6 +188,33 @@ func TestAppHostsLeaveExclude(t *testing.T) {
 	}
 }
 
+// The shipped global list names whatsapp.com, x.com and youtube.com, which
+// Russia's default apps need.
+func TestRussiaDefaultsLeaveExclude(t *testing.T) {
+	in := input()
+	in.Set = presets.Load(presets.Embedded())
+	in.Country = "RU"
+	in.Cfg.Apps = in.Set.Countries["RU"].DefaultApps
+	out := mustRender(t, in)
+	for _, d := range out.Exclude {
+		for _, h := range out.Hostlist {
+			if d == h || strings.HasSuffix(d, "."+h) || strings.HasSuffix(h, "."+d) {
+				t.Errorf("exclude %q cancels enabled host %q", d, h)
+			}
+		}
+	}
+	for _, d := range []string{"gosuslugi.ru", "vk.com", "microsoft.com"} {
+		if !slices.Contains(out.Exclude, d) {
+			t.Errorf("exclude lacks %q", d)
+		}
+	}
+	for _, d := range []string{"whatsapp.com", "x.com", "youtube.com"} {
+		if !slices.Contains(out.Hostlist, d) || slices.Contains(out.Exclude, d) {
+			t.Errorf("%s: want in hostlist, not in exclude", d)
+		}
+	}
+}
+
 func TestHostlist(t *testing.T) {
 	in := input()
 	in.UserHosts = []string{"example.org", "discord.com"}

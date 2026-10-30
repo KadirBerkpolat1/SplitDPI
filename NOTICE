@@ -25,7 +25,8 @@ host lists at c4ad8548bf3f5f7eeadfda263913283d246e132a,
 general.bat at 73cee5db28940ba3cdb09b53c8b06d7afcd1a75f
 Copyright (c) 2024-2026 Flowseal
 Licensed under the MIT License.
-Used: Discord and YouTube hosts; Discord voice ports, L7 filters and repeats.
+Used: Discord and YouTube hosts; Discord voice ports, L7 filters and repeats;
+the Russian domains of lists/list-exclude.txt (exclude/ru.txt).
 
 dmfrpro/zapret2-flake (https://github.com/dmfrpro/zapret2-flake)
 at d0867ec745c282eaacc985010482b199427b6f75

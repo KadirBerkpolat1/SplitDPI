@@ -1,0 +1,4 @@
+schema = 1
+code = "UZ"
+default_apps = ["tiktok"]
+exclude = "uz"

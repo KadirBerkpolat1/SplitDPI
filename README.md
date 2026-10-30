@@ -284,6 +284,30 @@ run it again once that is fixed. Settings in the terminal UI does the same
 after showing the list. It cannot be undone: to use SplitDPI again, install it
 again as in [Quick start](#quick-start).
 
+## Countries
+
+When SplitDPI knows your country, setup preselects the apps blocked there by
+SNI, the kind of block it can bypass. Only Turkey has been tested on a real
+connection; the other rows come from [OONI](https://explorer.ooni.org)
+measurements from August to October 2026.
+
+| Country | Preselected apps | What SplitDPI can do | What it cannot do |
+|---|---|---|---|
+| Turkey | Discord, Roblox | Tested on a real Türk Telekom line. Both apps are blocked by DNS and SNI ([OONI](https://explorer.ooni.org/findings/267640924000)). | |
+| Russia | YouTube, Discord, WhatsApp, X, Viber | Partly, not tested: these apps are blocked by SNI ([OONI](https://ooni.org/post/2024-russia-report)), but working strategies differ by ISP and break often. Plain DNS is rewritten, so turn on [encrypted DNS](#encrypted-dns). | Telegram, Instagram and Facebook are blocked by IP address. Mobile whitelist mode ([net4people](https://github.com/net4people/bbs/issues/516)) and the freeze after about 16 KB to foreign hosting ([net4people](https://github.com/net4people/bbs/issues/490)) cannot be bypassed. |
+| Uzbekistan | TikTok | Not tested. TikTok is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030202526.825336_UZ_webconnectivity_052c7879728aa664)). | |
+| Pakistan | Signal | Not tested. Signal is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030220511.996290_PK_signal_5ac96b6fcef513f4)). | Signal calls. The firewall reassembles TCP, so simple split strategies may fail. |
+| Oman | Signal, Viber | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030153230.174668_OM_signal_587cc9ac388c198c)). | Signal and Viber calls. |
+| Myanmar | X, Signal | Not tested. Both are blocked by SNI on several ISPs ([OONI](https://explorer.ooni.org/m/20261030164419.537459_MM_webconnectivity_04a4276a4ab2ba2c)). | Facebook, Instagram, Messenger and WhatsApp are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030185034.005475_MM_webconnectivity_feef379ddff0b397)). Signal calls. |
+| Tanzania | Discord, Signal | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030224510.394340_TZ_signal_ff0333dd53e6a624)). | X and Telegram's website are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030115612.829938_TZ_webconnectivity_595b8e6a4a66486b)). Signal calls. |
+| Syria | Discord | Not tested. Discord is blocked by SNI on two ISPs, from few measurements ([OONI](https://explorer.ooni.org/m/20261013164632.158025_SY_webconnectivity_9e07ffe0537f7f05)). | |
+
+Russia, Turkey and Uzbekistan also ship a list of domestic sites, such as banks
+and government portals, that SplitDPI leaves alone.
+
+Iran and China are not supported: blocking there is based on IP addresses and
+allowlists, which SplitDPI cannot get past.
+
 ## Where presets come from
 
 The ISP strategies started from

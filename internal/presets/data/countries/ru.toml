@@ -1,3 +1,4 @@
 schema = 1
 code = "RU"
-default_apps = ["youtube", "discord"]
+default_apps = ["youtube", "discord", "whatsapp", "x", "viber"]
+exclude = "ru"
