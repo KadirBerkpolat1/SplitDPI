@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -72,8 +73,13 @@ type fake struct {
 	uninstallErr error
 
 	engineErr error
+	engineDir string // the installed engine, "" if none
 
 	systemDNS string // the resolver that already encrypts DNS, if any
+
+	presetsErr error
+	takenOver  []string
+	revertRep  ops.RevertReport
 }
 
 func newFake() *fake {
@@ -233,6 +239,9 @@ func (f *fake) Takeover(ctx context.Context, fr ops.Foreign) (ops.TakeoverReport
 			f.foreign[i].Running, f.foreign[i].Service.Enabled = false, false
 		}
 	}
+	if fr.Service.Name != "" {
+		f.takenOver = append(f.takenOver, fr.Service.Name+" ("+string(fr.Service.Init)+")")
+	}
 	return f.takeoverRep, nil
 }
 
@@ -271,7 +280,85 @@ func (f *fake) EngineInstall(ctx context.Context, from string) (engine.Engine, e
 		return engine.Engine{}, f.engineErr
 	}
 	f.checks = slices.DeleteFunc(f.checks, func(c doctor.Check) bool { return c.ID == "engine" })
-	return engine.Engine{Dir: "/opt/splitdpi/zapret2-" + engine.Version}, nil
+	f.engineDir = "/opt/splitdpi/zapret2-" + engine.Version
+	return engine.Engine{Dir: f.engineDir}, nil
+}
+
+func (f *fake) EngineStatus() (engine.Engine, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return engine.Engine{Dir: f.engineDir}, f.engineDir != ""
+}
+
+// The config setters check their values the way ops does.
+func (f *fake) SetMode(mode config.Mode) error {
+	f.record("mode " + string(mode))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if mode == config.ModeApps && len(f.cfg.Apps) == 0 && len(f.sites) == 0 {
+		return ops.ErrAppsModeEmpty
+	}
+	f.cfg.Mode = mode
+	return nil
+}
+func (f *fake) SetSkipIfaces(list []string) error {
+	f.record("skip_ifaces " + strings.Join(list, ","))
+	for _, i := range list {
+		if strings.ContainsAny(i, " /") || len(i) > 15 {
+			return errors.New("invalid interface name " + i)
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cfg.SkipIfaces = slices.Clone(list)
+	return nil
+}
+func (f *fake) SetIPInfoURL(u string) error {
+	f.record("ipinfo_url " + u)
+	if u == "" {
+		u = config.Default().IPInfoURL
+	}
+	if !strings.HasPrefix(u, "https://") || len(u) == len("https://") {
+		return errors.New("not an https URL: " + u)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cfg.IPInfoURL = u
+	return nil
+}
+func (f *fake) SetQNum(n int) error {
+	f.record(fmt.Sprintf("qnum %d", n))
+	if n < 0 || n > 65535 {
+		return fmt.Errorf("queue number %d is not between 0 and 65535", n)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cfg.QNum = n
+	return nil
+}
+func (f *fake) PresetsUpdate(context.Context) (string, int, error) {
+	f.record("presets update")
+	if f.presetsErr != nil {
+		return "", 0, f.presetsErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.set.Version = "2026.10.30"
+	return f.set.Version, 12, nil
+}
+func (f *fake) TakenOver() ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.takenOver), nil
+}
+
+// Revert turns the taken-over services back on, as the real one does.
+func (f *fake) Revert(ctx context.Context, rulesOnly, purge bool) ops.RevertReport {
+	f.record(fmt.Sprintf("revert %v %v", rulesOnly, purge))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.takenOver = nil
+	return f.revertRep
 }
 
 func newModel(t *testing.T, f *fake) Model {

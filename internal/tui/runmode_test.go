@@ -17,7 +17,7 @@ var startCalls = []string{"background", "enable", "stop", "run ended"}
 
 func TestSettingsRunModePicker(t *testing.T) {
 	f := newFake()
-	m := toSetting(t, f, rowRunMode)
+	m := toSetting(t, f, "run_mode")
 	has(t, m.View(), "Run mode")
 	has(t, m.View(), "In this window")
 	if cli := footerCLI(m); cli != "sudo splitdpi run" {
@@ -25,8 +25,8 @@ func TestSettingsRunModePicker(t *testing.T) {
 	}
 
 	m = press(t, m, "enter")
-	if m.settings.runMode == nil || *m.settings.runMode != 0 {
-		t.Fatalf("picker %v, want open on window", m.settings.runMode)
+	if p := m.settings.pick; p == nil || p.id != "run_mode" || p.cursor != 0 {
+		t.Fatalf("picker %+v, want open on window", p)
 	}
 	v := flat(pageText(m.View()))
 	has(t, v, "How should r on the Status page start the bypass?")
@@ -41,13 +41,13 @@ func TestSettingsRunModePicker(t *testing.T) {
 		}
 	}
 	m = press(t, press(t, m, "q"), "esc")
-	if m.settings.runMode != nil || m.quitting || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "run mode ") }) {
-		t.Fatalf("esc: picker %v, quitting %v, calls %q", m.settings.runMode, m.quitting, f.calls)
+	if m.settings.pick != nil || m.quitting || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "run mode ") }) {
+		t.Fatalf("esc: picker %v, quitting %v, calls %q", m.settings.pick, m.quitting, f.calls)
 	}
 
 	m = press(t, press(t, press(t, m, "enter"), "down"), "enter")
-	if m.settings.runMode != nil || m.dialog != nil {
-		t.Fatalf("choosing left picker %v, dialog %v", m.settings.runMode, m.dialog)
+	if m.settings.pick != nil || m.dialog != nil {
+		t.Fatalf("choosing left picker %v, dialog %v", m.settings.pick, m.dialog)
 	}
 	if !f.called("run mode background") {
 		t.Fatalf("not saved; calls %q", f.calls)
@@ -66,8 +66,8 @@ func TestSettingsRunModePicker(t *testing.T) {
 	if cli := footerCLI(m); cli != "sudo splitdpi run --background" {
 		t.Errorf("row CLI after choosing %q", cli)
 	}
-	if m = press(t, m, "enter"); *m.settings.runMode != 1 {
-		t.Errorf("picker reopened on %d, want the saved background", *m.settings.runMode)
+	if m = press(t, m, "enter"); m.settings.pick.cursor != 1 {
+		t.Errorf("picker reopened on %d, want the saved background", m.settings.pick.cursor)
 	}
 }
 

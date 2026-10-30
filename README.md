@@ -68,8 +68,12 @@ uses; it only saves the choice, and the CLI commands stay as they are.
 - **Left:** the menu: Status, Sites, Strategy, Scan, Logs and Settings. Use the
   arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
   the menu.
-- **Right:** the chosen page. Settings holds the language, the run mode,
-  encrypted DNS and removing SplitDPI.
+- **Right:** the chosen page. Settings lists every setting with its value,
+  grouped as General (language, run mode), Bypass (scope, excluded sites,
+  strategy), DNS, Network (interfaces to leave alone, provider lookup
+  service), Maintenance (update presets, install the engine, check the
+  system, switch from or back to zapret, uninstall) and Advanced (queue
+  number). `/` searches the list; Esc clears the search.
 - **Bottom:** the keys of the page and, for the selected action, the command
   that does the same thing, so anything you do in the UI can be scripted.
 

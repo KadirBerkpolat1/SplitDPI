@@ -139,6 +139,7 @@ func (m Model) takeoverUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		if msg.err != nil {
 			m.note = errText(msg.err)
 		}
+		m.loadTakenOver()
 		return m, tea.Batch(m.refresh(), m.detectForeign()), true
 	}
 	return m, nil, false

@@ -5,24 +5,45 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
 
-// The settings page: one row per setting, each with its own actions.
+// The settings page: every setting in groups, one row each with its value.
+// / filters the rows; each row opens its own editor or runs its action.
 type settingsPage struct{}
 
 type settingsScreen struct {
-	cursor      int
-	dns         *dnsPicker // open while choosing the encrypted DNS
-	runMode     *int       // the run mode picker's cursor, while it is open
-	result      []string   // what the last uninstall removed or left
+	cursor    int // over the rows the search leaves
+	search    textinput.Model
+	searching bool // the search box has the keys
+
+	// The editors; at most one is open.
+	dns        *dnsPicker
+	pick       *picker
+	text       *textEditor
+	ifaces     *ifaceEditor
+	doctorOpen bool
+
+	busy      string         // the maintenance row at work, if any
+	checks    []doctor.Check // the last system check
+	checking  bool
+	engine    string   // the installed engine's version, "" if none
+	presets   string   // the preset data's version
+	excluded  int      // how many sites are excluded
+	takenOver []string // the services revert turns back on
+
+	result      []string // what the last maintenance action did
 	uninstalled bool
 }
 
@@ -34,17 +55,48 @@ type dnsPicker struct {
 	system string // the resolver that already encrypts the system's DNS, if any
 }
 
+// setting is one row. shown hides a row that does not apply here.
 type setting struct {
+	id      string
+	group   int
 	label   func() string
 	value   func(m Model) string
 	actions func(m Model) []action
+	shown   func(m Model) bool
 }
 
+// The groups, in order.
+const (
+	grpGeneral = iota
+	grpBypass
+	grpDNS
+	grpNetwork
+	grpMaint
+	grpAdvanced
+)
+
+var groupKeys = []string{"general", "bypass", "dns", "network", "maintenance", "advanced"}
+
+func groupName(g int) string { return i18n.T("settings_group." + groupKeys[g]) }
+
+func label(key string) func() string { return func() string { return i18n.T(key) } }
+
 var settings = []setting{
-	{label: func() string { return i18n.T("shell.settings.lang") }, value: langValue, actions: langActions},
-	{label: func() string { return i18n.T("run_mode.label") }, value: runModeValue, actions: runModeActions},
-	{label: func() string { return i18n.T("settings_dns.label") }, value: dnsValue, actions: dnsActions},
-	{label: func() string { return i18n.T("settings_uninstall.label") }, value: uninstallValue, actions: uninstallActions},
+	{id: "lang", group: grpGeneral, label: label("shell.settings.lang"), value: langValue, actions: langActions},
+	{id: "run_mode", group: grpGeneral, label: label("run_mode.label"), value: runModeValue, actions: runModeActions},
+	{id: "mode", group: grpBypass, label: label("settings_mode.label"), value: modeValue, actions: modeActions},
+	{id: "exclude", group: grpBypass, label: label("settings_exclude.label"), value: excludeValue, actions: excludeActions},
+	{id: "strategy", group: grpBypass, label: label("settings_strategy.label"), value: strategyValue, actions: strategyActions},
+	{id: "dns", group: grpDNS, label: label("settings_dns.label"), value: dnsValue, actions: dnsActions},
+	{id: "skip_ifaces", group: grpNetwork, label: label("settings_ifaces.label"), value: ifacesValue, actions: ifacesActions},
+	{id: "ipinfo_url", group: grpNetwork, label: label("settings_ipinfo.label"), value: ipinfoValue, actions: ipinfoActions},
+	{id: "presets", group: grpMaint, label: label("settings_presets.label"), value: presetsValue, actions: presetsActions},
+	{id: "engine", group: grpMaint, label: label("settings_engine.label"), value: engineValue, actions: engineActions},
+	{id: "doctor", group: grpMaint, label: label("settings_doctor.label"), value: doctorValue, actions: doctorActions},
+	{id: "takeover", group: grpMaint, label: label("settings_takeover.label"), value: takeoverValue, actions: takeoverActions, shown: canTakeOverAny},
+	{id: "revert", group: grpMaint, label: label("settings_revert.label"), value: revertValue, actions: revertActions, shown: hasTakenOver},
+	{id: "uninstall", group: grpMaint, label: label("settings_uninstall.label"), value: uninstallValue, actions: uninstallActions},
+	{id: "qnum", group: grpAdvanced, label: label("settings_qnum.label"), value: qnumValue, actions: qnumActions},
 }
 
 // The languages offered; the others still work with --lang.
@@ -76,39 +128,179 @@ func (settingsPage) Title() string { return i18n.T("shell.menu.settings") }
 func (settingsPage) Hint() string  { return i18n.T("shell.hint.settings") }
 
 func (settingsPage) Open(m *Model) tea.Cmd {
-	m.settings.dns, m.settings.runMode = nil, nil
-	return nil
+	s := &m.settings
+	s.dns, s.pick, s.text, s.ifaces, s.doctorOpen = nil, nil, nil, nil, false
+	s.search, s.searching = textinput.Model{}, false
+	m.loadSettings()
+	return m.detectForeign()
+}
+
+// loadSettings reads what the rows show besides the config.
+func (m *Model) loadSettings() {
+	s := &m.settings
+	s.engine = ""
+	if e, ok := m.b.EngineStatus(); ok {
+		s.engine = engineVersion(e)
+	}
+	s.presets = m.b.PresetsList().Version
+	list, err := m.b.ExcludeList()
+	if err != nil {
+		m.note = errText(err)
+	}
+	s.excluded = len(list)
+	m.loadTakenOver()
+}
+
+// shownSettings are the rows that apply here and match the search.
+func (m Model) shownSettings() []setting {
+	q := fold(strings.TrimSpace(m.settings.search.Value()))
+	var out []setting
+	for _, st := range settings {
+		if st.shown != nil && !st.shown(m) {
+			continue
+		}
+		if q != "" && !strings.Contains(fold(groupName(st.group)+" "+st.label()+" "+ansi.Strip(st.value(m))+" "+st.id), q) {
+			continue
+		}
+		out = append(out, st)
+	}
+	return out
+}
+
+// fold makes text comparable whatever its case, Turkish dotted and dotless
+// i included: i, ı, I and İ are all the same letter to a search.
+func fold(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case 'I', 'İ', 'ı':
+			return 'i'
+		case '\u0307': // the dot strings.ToLower leaves after İ
+			return -1
+		}
+		return unicode.ToLower(r)
+	}, s)
+}
+
+// settingsCursor is the cursor kept within the n shown rows.
+func (m Model) settingsCursor(n int) int { return max(min(m.settings.cursor, n-1), 0) }
+
+// current is the row under the cursor, if any is shown.
+func (m Model) current() (setting, bool) {
+	rows := m.shownSettings()
+	if len(rows) == 0 {
+		return setting{}, false
+	}
+	return rows[m.settingsCursor(len(rows))], true
 }
 
 func (settingsPage) Actions(m Model) []action {
+	s := m.settings
 	switch {
-	case m.settings.uninstalled:
+	case s.uninstalled:
 		return []action{{Key: "esc", Label: i18n.T("tui.act.quit")}} // every key quits
-	case m.settings.dns != nil:
+	case s.dns != nil:
 		return m.dnsPickerActions()
-	case m.settings.runMode != nil:
-		return m.runModePickerActions()
+	case s.pick != nil:
+		return m.pickerActions()
+	case s.text != nil:
+		return m.textActions()
+	case s.ifaces != nil:
+		return m.ifaceActions()
+	case s.doctorOpen:
+		return m.doctorViewActions()
+	case s.searching:
+		return []action{
+			{Key: "enter", Label: i18n.T("settings_page.search_done"), Do: func(m *Model) tea.Cmd { m.endSearch(); return nil }},
+			{Key: "esc", Label: i18n.T("settings_page.search_clear"), Do: func(m *Model) tea.Cmd { m.clearSearch(); return nil }},
+		}
 	}
-	return settings[m.settings.cursor].actions(m)
+	var acts []action
+	if st, ok := m.current(); ok {
+		acts = st.actions(m)
+	}
+	acts = append(acts, action{Key: "/", Label: i18n.T("settings_page.search"), Do: (*Model).startSearch})
+	if s.search.Value() != "" {
+		acts = append(acts, action{Key: "esc", Label: i18n.T("settings_page.search_clear"), Do: func(m *Model) tea.Cmd { m.clearSearch(); return nil }})
+	}
+	return acts
 }
 
-func (settingsPage) Key(m Model, _ tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
+func (m *Model) startSearch() tea.Cmd {
+	in := textinput.New()
+	in.Prompt, in.Placeholder, in.CharLimit = "/ ", i18n.T("settings_page.search_placeholder"), 40
+	in.SetValue(m.settings.search.Value())
+	cmd := in.Focus()
+	m.settings.search, m.settings.searching, m.focus, m.inPage = in, true, 0, true
+	return cmd
+}
+
+// endSearch leaves the box and keeps its filter, so the rows' keys work.
+func (m *Model) endSearch() {
+	m.settings.searching, m.focus = false, 0
+	m.settings.search.Blur()
+}
+
+func (m *Model) clearSearch() {
+	m.settings.search, m.settings.searching, m.settings.cursor, m.focus = textinput.Model{}, false, 0, 0
+}
+
+func (settingsPage) Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
+	st := m.settings
 	switch {
-	case m.settings.dns != nil:
+	case st.dns != nil:
 		return m.dnsPickerKey(s)
-	case m.settings.runMode != nil:
-		return m.runModePickerKey(s)
+	case st.pick != nil:
+		return m.pickerKey(s)
+	case st.text != nil:
+		return m.textKey(k)
+	case st.ifaces != nil:
+		return m.ifaceKey(k)
+	case st.doctorOpen:
+		return m.doctorViewKey(s)
+	case st.searching:
+		return m.searchKey(k, s)
 	}
-	n := len(settings)
+	n := len(m.shownSettings())
 	switch s {
 	case "up", "k":
-		m.settings.cursor = (m.settings.cursor + n - 1) % n
+		m.settings.cursor, m.focus = (m.settingsCursor(n)+n-1)%max(n, 1), 0
 		return m, nil, n > 1
 	case "down", "j":
-		m.settings.cursor = (m.settings.cursor + 1) % n
+		m.settings.cursor, m.focus = (m.settingsCursor(n)+1)%max(n, 1), 0
 		return m, nil, n > 1
+	case "esc":
+		if st.search.Value() != "" {
+			m.clearSearch()
+			return m, nil, true
+		}
 	}
 	return m, nil, false
+}
+
+// searchKey types into the search box; the arrows still move over the rows.
+func (m Model) searchKey(k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
+	n := len(m.shownSettings())
+	switch s {
+	case "esc":
+		m.clearSearch()
+		return m, nil, true
+	case "enter":
+		m.endSearch()
+		return m, nil, true
+	case "up":
+		m.settings.cursor = (m.settingsCursor(n) + n - 1) % max(n, 1)
+		return m, nil, true
+	case "down":
+		m.settings.cursor = (m.settingsCursor(n) + 1) % max(n, 1)
+		return m, nil, true
+	}
+	before := m.settings.search.Value()
+	var cmd tea.Cmd
+	m.settings.search, cmd = m.settings.search.Update(k)
+	if m.settings.search.Value() != before {
+		m.settings.cursor = 0
+	}
+	return m, cmd, true
 }
 
 func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
@@ -164,7 +356,10 @@ func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, m.refresh(), true
 	}
-	return m, nil, false
+	if next, cmd, ok := m.editorUpdate(msg); ok {
+		return next, cmd, true
+	}
+	return m.maintUpdate(msg)
 }
 
 func (settingsPage) View(m Model, w, h int) string {
@@ -176,37 +371,94 @@ func (settingsPage) View(m Model, w, h int) string {
 		return lipgloss.NewStyle().Width(w).MaxHeight(h).Render(strings.Join(lines, "\n"))
 	case s.dns != nil:
 		return m.dnsPickerView(w, h)
-	case s.runMode != nil:
-		return m.runModePickerView(w, h)
+	case s.pick != nil:
+		return m.pickerView(w, h)
+	case s.text != nil:
+		return m.textView(w, h)
+	case s.ifaces != nil:
+		return m.ifaceView(w, h)
+	case s.doctorOpen:
+		return m.doctorView(w, h)
+	}
+	return m.settingsList(w, h)
+}
+
+var groupStyle = lipgloss.NewStyle().Bold(true)
+
+// settingsList is the search line, the rows under their group headers, then
+// what the selected row is for and what the last action did.
+func (m Model) settingsList(w, h int) string {
+	s := m.settings
+	var head []string
+	switch {
+	case s.searching:
+		head = []string{s.search.View(), ""}
+	case s.search.Value() != "":
+		head = []string{mutedStyle.Render(i18n.T("settings_page.filtered", s.search.Value())), ""}
 	}
 	labelW := 0
 	for _, st := range settings {
 		labelW = max(labelW, lipgloss.Width(st.label()))
 	}
-	lines := make([]string, len(settings))
-	for i, st := range settings {
-		label := lipgloss.NewStyle().Width(labelW + 2).Render(st.label())
-		lines[i] = m.listMark(i == s.cursor) + label + st.value(m)
+	rows := m.shownSettings()
+	cur := m.settingsCursor(len(rows))
+	var lines []string
+	at, group := 0, -1
+	for i, st := range rows {
+		if st.group != group {
+			group = st.group
+			lines = append(lines, groupStyle.Render(groupName(group)))
+		}
+		if i == cur {
+			at = len(lines)
+		}
+		lines = append(lines, m.listMark(i == cur)+lipgloss.NewStyle().Width(labelW+2).Render(st.label())+st.value(m))
 	}
-	out := scroll(lines, s.cursor, len(lines), w)
+	var tail []string
+	if len(rows) == 0 {
+		lines = []string{mutedStyle.Render(i18n.T("settings_page.no_match"))}
+	} else {
+		tail = append(tail, "")
+		tail = append(tail, strings.Split(mutedStyle.Width(w).Render(i18n.T("settings_help."+rows[cur].id)), "\n")...)
+	}
 	if len(s.result) > 0 {
-		res := lipgloss.NewStyle().Width(w).MaxHeight(max(h-len(out)-1, 1)).Render(strings.Join(s.result, "\n"))
-		out = append(out, "", res)
+		tail = append(tail, "")
+		tail = append(tail, strings.Split(lipgloss.NewStyle().Width(w).Render(strings.Join(s.result, "\n")), "\n")...)
 	}
-	return strings.Join(out, "\n")
+	// The rows keep at least a few lines; the tail gives way.
+	room := max(h-len(head)-len(tail), min(6, len(lines)))
+	tail = tail[:min(len(tail), max(h-len(head)-room, 0))]
+	out := append(head, scroll(lines, at, room, w)...)
+	return strings.Join(append(out, tail...), "\n")
+}
+
+// savedNote says a setting was saved as value, and when it applies.
+func (m Model) savedNote(label, value string) string {
+	note := i18n.T("settings_page.saved", label, value)
+	if m.bypassOn() {
+		note += " " + i18n.T("settings_dns.on_restart")
+	}
+	return note
 }
 
 func langValue(Model) string { return i18n.T("shell.lang." + i18n.Lang()) }
 
-// langActions switch to the next offered language; it applies at once and
-// is saved as the config's lang.
+// langActions: enter picks a language, space switches to the next one; it
+// applies at once and is saved as the config's lang.
 func langActions(Model) []action {
 	next := langs[(slices.Index(langs, i18n.Lang())+1)%len(langs)]
-	return []action{{Key: "space", Label: i18n.T("shell.settings.lang_to", i18n.T("shell.lang."+next)), Do: func(m *Model) tea.Cmd {
-		i18n.Init(next)
-		b := m.b
-		return func() tea.Msg { return langMsg{b.SetLang(next)} }
-	}}}
+	return []action{
+		{Key: "enter", Label: i18n.T("settings_page.lang_choose"), CLI: "sudo splitdpi config set lang " + i18n.Lang(), Do: func(m *Model) tea.Cmd { return m.openPicker("lang") }},
+		{Key: "space", Label: i18n.T("shell.settings.lang_to", i18n.T("shell.lang."+next)), CLI: "sudo splitdpi config set lang " + next, Do: func(m *Model) tea.Cmd {
+			return m.setLang(next)
+		}},
+	}
+}
+
+func (m *Model) setLang(lang string) tea.Cmd {
+	i18n.Init(lang)
+	b := m.b
+	return func() tea.Msg { return langMsg{b.SetLang(lang)} }
 }
 
 // The run modes in the picker's order.
@@ -238,57 +490,16 @@ func runModeValue(m Model) string { return runModeName(m.runMode()) }
 
 func runModeActions(m Model) []action {
 	return []action{{Key: "enter", Label: i18n.T("run_mode.change"), CLI: runModeCLI(m.runMode()), Do: func(m *Model) tea.Cmd {
-		c := max(slices.Index(runModes, m.runMode()), 0)
-		m.settings.runMode, m.focus = &c, 0
-		return nil
+		return m.openPicker("run_mode")
 	}}}
-}
-
-func (m Model) runModePickerActions() []action {
-	mode := runModes[*m.settings.runMode]
-	return []action{
-		{Key: "enter", Label: i18n.T("tui.act.choose"), CLI: runModeCLI(mode), Do: (*Model).chooseRunMode},
-		{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { m.settings.runMode = nil; return nil }},
-	}
-}
-
-// runModePickerKey moves the cursor and leaves enter to the footer; other
-// keys do nothing while the picker is open.
-func (m Model) runModePickerKey(s string) (Model, tea.Cmd, bool) {
-	c, n := *m.settings.runMode, len(runModes)
-	switch s {
-	case "up", "k":
-		c = (c + n - 1) % n
-	case "down", "j":
-		c = (c + 1) % n
-	case "esc":
-		m.settings.runMode = nil
-		return m, nil, true
-	case "enter", "tab", "shift+tab", "left", "right":
-		return m, nil, false
-	}
-	m.settings.runMode = &c
-	return m, nil, true
 }
 
 // chooseRunMode only saves the choice, so it needs no confirm: nothing
 // starts or stops until r is pressed.
-func (m *Model) chooseRunMode() tea.Cmd {
-	mode := runModes[*m.settings.runMode]
-	m.settings.runMode = nil
+func (m *Model) chooseRunMode(mode config.RunMode) tea.Cmd {
+	m.settings.pick = nil
 	b := m.b
 	return func() tea.Msg { return runModeMsg{mode, b.SetRunMode(mode)} }
-}
-
-func (m Model) runModePickerView(w, h int) string {
-	head := append(strings.Split(lipgloss.NewStyle().Width(w).Render(i18n.T("run_mode.head")), "\n"), "")
-	names, notes := make([]string, len(runModes)), make([]string, len(runModes))
-	for i, r := range runModes {
-		names[i], notes[i] = runModeName(r), i18n.T("run_mode."+string(r)+"_note")
-	}
-	cur := m.runMode()
-	lines, at := m.choiceList(names, notes, func(i int) bool { return runModes[i] == cur }, *m.settings.runMode, w)
-	return strings.Join(append(head, scroll(lines, at, h-len(head), w)...), "\n")
 }
 
 // choiceList lays out a picker's choices, each name with its note wrapped
@@ -497,16 +708,24 @@ func (m *Model) confirmUninstall() tea.Cmd {
 	return nil
 }
 
-// uninstall stops the bypass this TUI runs, if any, then removes SplitDPI.
-func (m *Model) uninstall() tea.Cmd {
-	m.note = i18n.T("settings_uninstall.working")
-	b, ctx, w := m.b, m.ctx, m.logs
+// stopOwnRun returns a func that stops the bypass this TUI runs, if any,
+// and waits until its rules are gone; it runs inside a command.
+func (m *Model) stopOwnRun() func() {
 	running, cancel, finished := m.running, m.runCancel, m.runFinished
-	return func() tea.Msg {
+	return func() {
 		if running {
 			cancel()
 			<-finished
 		}
+	}
+}
+
+// uninstall stops the bypass this TUI runs, if any, then removes SplitDPI.
+func (m *Model) uninstall() tea.Cmd {
+	m.note = i18n.T("settings_uninstall.working")
+	b, ctx, w, stop := m.b, m.ctx, m.logs, m.stopOwnRun()
+	return func() tea.Msg {
+		stop()
 		r, err := b.Uninstall(ctx)
 		for _, d := range r.Leftover {
 			fmt.Fprintln(w, i18n.T("uninstall.leftover", d))

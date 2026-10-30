@@ -73,8 +73,13 @@ Hangisi olursa olsun `sudo splitdpi stop` durdurur.
 - **Solda:** menü: Durum, Siteler, Strateji, Tarama, Günlük ve Ayarlar. Ok
   tuşlarıyla ya da fareyle tıklayarak seçin; Enter veya Tab sayfaya girer, Esc
   menüye döner.
-- **Sağda:** seçilen sayfa. Dil, çalıştırma biçimi, şifreli DNS ve SplitDPI'yi
-  kaldırma Ayarlar sayfasındadır.
+- **Sağda:** seçilen sayfa. Ayarlar sayfası her ayarı değeriyle birlikte
+  gruplar halinde listeler: Genel (dil, çalıştırma biçimi), Engel aşma
+  (kapsam, hariç tutulan siteler, strateji), DNS, Ağ (dokunulmayacak
+  arayüzler, sağlayıcıyı bulan servis), Bakım (hazır ayarları güncelleme,
+  motoru kurma, sistemi denetleme, zapret'ten geçme ya da ona geri dönme,
+  kaldırma) ve Gelişmiş (kuyruk numarası). `/` listede arar; Esc aramayı
+  temizler.
 - **Altta:** sayfanın kısayolları ve seçili işi yapan komut. Arayüzde
   yaptığınız her şeyi böylece bir betikle de yapabilirsiniz.
 

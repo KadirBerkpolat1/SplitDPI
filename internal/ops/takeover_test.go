@@ -127,6 +127,9 @@ func systemdZapret2() fstest.MapFS {
 func TestTakeoverSystemdAndRevert(t *testing.T) {
 	ctx := context.Background()
 	o, f := takeoverOps(t, systemdZapret2(), map[string]string{"systemctl is-enabled zapret2": "enabled"})
+	if got, err := o.TakenOver(); err != nil || len(got) != 0 {
+		t.Fatalf("taken over before takeover: %q, %v", got, err)
+	}
 	found, err := o.DetectForeign(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -160,6 +163,9 @@ func TestTakeoverSystemdAndRevert(t *testing.T) {
 	if _, err := o.Takeover(ctx, stopped); err != nil {
 		t.Fatal(err)
 	}
+	if got, err := o.TakenOver(); err != nil || !slices.Equal(got, []string{"zapret2 (systemd)"}) {
+		t.Errorf("taken over %q, %v", got, err)
+	}
 
 	f.calls = nil
 	rep := o.Revert(ctx, false, false)
@@ -171,6 +177,9 @@ func TestTakeoverSystemdAndRevert(t *testing.T) {
 	}
 	if _, err := os.Stat(o.P.TakeoverFile); !os.IsNotExist(err) {
 		t.Errorf("record still there: %v", err)
+	}
+	if got, err := o.TakenOver(); err != nil || len(got) != 0 {
+		t.Errorf("taken over after revert: %q, %v", got, err)
 	}
 	f.calls = nil
 	if rep := o.Revert(ctx, false, false); len(rep.Restored) != 0 || len(f.calls) != 0 {

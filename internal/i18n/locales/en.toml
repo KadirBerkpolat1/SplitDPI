@@ -701,3 +701,125 @@ err_mode = "Unknown mode %q. Allowed: broad (every blocked site, learned automat
 err_iface = "%q is not an interface name. Use 1-15 letters (a-z, A-Z), digits or _ . : -, optionally ending in *, such as wg*."
 err_url = "%q is not an https:// address with a host name. To go back to the default: splitdpi config reset ipinfo_url"
 err_qnum = "The queue number must be a whole number from 0 to 65535, not %s."
+
+[settings_group]
+general = "General"
+bypass = "Bypass"
+dns = "DNS"
+network = "Network"
+maintenance = "Maintenance"
+advanced = "Advanced"
+
+[settings_page]
+search = "Search"
+search_done = "Done"
+search_clear = "Clear search"
+search_placeholder = "setting, value or group"
+filtered = "Search: %s (Esc clears it)"
+no_match = "No setting matches."
+saved = "Saved. %s: %s."
+lang_choose = "Choose language"
+lang_head = "The language of this window and of the splitdpi commands:"
+edit = "Change"
+save = "Save"
+working = "in progress..."
+
+[settings_help]
+lang = "The language of this window and of the splitdpi commands."
+run_mode = "How r on the Status page starts the bypass: in this window, in the background, or also at every boot."
+mode = "Which traffic the bypass handles: every site that looks blocked, or only the apps you turned on and your own sites."
+exclude = "Sites the bypass never touches, for sites that break with it. They are listed at the end of the Sites page."
+strategy = "How packets are changed to get past the block. The Strategy page lists the choices; the Scan page finds one that works."
+dns = "Sends SplitDPI's DNS queries encrypted, so that the provider cannot answer them with a block page."
+skip_ifaces = "Network interfaces the bypass leaves alone, such as VPNs. A name ending in * matches every interface whose name starts with it."
+ipinfo_url = "The service that tells which internet provider you use, so that the presets for it can be tried."
+presets = "Downloads the latest ready-made strategies and app lists."
+engine = "zapret2 does the actual bypass; this downloads and installs the version SplitDPI is tested with."
+doctor = "Checks that everything SplitDPI needs is in place, and says how to fix what is not."
+takeover = "Another zapret install is in the way. SplitDPI can stop it, keep its sites and take its place."
+revert = "Turns the zapret service SplitDPI switched off back on, and stops SplitDPI."
+uninstall = "Removes SplitDPI completely: service, rules, settings, data, log and the program."
+qnum = "The queue the firewall hands packets to the engine through. Change it only if another program uses the same number."
+
+[settings_mode]
+label = "Scope"
+change = "Choose scope"
+head = "Which traffic should the bypass handle?"
+broad = "Every site"
+broad_note = "Every site that looks blocked is handled automatically, and your own sites too."
+apps = "Only apps"
+apps_note = "Only the apps you turned on and the sites you added; other sites are left alone."
+empty = "Only apps needs something to handle: first turn on an app or add a site on the Sites page."
+
+[settings_exclude]
+label = "Excluded sites"
+count_one = "%d site"
+count_many = "%d sites"
+go = "Open the Sites page"
+jumped = "The excluded sites are at the end of this list. Press e to add one."
+
+[settings_strategy]
+label = "Strategy"
+go = "Open the Strategy page"
+
+[settings_ifaces]
+label = "Interfaces to leave alone"
+head = "The bypass never touches traffic on these network interfaces, such as VPNs. A name ending in * matches every interface whose name starts with it."
+add = "Add"
+default = "Restore defaults"
+close = "Done"
+empty = "None: the bypass applies to every interface."
+which = "Interface name (for example wg0, or tun* for every tun interface):"
+
+[settings_ipinfo]
+label = "Provider lookup service"
+head = "The address of the service that finds your internet provider. It must start with https://."
+default = "Leave it empty to go back to the default: %s"
+
+[settings_qnum]
+label = "Queue number"
+head = "The number of the queue (NFQUEUE) through which the firewall hands packets to the engine, from 0 to 65535."
+warn = "Change it only if another program, such as another firewall or zapret, already uses this number: two programs on the same queue break each other's traffic."
+default = "Default: %d"
+not_number = "Enter a number from 0 to 65535."
+
+[settings_presets]
+label = "Update presets"
+version = "version %s"
+do = "Update"
+
+[settings_engine]
+label = "Install/update engine"
+missing = "not installed"
+old = "zapret2 %s (latest: %s)"
+install = "Install"
+update = "Update"
+reinstall = "Reinstall"
+
+[settings_doctor]
+label = "Check the system"
+not_run = "not checked yet"
+blockers_one = "%d problem"
+blockers_many = "%d problems"
+warnings_one = "%d warning"
+warnings_many = "%d warnings"
+ok = "no problems"
+none_found = "No problems found."
+do = "Check"
+again = "Check again"
+head = "What SplitDPI needs to run, problems first:"
+
+[settings_takeover]
+label = "Switch from zapret"
+running = "%s is running"
+boot = "%s starts on boot"
+
+[settings_revert]
+label = "Go back to zapret"
+do = "Go back"
+title = "Go back to zapret?"
+stop = "SplitDPI stops; its service and firewall rules are removed."
+restore = "%s is turned back on."
+kept = "Your settings and site list stay."
+working = "Going back to zapret..."
+done = "Done: the zapret service SplitDPI turned off is on again."

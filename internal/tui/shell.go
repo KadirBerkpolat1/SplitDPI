@@ -142,7 +142,7 @@ func (m Model) footer() string {
 	}
 	lines := packKeys(keys, m.width)
 	if m.focus < len(acts) && acts[m.focus].CLI != "" {
-		lines = append(lines, mutedStyle.Render("$ ")+commandStyle.Render(acts[m.focus].CLI))
+		lines = append(lines, ansi.Truncate(mutedStyle.Render("$ ")+commandStyle.Render(acts[m.focus].CLI), m.width, "…"))
 	} else {
 		lines = append(lines, "")
 	}

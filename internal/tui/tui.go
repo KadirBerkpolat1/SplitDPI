@@ -54,10 +54,17 @@ type Backend interface {
 	AcceptDisclaimer() error
 	SetLang(lang string) error
 	SetRunMode(mode config.RunMode) error
+	SetMode(mode config.Mode) error
+	SetSkipIfaces(list []string) error
+	SetIPInfoURL(u string) error
+	SetQNum(n int) error
+	PresetsUpdate(ctx context.Context) (version string, apps int, err error)
 
 	SitesImport(path string) ([]string, []ops.ImportSkip, error)
 	DetectForeign(ctx context.Context) ([]ops.Foreign, error)
 	Takeover(ctx context.Context, f ops.Foreign) (ops.TakeoverReport, error)
+	TakenOver() ([]string, error)
+	Revert(ctx context.Context, rulesOnly, purge bool) ops.RevertReport
 
 	DNSProviders() []ops.DNSProvider
 	SetDNS(provider string, proto dns.Protocol) (running bool, err error)
@@ -66,6 +73,7 @@ type Backend interface {
 	Uninstall(ctx context.Context) (ops.UninstallReport, error)
 
 	EngineInstall(ctx context.Context, from string) (engine.Engine, error)
+	EngineStatus() (engine.Engine, bool)
 }
 
 const statusEvery = 2 * time.Second

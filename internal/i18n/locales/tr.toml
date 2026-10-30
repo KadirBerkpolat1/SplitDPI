@@ -701,3 +701,125 @@ err_mode = "Bilinmeyen kapsam %q. Geçerli değerler: broad (kendiliğinden öğ
 err_iface = "%q bir arayüz adı değil. 1-15 harf (a-z, A-Z), rakam ya da _ . : - kullanın; sonda * olabilir, örneğin wg*."
 err_url = "%q, sunucu adı içeren bir https:// adresi değil. Varsayılana dönmek için: splitdpi config reset ipinfo_url"
 err_qnum = "Kuyruk numarası 0 ile 65535 arasında bir tam sayı olmalı; %s olamaz."
+
+[settings_group]
+general = "Genel"
+bypass = "Engel aşma"
+dns = "DNS"
+network = "Ağ"
+maintenance = "Bakım"
+advanced = "Gelişmiş"
+
+[settings_page]
+search = "Ara"
+search_done = "Tamam"
+search_clear = "Aramayı temizle"
+search_placeholder = "ayar, değer ya da grup"
+filtered = "Arama: %s (Esc temizler)"
+no_match = "Eşleşen ayar yok."
+saved = "Kaydedildi. %s: %s."
+lang_choose = "Dil seç"
+lang_head = "Bu pencerenin ve splitdpi komutlarının dili:"
+edit = "Değiştir"
+save = "Kaydet"
+working = "sürüyor..."
+
+[settings_help]
+lang = "Bu pencerenin ve splitdpi komutlarının dili."
+run_mode = "Durum sayfasındaki r tuşu engel aşmayı nasıl başlatsın: bu pencerede, arka planda ya da her açılışta da."
+mode = "Engel aşma hangi trafiğe uygulansın: engellenmiş görünen her siteye ya da yalnızca açtığınız uygulamalara ve kendi sitelerinize."
+exclude = "Engel aşmanın hiç dokunmadığı siteler; onunla bozulan siteler için. Siteler sayfasının sonunda listelenir."
+strategy = "Engeli aşmak için paketlerin nasıl değiştirileceği. Seçenekler Strateji sayfasında; işe yarayanı Tarama sayfası bulur."
+dns = "SplitDPI'nin DNS sorgularını şifreli gönderir; böylece sağlayıcı onlara engel sayfasıyla cevap veremez."
+skip_ifaces = "Engel aşmanın dokunmadığı ağ arayüzleri, örneğin VPN'ler. Sonu * olan bir ad, o adla başlayan bütün arayüzler demektir."
+ipinfo_url = "Hangi internet sağlayıcısını kullandığınızı bulan servis; sağlayıcınıza uygun hazır ayarlar bununla denenir."
+presets = "En yeni hazır stratejileri ve uygulama listelerini indirir."
+engine = "Engeli asıl aşan zapret2'dir; bu, SplitDPI'nin denendiği sürümü indirip kurar."
+doctor = "SplitDPI'nin ihtiyaç duyduğu her şeyin yerinde olup olmadığını denetler, eksik olanın nasıl giderileceğini söyler."
+takeover = "Başka bir zapret kurulumu engel oluyor. SplitDPI onu durdurup sitelerini alarak yerine geçebilir."
+revert = "SplitDPI'nin kapattığı zapret servisini yeniden açar ve SplitDPI'yi durdurur."
+uninstall = "SplitDPI'yi tamamen kaldırır: servis, kurallar, ayarlar, veriler, günlük ve programın kendisi."
+qnum = "Güvenlik duvarının paketleri motora verdiği kuyruk. Yalnızca başka bir program aynı numarayı kullanıyorsa değiştirin."
+
+[settings_mode]
+label = "Kapsam"
+change = "Kapsam seç"
+head = "Engel aşma hangi trafiğe uygulansın?"
+broad = "Her site"
+broad_note = "Engellenmiş görünen her siteye kendiliğinden uygulanır; sizin siteleriniz de dahil."
+apps = "Yalnızca uygulamalar"
+apps_note = "Yalnızca açtığınız uygulamalara ve eklediğiniz sitelere uygulanır; diğer sitelere dokunulmaz."
+empty = "\"Yalnızca uygulamalar\" için uygulanacak bir şey olmalı: önce Siteler sayfasından bir uygulama açın ya da site ekleyin."
+
+[settings_exclude]
+label = "Hariç tutulan siteler"
+count_one = "%d site"
+count_many = "%d site"
+go = "Siteler sayfasını aç"
+jumped = "Hariç tutulan siteler bu listenin sonunda. Eklemek için e'ye basın."
+
+[settings_strategy]
+label = "Strateji"
+go = "Strateji sayfasını aç"
+
+[settings_ifaces]
+label = "Dokunulmayacak arayüzler"
+head = "Engel aşma bu ağ arayüzlerindeki trafiğe hiç dokunmaz (örneğin VPN'ler). Sonu * olan bir ad, o adla başlayan bütün arayüzler demektir."
+add = "Ekle"
+default = "Varsayılana dön"
+close = "Bitti"
+empty = "Liste boş: engel aşma bütün arayüzlere uygulanır."
+which = "Arayüz adı (örneğin wg0; bütün tun arayüzleri için tun*):"
+
+[settings_ipinfo]
+label = "Sağlayıcıyı bulan servis"
+head = "İnternet sağlayıcınızı bulan servisin adresi. https:// ile başlamalı."
+default = "Boş bırakırsanız varsayılana döner: %s"
+
+[settings_qnum]
+label = "Kuyruk numarası"
+head = "Güvenlik duvarının paketleri motora verdiği kuyruğun (NFQUEUE) numarası; 0 ile 65535 arası."
+warn = "Yalnızca başka bir program (başka bir güvenlik duvarı ya da zapret gibi) bu numarayı zaten kullanıyorsa değiştirin: aynı kuyruğu kullanan iki program birbirinin trafiğini bozar."
+default = "Varsayılan: %d"
+not_number = "0 ile 65535 arasında bir sayı girin."
+
+[settings_presets]
+label = "Hazır ayarları güncelle"
+version = "sürüm %s"
+do = "Güncelle"
+
+[settings_engine]
+label = "Motoru kur/güncelle"
+missing = "kurulu değil"
+old = "zapret2 %s (güncel: %s)"
+install = "Kur"
+update = "Güncelle"
+reinstall = "Yeniden kur"
+
+[settings_doctor]
+label = "Sistemi denetle"
+not_run = "henüz denetlenmedi"
+blockers_one = "%d sorun"
+blockers_many = "%d sorun"
+warnings_one = "%d uyarı"
+warnings_many = "%d uyarı"
+ok = "sorun yok"
+none_found = "Sorun bulunmadı."
+do = "Denetle"
+again = "Yeniden denetle"
+head = "SplitDPI'nin çalışması için gerekenler, önce sorunlar:"
+
+[settings_takeover]
+label = "zapret'ten geç"
+running = "%s çalışıyor"
+boot = "%s açılışta başlıyor"
+
+[settings_revert]
+label = "zapret'e geri dön"
+do = "Geri dön"
+title = "zapret'e geri dönülsün mü?"
+stop = "SplitDPI durdurulacak; servisi ve güvenlik duvarı kuralları kaldırılacak."
+restore = "%s yeniden açılacak."
+kept = "Ayarlarınız ve site listeniz silinmeyecek."
+working = "zapret'e geri dönülüyor..."
+done = "Tamam: SplitDPI'nin kapattığı zapret servisi yeniden açık."

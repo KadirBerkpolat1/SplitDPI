@@ -13,20 +13,28 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
 
-const (
-	rowRunMode = iota + 1
-	rowDNS
-	rowUninstall
-)
-
-// toSetting opens the settings page with the cursor on row.
-func toSetting(t *testing.T, f *fake, row int) Model {
+// toSetting opens the settings page with the cursor on the row with id.
+func toSetting(t *testing.T, f *fake, id string) Model {
 	t.Helper()
-	m := goTo(t, newModel(t, f), pgSettings)
-	for m.settings.cursor < row {
+	return toRow(t, goTo(t, newModel(t, f), pgSettings), id)
+}
+
+// toRow moves the cursor down to the row with id.
+func toRow(t *testing.T, m Model, id string) Model {
+	t.Helper()
+	for range len(settings) {
+		if st, ok := m.current(); ok && st.id == id {
+			return m
+		}
 		m = press(t, m, "down")
 	}
+	t.Fatalf("no row %s in:\n%s", id, m.View())
 	return m
+}
+
+func rowID(m Model) string {
+	st, _ := m.current()
+	return st.id
 }
 
 func (f *fake) count(s string) int {
@@ -64,7 +72,7 @@ func footerCLI(m Model) string {
 
 func TestSettingsDNSPickerListsProviders(t *testing.T) {
 	f := newFake()
-	m := toSetting(t, f, rowDNS)
+	m := toSetting(t, f, "dns")
 	has(t, m.View(), "Encrypted DNS")
 	has(t, m.View(), "Off")
 	if cli := footerCLI(m); cli != "sudo splitdpi dns <id> [--dot]" {
@@ -99,7 +107,7 @@ func TestSettingsDNSPickerListsProviders(t *testing.T) {
 
 func TestSettingsDNSConfirm(t *testing.T) {
 	f := newFake()
-	m := press(t, toSetting(t, f, rowDNS), "enter")
+	m := press(t, toSetting(t, f, "dns"), "enter")
 	m = press(t, press(t, m, "down"), "down")
 	if cli := footerCLI(m); cli != "sudo splitdpi dns cloudflare" {
 		t.Fatalf("CLI %q", cli)
@@ -139,7 +147,7 @@ func TestSettingsDNSConfirm(t *testing.T) {
 func TestSettingsDNSSystemEncrypted(t *testing.T) {
 	note := "Your system already encrypts DNS with dnscrypt-proxy, so SplitDPI's encrypted DNS is not needed. It only affects programs that send DNS queries straight to a server instead of through the local resolver."
 	f := newFake()
-	plain := press(t, toSetting(t, f, rowDNS), "enter")
+	plain := press(t, toSetting(t, f, "dns"), "enter")
 	if strings.Contains(plain.View(), "already encrypts") {
 		t.Errorf("note without an encrypting resolver:\n%s", plain.View())
 	}
@@ -148,7 +156,7 @@ func TestSettingsDNSSystemEncrypted(t *testing.T) {
 	}
 
 	f.systemDNS = "dnscrypt-proxy"
-	m := press(t, toSetting(t, f, rowDNS), "enter")
+	m := press(t, toSetting(t, f, "dns"), "enter")
 	v := flat(pageText(m.View()))
 	has(t, v, note)
 	if strings.Index(v, note) > strings.Index(v, i18n.T("dns2.off_note")) {
@@ -167,7 +175,7 @@ func TestSettingsDNSSystemEncrypted(t *testing.T) {
 func TestSettingsDNSDoTWhileRunning(t *testing.T) {
 	f := newFake()
 	f.st.State = "running"
-	m := press(t, toSetting(t, f, rowDNS), "enter")
+	m := press(t, toSetting(t, f, "dns"), "enter")
 	for range 4 {
 		m = press(t, m, "down")
 	}
@@ -199,7 +207,7 @@ func TestSettingsDNSDoTWhileRunning(t *testing.T) {
 func TestSettingsDNSOffWithoutConfirm(t *testing.T) {
 	f := newFake()
 	f.cfg.DNSProvider = "cloudflare"
-	m := press(t, toSetting(t, f, rowDNS), "enter")
+	m := press(t, toSetting(t, f, "dns"), "enter")
 	if p := m.settings.dns; p.list[p.cursor].ID != "cloudflare" {
 		t.Fatalf("picker starts on %s", p.list[p.cursor].ID)
 	}
@@ -225,7 +233,7 @@ func uninstallFake() *fake {
 
 func TestSettingsUninstall(t *testing.T) {
 	f := uninstallFake()
-	m := toSetting(t, f, rowUninstall)
+	m := toSetting(t, f, "uninstall")
 	has(t, m.View(), "Uninstall SplitDPI")
 	if cli := footerCLI(m); cli != "sudo splitdpi uninstall --yes" {
 		t.Fatalf("CLI %q", cli)
@@ -272,7 +280,7 @@ func TestSettingsUninstallIncomplete(t *testing.T) {
 	f := uninstallFake()
 	f.uninstallRep = ops.UninstallReport{Removed: []string{"/run/splitdpi"}, Leftover: []string{"/etc/splitdpi", "/usr/local/bin/splitdpi"}}
 	f.uninstallErr = ops.ErrUninstallIncomplete
-	m := press(t, press(t, toSetting(t, f, rowUninstall), "enter"), "y")
+	m := press(t, press(t, toSetting(t, f, "uninstall"), "enter"), "y")
 	if m.settings.uninstalled {
 		t.Fatal("incomplete uninstall marked done")
 	}
@@ -281,14 +289,14 @@ func TestSettingsUninstallIncomplete(t *testing.T) {
 	has(t, v, "Still present: /etc/splitdpi")
 	has(t, v, "Still present: /usr/local/bin/splitdpi")
 	has(t, v, "Uninstall did not finish")
-	if m = press(t, m, "up"); m.settings.cursor != rowDNS {
-		t.Errorf("page stuck after incomplete uninstall: cursor %d", m.settings.cursor)
+	if m = press(t, m, "up"); rowID(m) != "doctor" {
+		t.Errorf("page stuck after incomplete uninstall: on %s", rowID(m))
 	}
 }
 
 func TestSettingsUninstallNothing(t *testing.T) {
 	f := newFake()
-	m := press(t, toSetting(t, f, rowUninstall), "enter")
+	m := press(t, toSetting(t, f, "uninstall"), "enter")
 	if m.dialog != nil || f.called("uninstall") {
 		t.Fatal("asked with nothing to remove")
 	}
@@ -304,7 +312,7 @@ func TestSettingsFit80x24(t *testing.T) {
 		f.cfg.DNSProvider = "auto"
 		views := map[string]string{}
 		views["rows"] = goTo(t, newModel(t, f), pgSettings).View()
-		r := toSetting(t, f, rowRunMode)
+		r := toSetting(t, f, "run_mode")
 		views["run mode row"] = r.View()
 		r = press(t, r, "enter")
 		views["run mode picker"] = r.View()
@@ -318,13 +326,13 @@ func TestSettingsFit80x24(t *testing.T) {
 			t.Errorf("%s run mode saved: the note is cut off:\n%s", lang, views["run mode saved"])
 		}
 		f.cfg.RunMode = config.RunWindow
-		p := press(t, toSetting(t, f, rowDNS), "enter")
+		p := press(t, toSetting(t, f, "dns"), "enter")
 		views["picker"] = p.View()
 		p = press(t, press(t, p, "down"), "t")
 		views["picker dot"] = p.View()
 		views["dns confirm"] = press(t, p, "enter").View()
 		f.systemDNS = "dnscrypt-proxy"
-		s := press(t, toSetting(t, f, rowDNS), "enter")
+		s := press(t, toSetting(t, f, "dns"), "enter")
 		views["picker system"] = s.View()
 		s = press(t, press(t, s, "down"), "t")
 		views["picker dot system"] = s.View()
@@ -335,7 +343,7 @@ func TestSettingsFit80x24(t *testing.T) {
 			}
 		}
 		f.systemDNS = ""
-		u := press(t, toSetting(t, f, rowUninstall), "enter")
+		u := press(t, toSetting(t, f, "uninstall"), "enter")
 		views["uninstall confirm"] = u.View()
 		views["uninstalled"] = press(t, u, "y").View()
 		f.uninstallErr = ops.ErrUninstallIncomplete

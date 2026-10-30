@@ -189,6 +189,20 @@ func (o *Ops) recordTakeover(t takenService) error {
 	return writeTakeover(o.P.TakeoverFile, rec)
 }
 
+// TakenOver lists the services Takeover turned off that Revert would turn
+// back on, as "name (init)"; nothing when there is no record.
+func (o *Ops) TakenOver() ([]string, error) {
+	rec, err := readTakeover(o.P.TakeoverFile)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, len(rec.Services))
+	for i, t := range rec.Services {
+		out[i] = t.Service.Name + " (" + string(t.Service.Init) + ")"
+	}
+	return out, nil
+}
+
 // restoreTakeover turns the services in the takeover record back on and
 // removes the record. Services that fail stay in the record for a later revert.
 func (o *Ops) restoreTakeover(ctx context.Context, r *RevertReport) {
