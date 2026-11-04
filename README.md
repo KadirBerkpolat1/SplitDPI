@@ -35,9 +35,12 @@ zapret or zapret2 install over to SplitDPI.
 | Artix, antiX, dinit, s6 or sysvinit distros | other | no: run on demand | yes | not tested yet |
 
 SplitDPI needs an x86_64 or arm64 kernel 5.4 or newer with nftables, plus the
-`nft` and `curl` commands. `splitdpi doctor` checks all of this and prints the
-install command for your package manager. NixOS users should look at
-zapret2-flake or zapret2-nix instead.
+`nft` and `curl` commands; the blockcheck2 scan also needs `nslookup` or
+`host`. The setup asks before it installs missing packages with your distro's
+package manager, and `sudo splitdpi deps install` does the same from the
+command line (`--yes` installs without asking). `splitdpi doctor` checks all of
+this and prints the install command for your package manager. NixOS users
+should look at zapret2-flake or zapret2-nix instead.
 
 ## Quick start
 
@@ -48,8 +51,8 @@ sudo splitdpi
 
 The install script verifies the download's checksum and installs
 `/usr/local/bin/splitdpi`. `sudo splitdpi` opens the terminal UI; press `w` to
-start the setup. The setup checks your system, installs the zapret2 engine
-itself, finds your ISP, asks which apps should work, tests strategies, and then
+start the setup. The setup checks your system, offers to install missing
+packages, installs the zapret2 engine itself, finds your ISP, asks which apps should work, tests strategies, and then
 runs SplitDPI now or at every boot.
 
 There are three ways to keep the bypass on. In the UI window (`r`, or
@@ -91,6 +94,7 @@ needs a terminal of at least 80x24.
 |---|---|
 | `splitdpi` | Opens the terminal UI. |
 | `splitdpi doctor` | Checks the system and lists anything that blocks SplitDPI. |
+| `splitdpi deps [install [--yes]]` | Lists the missing packages SplitDPI needs, or installs them with your package manager after asking; `--yes` installs without asking. |
 | `splitdpi engine install [--from FILE]` / `engine status` | Installs the pinned zapret2 release after checking its SHA-256, or shows the installed one. |
 | `splitdpi detect [--asn N] [--country CC]` | Looks up your ISP and lists its preset strategies. |
 | `splitdpi scan [--site DOMAIN] [--dns keep\|auto\|PROVIDER] [--apps ID,ID] [--asn N] [--country CC] [--blockcheck-only\|--no-blockcheck] [-v]` | Finds a strategy that works and saves it; see [Finding a strategy](#finding-a-strategy). |

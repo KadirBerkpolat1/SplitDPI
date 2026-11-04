@@ -78,25 +78,32 @@ func TestScanSiteUsageAndBadDomain(t *testing.T) {
 
 // With dnscrypt-proxy encrypting DNS, a scan says so instead of checking for
 // poisoning and asking, even on a terminal that would answer yes.
-func TestScanSkipsDNSQuestionWhenSystemEncrypts(t *testing.T) {
-	o, _ := runOpsFor(t, dnscryptRoot)
+// fakeEngine installs an engine whose blockcheck2 finds nothing; the returned
+// file exists once blockcheck2 has run.
+func fakeEngine(t *testing.T, o *ops.Ops) (ran string) {
+	t.Helper()
 	dir := filepath.Join(o.P.EngineDir, "zapret2-"+engine.Version)
 	bin := filepath.Join(dir, "binaries", "linux-x86_64")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	ran = filepath.Join(t.TempDir(), "blockcheck2-ran")
 	for name, data := range map[string]string{
 		filepath.Join(bin, "nfqws2"):            "",
-		filepath.Join(dir, "blockcheck2.sh"):    "#!/bin/sh\necho\necho '* SUMMARY'\n",
+		filepath.Join(dir, "blockcheck2.sh"):    "#!/bin/sh\n: > '" + ran + "'\necho\necho '* SUMMARY'\n",
 		filepath.Join(o.P.EngineDir, "current"): "zapret2-" + engine.Version + "\nlinux-x86_64\n",
 	} {
 		if err := os.WriteFile(name, []byte(data), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	oldIn, oldTTY := dnsPromptIn, dnsPromptTTY
-	t.Cleanup(func() { dnsPromptIn, dnsPromptTTY = oldIn, oldTTY })
-	dnsPromptIn, dnsPromptTTY = strings.NewReader("y\n"), func() bool { return true }
+	return ran
+}
+
+func TestScanSkipsDNSQuestionWhenSystemEncrypts(t *testing.T) {
+	o, _ := runOpsFor(t, dnscryptRoot)
+	fakeEngine(t, o)
+	setPrompt(t, true, "y\n")
 
 	out, _ := runOps(t, o, "scan", "--site", "pastebin.com", "--asn", "9121")
 	has(t, out, "System DNS is already encrypted (dnscrypt-proxy), so the DNS poisoning check is skipped.")
@@ -107,6 +114,43 @@ func TestScanSkipsDNSQuestionWhenSystemEncrypts(t *testing.T) {
 	}
 	if c, _ := config.Load(o.P); c.DNSOn() {
 		t.Errorf("scan turned DNS on: %s", c.DNSProvider)
+	}
+}
+
+// Without curl and no terminal to ask, blockcheck2 does not run and the scan
+// stops with the command that installs it.
+func TestScanWithoutCurlStopsWithoutTTY(t *testing.T) {
+	o, f, _ := missingOps(t, debianRoot(t, dnscryptRoot), "curl")
+	ran := fakeEngine(t, o)
+	setPrompt(t, false, "y\n")
+
+	out, code := runOps(t, o, "scan", "--site", "pastebin.com", "--asn", "9121")
+	eq(t, code, 1)
+	has(t, out, "  curl: scan (blockcheck2) tests sites with curl")
+	has(t, out, "sudo splitdpi deps install")
+	notHas(t, out, "[y/N]")
+	if f.saw("apt-get install -y curl") {
+		t.Error("curl installed without a question")
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("blockcheck2 ran without curl")
+	}
+}
+
+func TestScanInstallsCurlOnYes(t *testing.T) {
+	o, f, gone := missingOps(t, debianRoot(t, dnscryptRoot), "curl")
+	f.hooks = map[string]func(){"apt-get install -y curl": func() { clear(gone) }}
+	ran := fakeEngine(t, o)
+	setPrompt(t, true, "y\n")
+
+	out, _ := runOps(t, o, "scan", "--site", "pastebin.com", "--asn", "9121")
+	has(t, out, "Install them now? [y/N]")
+	has(t, out, "Installed: curl")
+	if !f.saw("apt-get install -y curl") {
+		t.Errorf("curl not installed; calls %q", f.calls)
+	}
+	if _, err := os.Stat(ran); err != nil {
+		t.Errorf("blockcheck2 did not run after the install: %v\n%s", err, out)
 	}
 }
 
@@ -129,10 +173,7 @@ func TestScanDNSChoice(t *testing.T) {
 		{name: "flag keep", flag: "keep", tty: true, out: "Keeping the system resolver", notOut: "[y/N]"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			oldIn, oldTTY := dnsPromptIn, dnsPromptTTY
-			t.Cleanup(func() { dnsPromptIn, dnsPromptTTY = oldIn, oldTTY })
-			dnsPromptIn = strings.NewReader(tc.input)
-			dnsPromptTTY = func() bool { return tc.tty }
+			setPrompt(t, tc.tty, tc.input)
 			var w bytes.Buffer
 			got := scanDNSChoice(&ops.Ops{}, &w, tc.flag, poisoned)
 			eq(t, got, tc.want)

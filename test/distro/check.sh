@@ -26,6 +26,27 @@ echo "$out" | grep -Fq "$hint" || {
 	exit 1
 }
 
+if [ -f /etc/os-release ] && grep -q '^ID=arch' /etc/os-release; then
+	# The Arch image ships without sync databases. This prepares the test
+	# image only: splitdpi itself never runs -Sy, which is a partial upgrade.
+	pacman -Sy --noconfirm
+fi
+
+"$bin" deps install --yes || {
+	echo "splitdpi deps install --yes failed" >&2
+	exit 1
+}
+for tool in nft curl; do
+	command -v "$tool" >/dev/null || {
+		echo "splitdpi deps install --yes left $tool missing" >&2
+		exit 1
+	}
+done
+command -v nslookup >/dev/null || command -v host >/dev/null || {
+	echo "splitdpi deps install --yes left nslookup and host missing" >&2
+	exit 1
+}
+
 sh -n internal/initsys/testdata/splitdpi.openrc.golden
 sh -n internal/initsys/testdata/runit-run.golden
 sh -n internal/initsys/testdata/runit-finish.golden
