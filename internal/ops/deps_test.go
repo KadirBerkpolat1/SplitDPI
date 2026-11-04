@@ -121,6 +121,11 @@ func TestInstallPackagesErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Unable to locate package curl") || !strings.Contains(err.Error(), "sudo apt install curl") {
 		t.Errorf("failed install: %v", err)
 	}
+	// The TUI words the failure itself and shows only the package manager's error.
+	var ie InstallError
+	if !errors.As(err, &ie) || ie.Err.Error() != "apt-get: exit status 100: E: Unable to locate package curl" {
+		t.Errorf("failed install is not an InstallError: %#v", err)
+	}
 
 	// The package manager succeeds but the command is still not there.
 	m = newMachine("nslookup", "host")

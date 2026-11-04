@@ -55,9 +55,9 @@ sudo splitdpi
 Kurulum betiği indirdiği dosyanın sağlama toplamını doğrular ve programı
 `/usr/local/bin/splitdpi` olarak kurar. `sudo splitdpi` terminal arayüzünü
 açar; kurulumu başlatmak için `w` tuşuna basın. Kurulum sisteminizi denetler,
-eksik paketleri sorup kurar, zapret2 motorunu kendisi kurar, sağlayıcınızı bulur, hangi uygulamaların
-çalışması gerektiğini sorar, stratejileri dener ve SplitDPI'yi hemen ya da her
-açılışta çalıştırır.
+eksik paketleri sorup kurar, zapret2 motorunu kendisi kurar, sağlayıcınızı
+bulur, hangi uygulamaların çalışması gerektiğini sorar, stratejileri dener ve
+SplitDPI'yi hemen ya da her açılışta çalıştırır.
 
 Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
 `splitdpi run`) çalışırsa pencere kapanınca durur. Bu oturum için arka planda

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -85,8 +86,8 @@ func (m Model) pkgsDone(msg pkgsMsg) (Model, tea.Cmd) {
 }
 
 // pkgsView sums up the offered packages and how their install goes. A failed
-// install shows the error's first line, the rest is in the log: the error may
-// already end in the command that installs them by hand.
+// install shows the first line of the package manager's error; all of it is
+// in the log.
 func (w wizard) pkgsView() []string {
 	p := w.pkgs
 	lines := []string{"", i18n.T("tui.pkgs.missing", strings.Join(p.Names, ", "))}
@@ -94,7 +95,12 @@ func (w wizard) pkgsView() []string {
 	case w.pkgsInstalling:
 		lines = append(lines, i18n.T("deps.installing", strings.Join(p.Names, ", "), p.Manager))
 	case w.pkgsErr != nil:
-		first, _, _ := strings.Cut(w.pkgsErr.Error(), "\n")
+		err := w.pkgsErr
+		var ie ops.InstallError
+		if errors.As(err, &ie) {
+			err = ie.Err
+		}
+		first, _, _ := strings.Cut(err.Error(), "\n")
 		lines = append(lines, badStyle.Render(i18n.T("tui.pkgs.failed", first)), i18n.T("deps.hint", commandStyle.Render(p.Hint())))
 	}
 	return lines

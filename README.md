@@ -52,8 +52,8 @@ sudo splitdpi
 The install script verifies the download's checksum and installs
 `/usr/local/bin/splitdpi`. `sudo splitdpi` opens the terminal UI; press `w` to
 start the setup. The setup checks your system, offers to install missing
-packages, installs the zapret2 engine itself, finds your ISP, asks which apps should work, tests strategies, and then
-runs SplitDPI now or at every boot.
+packages, installs the zapret2 engine itself, finds your ISP, asks which apps
+should work, tests strategies, and then runs SplitDPI now or at every boot.
 
 There are three ways to keep the bypass on. In the UI window (`r`, or
 `splitdpi run`) it stops when that window closes. In the background for this

@@ -48,6 +48,20 @@ func (o *Ops) missing(tools []sysinfo.Tool) []sysinfo.Tool {
 	return out
 }
 
+// InstallError is a package manager that failed. Refresh is the failed
+// package list update before it, if any; Hint installs the packages by hand.
+type InstallError struct {
+	Err     error
+	Refresh error
+	Hint    string
+}
+
+func (e InstallError) Error() string {
+	return i18n.T("deps.failed", errors.Join(e.Err, e.Refresh), e.Hint)
+}
+
+func (e InstallError) Unwrap() error { return e.Err }
+
 // InstallPackages installs p with the package manager, then checks that its
 // tools are on PATH.
 func (o *Ops) InstallPackages(ctx context.Context, p sysinfo.Packages) error {
@@ -63,7 +77,7 @@ func (o *Ops) InstallPackages(ctx context.Context, p sysinfo.Packages) error {
 		_, refreshErr = o.Exec(ctx, "", c.Refresh[0], c.Refresh[1:]...)
 	}
 	if _, err := o.Exec(ctx, "", c.Install[0], c.Install[1:]...); err != nil {
-		return errors.New(i18n.T("deps.failed", errors.Join(refreshErr, err), p.Hint()))
+		return InstallError{Err: err, Refresh: refreshErr, Hint: p.Hint()}
 	}
 	if still := sysinfo.NewPackages(p.Manager, o.missing(p.Tools)); len(still.Tools) > 0 {
 		return errors.New(i18n.T("deps.still_missing", strings.Join(still.Names, ", ")))

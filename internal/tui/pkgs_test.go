@@ -7,6 +7,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
@@ -110,14 +111,16 @@ func TestWizardPackageInstallFailureShowsHint(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{curlWarn}
 	f.pkgs = aptPkgs(sysinfo.Curl)
-	f.pkgsErr = errors.New(i18n.T("deps.failed", "apt-get: exit status 100", "sudo apt install curl"))
+	f.pkgsErr = ops.InstallError{Err: errors.New("apt-get: exit status 100"), Hint: "sudo apt install curl"}
 	m := press(t, press(t, press(t, newModel(t, f), "w"), "enter"), "y")
 	if !f.called("install curl") || m.wiz.step != wDoctor || f.count("doctor") != 1 {
 		t.Fatalf("after a failed install: step %v, calls %q; want the checks kept", m.wiz.step, f.calls)
 	}
 	v := m.View()
-	has(t, v, i18n.T("tui.pkgs.failed", "Could not install the packages"))
-	has(t, v, "exit status 100")
+	has(t, v, i18n.T("tui.pkgs.failed", "apt-get: exit status 100"))
+	if strings.Contains(v, "Could not install the packages") {
+		t.Errorf("the failure is worded twice:\n%s", v)
+	}
 	has(t, v, i18n.T("deps.hint", "sudo apt install curl"))
 	if !strings.Contains(m.logs.String(), "exit status 100") {
 		t.Errorf("error not logged: %q", m.logs.String())
@@ -161,7 +164,7 @@ func TestPackageScreensFit80x24(t *testing.T) {
 		fits(t, lang+" packages question", d.View())
 		installing, _ := update(t, d, key("y"))
 		fits(t, lang+" packages installing", installing.View())
-		f.pkgsErr = errors.New(i18n.T("deps.failed", "apt-get: exit status 100: E: Unable to locate package bind9-host", "sudo apt install nftables curl bind9-host"))
+		f.pkgsErr = ops.InstallError{Err: errors.New("apt-get: exit status 100: E: Unable to locate package bind9-host"), Hint: "sudo apt install nftables curl bind9-host"}
 		fits(t, lang+" packages failed", press(t, d, "y").View())
 	}
 }
