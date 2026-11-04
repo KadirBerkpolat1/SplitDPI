@@ -75,6 +75,9 @@ type fake struct {
 	engineErr error
 	engineDir string // the installed engine, "" if none
 
+	pkgs    sysinfo.Packages // the missing packages
+	pkgsErr error
+
 	systemDNS string // the resolver that already encrypts DNS, if any
 
 	presetsErr error
@@ -288,6 +291,28 @@ func (f *fake) EngineStatus() (engine.Engine, bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return engine.Engine{Dir: f.engineDir}, f.engineDir != ""
+}
+
+func (f *fake) MissingPackages(tools ...sysinfo.Tool) sysinfo.Packages {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.pkgs
+}
+
+// InstallPackages fails with pkgsErr, else installs: nothing is missing and
+// the checks of the installed tools pass.
+func (f *fake) InstallPackages(ctx context.Context, p sysinfo.Packages) error {
+	f.record("install " + strings.Join(p.Names, " "))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pkgsErr != nil {
+		return f.pkgsErr
+	}
+	f.checks = slices.DeleteFunc(f.checks, func(c doctor.Check) bool {
+		return slices.ContainsFunc(p.Tools, func(t sysinfo.Tool) bool { return t.ID == c.ID })
+	})
+	f.pkgs = sysinfo.Packages{Manager: p.Manager}
+	return nil
 }
 
 // The config setters check their values the way ops does.

@@ -26,6 +26,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 // The scan page offers two flows, both run as the setup wizard:
@@ -63,7 +64,12 @@ type wizard struct {
 
 	installing bool
 	installErr error
-	installed  string // the note once the engine is in, shown after the checks rerun
+	installed  string // the note once the engine or packages are in, shown after the checks rerun
+
+	pkgs           sysinfo.Packages // the missing packages, found with the checks
+	pkgsSkipped    bool             // "continue without them": not offered again in this setup
+	pkgsInstalling bool
+	pkgsErr        error
 
 	progress   *ring
 	scanCancel context.CancelFunc
@@ -84,7 +90,10 @@ type lastScan struct {
 }
 
 type (
-	doctorMsg struct{ checks []doctor.Check }
+	doctorMsg struct {
+		checks []doctor.Check
+		pkgs   sysinfo.Packages
+	}
 	detectMsg struct {
 		info scan.ASNInfo
 		err  error
@@ -116,11 +125,11 @@ func (m *Model) openWizard() tea.Cmd { return m.startWizard(false) }
 // openSiteWizard starts the setup for a blockcheck2 scan of one site.
 func (m *Model) openSiteWizard() tea.Cmd { return m.startWizard(true) }
 
-// A running scan or engine download is kept: the page shows it instead of
-// starting over.
+// A running scan, engine download or package install is kept: the page shows
+// it instead of starting over.
 func (m *Model) startWizard(site bool) tea.Cmd {
 	m.focus, m.note, m.inPage = 0, "", true
-	if m.wiz.scanning || m.wiz.installing {
+	if m.wiz.scanning || m.wiz.installing || m.wiz.pkgsInstalling {
 		return nil
 	}
 	m.wiz = wizard{step: wDoctor, siteFlow: site, progress: &ring{max: 200}, last: m.wiz.last, shared: m.wiz.shared}
@@ -160,7 +169,22 @@ func (m *Model) finishWizard() {
 func (m *Model) runDoctor() tea.Cmd {
 	b, ctx := m.b, m.ctx
 	m.note = i18n.T("tui.wiz.checking")
-	return func() tea.Msg { return doctorMsg{b.Doctor(ctx)} }
+	return func() tea.Msg { return doctorMsg{b.Doctor(ctx), b.MissingPackages()} }
+}
+
+// checked moves on to the ISP unless the checks block or the missing
+// packages are still to be offered.
+func (m *Model) checked() {
+	w := &m.wiz
+	if len(blockers(w.checks)) > 0 || w.offerPkgs() {
+		return
+	}
+	w.step, m.focus = wLookup, 0
+	host, err := m.b.IPInfoHost()
+	if err != nil {
+		m.note = errText(err)
+	}
+	w.host = host
 }
 
 func blockers(cs []doctor.Check) []doctor.Check {
@@ -213,16 +237,12 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 	w := &m.wiz
 	switch msg := msg.(type) {
 	case doctorMsg:
-		w.checks, m.note, w.installed = msg.checks, w.installed, ""
-		if len(blockers(msg.checks)) == 0 {
-			w.step, m.focus = wLookup, 0
-			host, err := m.b.IPInfoHost()
-			if err != nil {
-				m.note = errText(err)
-			}
-			w.host = host
-		}
+		w.checks, w.pkgs, m.note, w.installed = msg.checks, msg.pkgs, w.installed, ""
+		m.checked()
 		return m, nil, true
+	case pkgsMsg:
+		m, cmd := m.pkgsDone(msg)
+		return m, cmd, true
 	case detectMsg:
 		m.note = ""
 		if msg.err != nil {
@@ -381,8 +401,10 @@ func (m Model) wizardActions() []action {
 	case wDoctor:
 		again := action{Key: "enter", Label: i18n.T("tui.wiz.check_again"), CLI: "sudo splitdpi doctor", Do: (*Model).runDoctor}
 		switch {
-		case w.installing:
+		case w.installing, w.pkgsInstalling:
 			return nil
+		case w.offerPkgs(): // the engine is offered once the checks rerun after them
+			return m.pkgsActions(again)
 		case engineMissing(w.checks):
 			again.Key = "r"
 			return []action{{Key: "enter", Label: i18n.T("scan_page.install"), CLI: "sudo splitdpi engine install", Do: (*Model).installEngine}, again}
@@ -670,7 +692,12 @@ func (m Model) wizardView(width, h int) string {
 			head = append(head, row(width, i18n.T("scan_page.last"), l.summary()))
 		}
 	case wDoctor:
-		head = append(head, i18n.T("tui.wiz.doctor"))
+		offer := w.offerPkgs()
+		if offer && len(blockers(w.checks)) == 0 {
+			head = append(head, i18n.T("tui.pkgs.head"))
+		} else {
+			head = append(head, i18n.T("tui.wiz.doctor"))
+		}
 		for _, c := range w.checks {
 			if c.Severity == doctor.OK {
 				continue
@@ -680,11 +707,14 @@ func (m Model) wizardView(width, h int) string {
 				mark = badStyle.Render(m.g.fail)
 			}
 			head = append(head, mark+" "+c.Msg)
-			if c.Fix != "" {
+			// The package summary below replaces the fixes of the tools it installs.
+			if c.Fix != "" && !(offer && w.offersTool(c.ID)) {
 				head = append(head, "    "+mutedStyle.Render("$ ")+commandStyle.Render(c.Fix))
 			}
 		}
-		if engineMissing(w.checks) {
+		if offer {
+			head = append(head, w.pkgsView()...)
+		} else if engineMissing(w.checks) {
 			switch {
 			case w.installing:
 				head = append(head, "", i18n.T("scan_page.installing", engine.Version))

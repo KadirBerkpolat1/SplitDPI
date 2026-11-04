@@ -26,6 +26,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/render"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 // Backend is the part of ops the TUI uses; *ops.Ops implements it.
@@ -75,6 +76,9 @@ type Backend interface {
 
 	EngineInstall(ctx context.Context, from string) (engine.Engine, error)
 	EngineStatus() (engine.Engine, bool)
+
+	MissingPackages(tools ...sysinfo.Tool) sysinfo.Packages
+	InstallPackages(ctx context.Context, p sysinfo.Packages) error
 }
 
 const statusEvery = 2 * time.Second
