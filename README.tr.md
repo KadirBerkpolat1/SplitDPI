@@ -188,6 +188,11 @@ stratejiyi kaydeder.
   ya da hayır seçeneğini sunar. Soruyu yanıtlayacak kimse yoksa açmak için
   `--dns auto` (ya da bir sağlayıcı), onsuz devam etmek için `--dns keep`
   verin.
+- **blockcheck2'nin paketleri.** blockcheck2 `curl` ve `nslookup` ya da `host`
+  olmadan çalışmaz. Bunlar eksikse `scan` blockcheck2'den önce onları
+  kurmayı terminalde sorar; soruyu yanıtlayacak kimse yoksa ya da hayır
+  derseniz blockcheck2'yi çalıştırmadan durur ve kurma komutunu yazar
+  (`sudo splitdpi deps install`).
 - **Diğer seçenekler.** `--apps` yalnızca verilen uygulamaları dener, `--asn`
   ve `--country` sağlayıcı aramasını atlar, `--blockcheck-only` hazır ayarları
   atlar, `--no-blockcheck` onlardan sonra durur, `-v` ise başarısız her

@@ -67,7 +67,7 @@ func runDeps(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 // printPackages lists the missing packages, why each is needed, and, where
 // splitdpi can install them, the command it runs and how to undo it.
 func printPackages(w io.Writer, p sysinfo.Packages) {
-	fmt.Fprintln(w, i18n.T("deps.missing", string(p.Manager)))
+	fmt.Fprintln(w, i18n.T("deps.missing"))
 	for i, t := range p.Tools {
 		fmt.Fprintln(w, "  "+i18n.T("deps.why."+t.ID, p.Names[i]))
 	}

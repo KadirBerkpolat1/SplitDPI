@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"maps"
 	"os"
 	"os/exec"
@@ -75,7 +77,7 @@ func TestDepsShowsPlan(t *testing.T) {
 	o, f, _ := missingOps(t, debianRoot(t, nil), "curl", "nslookup", "host")
 	out, code := runOps(t, o, "deps")
 	eq(t, code, 0)
-	has(t, out, "Missing packages (apt):\n"+
+	has(t, out, "Missing packages:\n"+
 		"  curl: scan (blockcheck2) tests sites with curl\n"+
 		"  bind9-host: scan (blockcheck2) checks DNS with nslookup or host\n"+
 		"Runs: "+aptUpdate+"; "+aptInstall+"\n"+
@@ -138,7 +140,7 @@ func TestDepsInstallUnknownDistro(t *testing.T) {
 	o, f, _ := missingOps(t, fstest.MapFS{"etc/os-release": {Data: []byte("ID=nixos\n")}}, "nft")
 	out, code := runOps(t, o, "deps", "install", "--yes")
 	eq(t, code, 1)
-	has(t, out, "  nftables: splitdpi adds its firewall rules with nft")
+	has(t, out, "Missing packages:\n  nftables: splitdpi adds its firewall rules with nft")
 	has(t, out, "No supported package manager found. Install these yourself: nftables")
 	notHas(t, out, "Runs:")
 	eq(t, len(f.calls), 0)
@@ -147,6 +149,22 @@ func TestDepsInstallUnknownDistro(t *testing.T) {
 	eq(t, code, 0)
 	has(t, out, "No supported package manager found.")
 	notHas(t, out, "sudo splitdpi deps install")
+}
+
+func TestDepsInstallErrorShowsHint(t *testing.T) {
+	o, _, _ := missingOps(t, debianRoot(t, nil), "curl")
+	run := o.Exec
+	o.Exec = func(ctx context.Context, stdin, name string, args ...string) ([]byte, error) {
+		if name == "apt-get" && args[0] == "install" {
+			return nil, errors.New("apt-get: exit status 100: E: Unable to locate package curl")
+		}
+		return run(ctx, stdin, name, args...)
+	}
+	out, code := runOps(t, o, "deps", "install", "--yes")
+	eq(t, code, 1)
+	has(t, out, "Could not install the packages: apt-get: exit status 100: E: Unable to locate package curl")
+	has(t, out, "Install them yourself: sudo apt install curl")
+	notHas(t, out, "Installed:")
 }
 
 func TestDepsInstallFailureExits1(t *testing.T) {

@@ -77,7 +77,7 @@ func (o *Ops) InstallPackages(ctx context.Context, p sysinfo.Packages) error {
 		_, refreshErr = o.Exec(ctx, "", c.Refresh[0], c.Refresh[1:]...)
 	}
 	if _, err := o.Exec(ctx, "", c.Install[0], c.Install[1:]...); err != nil {
-		return InstallError{Err: err, Refresh: refreshErr, Hint: p.Hint()}
+		return InstallError{Err: err, Refresh: refreshErr, Hint: p.RetryHint()}
 	}
 	if still := sysinfo.NewPackages(p.Manager, o.missing(p.Tools)); len(still.Tools) > 0 {
 		return errors.New(i18n.T("deps.still_missing", strings.Join(still.Names, ", ")))

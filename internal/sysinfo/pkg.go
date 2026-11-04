@@ -179,7 +179,8 @@ func Installer(pm PkgManager, pkgs []string) (InstallCommand, bool) {
 	case Xbps:
 		return InstallCommand{Install: with("xbps-install", "-Sy")}, true
 	case Emerge:
-		return InstallCommand{Install: with("emerge", "--noreplace")}, true
+		// --ask=n: EMERGE_DEFAULT_OPTS may hold --ask, and nobody answers it.
+		return InstallCommand{Install: with("emerge", "--ask=n", "--noreplace")}, true
 	}
 	return InstallCommand{}, false
 }
@@ -220,6 +221,16 @@ func (p Packages) Command() string {
 
 // Hint is the command that installs them by hand.
 func (p Packages) Hint() string { return InstallHint(p.Manager, p.Names...) }
+
+// RetryHint is the command to run by hand once installing them failed. When
+// pacman -S fails, the package database is mostly stale, and only a full
+// upgrade fixes that.
+func (p Packages) RetryHint() string {
+	if p.Manager == Pacman {
+		return "sudo pacman -Syu " + strings.Join(p.Names, " ")
+	}
+	return p.Hint()
+}
 
 // RemoveHint is the command that removes them again.
 func (p Packages) RemoveHint() string { return RemoveHint(p.Manager, p.Names...) }

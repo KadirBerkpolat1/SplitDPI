@@ -173,6 +173,11 @@ works.
   Cloudflare, another provider, or no. When nobody can answer,
   pass `--dns auto` (or a provider) to turn it on, or `--dns keep` to go on
   without it.
+- **blockcheck2's packages.** blockcheck2 cannot run without `curl` and
+  `nslookup` or `host`. When they are missing, `scan` asks on the terminal
+  whether to install them before blockcheck2 runs; when nobody can answer, or
+  you say no, it stops without running blockcheck2 and prints the install
+  command (`sudo splitdpi deps install`).
 - **Other options.** `--apps` tests only the given apps, `--asn` and `--country`
   skip the ISP lookup, `--blockcheck-only` skips the presets, `--no-blockcheck`
   stops after them, and `-v` shows the raw error of every failed test.

@@ -383,8 +383,13 @@ func keyMsg(k string) tea.KeyMsg {
 	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(k)}
 }
 
-// quit leaves the TUI, but first asks when it runs the bypass itself.
+// quit leaves the TUI, but first asks when it runs the bypass itself. It does
+// not leave while packages install: that would kill the package manager.
 func (m *Model) quit() tea.Cmd {
+	if m.wiz.pkgsInstalling {
+		m.note = i18n.T("tui.pkgs.wait")
+		return nil
+	}
 	if m.running {
 		m.confirmQuit = true
 		return nil

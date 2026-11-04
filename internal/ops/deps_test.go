@@ -127,6 +127,14 @@ func TestInstallPackagesErrors(t *testing.T) {
 		t.Errorf("failed install is not an InstallError: %#v", err)
 	}
 
+	// A stale pacman database fails -S with 404s; -S again would too.
+	m = newMachine("curl")
+	m.fail["pacman -S"] = errors.New("pacman: exit status 1: error: failed retrieving file 'curl-8.17.0-1-x86_64.pkg.tar.zst' : The requested URL returned error: 404")
+	o = pkgOps(t, "arch", m)
+	if err := o.InstallPackages(context.Background(), o.MissingPackages()); !errors.As(err, &ie) || ie.Hint != "sudo pacman -Syu curl" {
+		t.Errorf("pacman failure hint: %v", err)
+	}
+
 	// The package manager succeeds but the command is still not there.
 	m = newMachine("nslookup", "host")
 	m.installs = false
@@ -188,9 +196,20 @@ func TestScanPackages(t *testing.T) {
 		}
 	}
 
+	// A failed install stops the scan before blockcheck2, with the reason.
 	o, m := setup(t)
-	var asked []string
+	m.fail["apt-get install"] = errors.New("apt-get: exit status 100: E: Unable to locate package curl")
 	var log []string
+	yes := func(context.Context, sysinfo.Packages) bool { return true }
+	_, err := o.Scan(context.Background(), scan.Options{ASN: 9121, Site: "pastebin.com", Packages: yes}, func(l string) { log = append(log, l) })
+	var ie InstallError
+	if !errors.As(err, &ie) || ranBlockcheck(log) {
+		t.Errorf("err %v; log %q", err, log)
+	}
+
+	o, m = setup(t)
+	var asked []string
+	log = nil
 	opt := scan.Options{ASN: 9121, Site: "pastebin.com", Packages: func(_ context.Context, p sysinfo.Packages) bool {
 		asked = p.Names
 		return true

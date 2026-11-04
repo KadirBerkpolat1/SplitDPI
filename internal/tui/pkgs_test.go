@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -64,21 +66,64 @@ func TestWizardInstallsMissingPackages(t *testing.T) {
 	has(t, m.View(), i18n.T("deps.installed", "curl, bind9-host"))
 }
 
+// A first setup: the engine is missing, and so is nslookup, which only
+// blockcheck2 needs. Going on without the package leads to the engine
+// install, and the checks that rerun after it do not ask again.
 func TestWizardContinuesWithoutPackages(t *testing.T) {
+	f := newFake()
+	f.checks = []doctor.Check{engineBlocker, lookupWarn}
+	f.pkgs = aptPkgs(sysinfo.Lookup)
+	m := press(t, newModel(t, f), "w")
+	has(t, m.View(), i18n.T("tui.pkgs.skip"))
+	m = press(t, m, "c")
+	if m.wiz.step != wDoctor || f.called("install bind9-host") {
+		t.Fatalf("c: step %v, calls %q; want the engine offered without installing", m.wiz.step, f.calls)
+	}
+	has(t, m.View(), i18n.T("scan_page.install"))
+
+	m = press(t, m, "enter")
+	if !f.called("engine install ") || f.count("doctor") != 2 || m.wiz.step != wLookup || m.dialog != nil {
+		t.Fatalf("after the engine: step %v, %d doctor runs, dialog %v, calls %q; want the ISP", m.wiz.step, f.count("doctor"), m.dialog, f.calls)
+	}
+}
+
+// A site scan always runs blockcheck2, so it cannot go on without curl or
+// nslookup/host.
+func TestSiteScanNeedsPackages(t *testing.T) {
+	f := newFake()
+	f.checks = []doctor.Check{lookupWarn}
+	f.pkgs = aptPkgs(sysinfo.Lookup)
+	m := press(t, press(t, goTo(t, newModel(t, f), pgScan), "down"), "enter")
+	if !m.wiz.siteFlow || m.wiz.step != wDoctor {
+		t.Fatalf("site flow %v, step %v; want its checks", m.wiz.siteFlow, m.wiz.step)
+	}
+	v := m.View()
+	has(t, v, i18n.T("tui.pkgs.install"))
+	if strings.Contains(v, i18n.T("tui.pkgs.skip")) {
+		t.Errorf("a site scan offers going on without blockcheck2's packages:\n%s", v)
+	}
+	if m = press(t, m, "c"); m.wiz.step != wDoctor {
+		t.Errorf("c left the checks: step %v", m.wiz.step)
+	}
+}
+
+// Quitting in the middle of an install would kill the package manager.
+func TestQuitWaitsForPackageInstall(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{curlWarn}
 	f.pkgs = aptPkgs(sysinfo.Curl)
-	m := press(t, press(t, newModel(t, f), "w"), "c")
-	if m.wiz.step != wLookup || f.called("install curl") {
-		t.Fatalf("c: step %v, calls %q; want the ISP without installing", m.wiz.step, f.calls)
+	m, _ := update(t, press(t, press(t, newModel(t, f), "w"), "enter"), key("e"))
+	if !m.wiz.pkgsInstalling {
+		t.Fatal("the install did not start")
 	}
-
-	// The checks rerun in the same setup: the packages are not offered again.
-	m.wiz.step = wDoctor
-	cmd := m.runDoctor()
-	m = settle(t, m, cmd)
-	if f.count("doctor") != 2 || m.wiz.step != wLookup || m.dialog != nil {
-		t.Fatalf("rerun: step %v, %d doctor runs, dialog %v; want the ISP again", m.wiz.step, f.count("doctor"), m.dialog)
+	for _, k := range []string{"q", "ctrl+c"} {
+		next, cmd := update(t, m, key(k))
+		if cmd != nil {
+			if _, quit := cmd().(tea.QuitMsg); quit {
+				t.Fatalf("%s quit during the install", k)
+			}
+		}
+		has(t, next.View(), i18n.T("tui.pkgs.wait"))
 	}
 }
 
@@ -110,19 +155,20 @@ func TestWizardOffersPackagesForBlocker(t *testing.T) {
 func TestWizardPackageInstallFailureShowsHint(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{curlWarn}
-	f.pkgs = aptPkgs(sysinfo.Curl)
-	f.pkgsErr = ops.InstallError{Err: errors.New("apt-get: exit status 100"), Hint: "sudo apt install curl"}
+	f.pkgs = sysinfo.NewPackages(sysinfo.Pacman, []sysinfo.Tool{sysinfo.Curl})
+	f.pkgsErr = ops.InstallError{Err: errors.New("pacman: exit status 1"), Hint: "sudo pacman -Syu curl"}
 	m := press(t, press(t, press(t, newModel(t, f), "w"), "enter"), "y")
 	if !f.called("install curl") || m.wiz.step != wDoctor || f.count("doctor") != 1 {
 		t.Fatalf("after a failed install: step %v, calls %q; want the checks kept", m.wiz.step, f.calls)
 	}
 	v := m.View()
-	has(t, v, i18n.T("tui.pkgs.failed", "apt-get: exit status 100"))
+	has(t, v, i18n.T("tui.pkgs.failed", "pacman: exit status 1"))
 	if strings.Contains(v, "Could not install the packages") {
 		t.Errorf("the failure is worded twice:\n%s", v)
 	}
-	has(t, v, i18n.T("deps.hint", "sudo apt install curl"))
-	if !strings.Contains(m.logs.String(), "exit status 100") {
+	// The error's own hint: pacman -S, which just failed, would fail again.
+	has(t, v, i18n.T("deps.hint", "sudo pacman -Syu curl"))
+	if !strings.Contains(m.logs.String(), "exit status 1") {
 		t.Errorf("error not logged: %q", m.logs.String())
 	}
 	// enter asks again.

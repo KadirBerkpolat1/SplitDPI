@@ -54,8 +54,8 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 				fmt.Fprintln(w, ln)
 			}
 		}
+		printTrials(w, rep.Trials, verbose)
 		if errors.Is(err, scan.ErrNoStrategy) {
-			printTrials(w, rep.Trials, verbose)
 			return errors.New(i18n.T("scan.no_strategy"))
 		}
 		return err

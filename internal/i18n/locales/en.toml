@@ -842,7 +842,7 @@ help = "Show (no arguments) or install (install [--yes]) the missing packages sp
 [deps]
 usage = "Usage: splitdpi deps [install [--yes]]"
 none = "Every package splitdpi needs is installed."
-missing = "Missing packages (%s):"
+missing = "Missing packages:"
 why.nft = "%s: splitdpi adds its firewall rules with nft"
 why.curl = "%s: scan (blockcheck2) tests sites with curl"
 why.lookup = "%s: scan (blockcheck2) checks DNS with nslookup or host"
@@ -867,3 +867,4 @@ title = "Install packages"
 change = "Installs %s with %s"
 undo = "To remove them later:"
 failed = "Package install failed: %v"
+wait = "Packages are being installed; wait until the package manager finishes."

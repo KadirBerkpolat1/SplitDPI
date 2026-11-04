@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
@@ -28,10 +29,17 @@ func (w wizard) offersTool(id string) bool {
 	return slices.ContainsFunc(w.pkgs.Tools, func(t sysinfo.Tool) bool { return t.ID == id })
 }
 
-// pkgsActions installs the packages or, when nothing blocks, goes on without them.
+// canSkipPkgs reports whether the setup can go on without the offered
+// packages: none of them is what blocks, and the flow is not a site scan,
+// which always runs blockcheck2.
+func (w wizard) canSkipPkgs() bool {
+	return !w.siteFlow && !slices.ContainsFunc(blockers(w.checks), func(c doctor.Check) bool { return w.offersTool(c.ID) })
+}
+
+// pkgsActions installs the packages or, when the setup can, goes on without them.
 func (m Model) pkgsActions(again action) []action {
 	acts := []action{{Key: "enter", Label: i18n.T("tui.pkgs.install"), CLI: ops.InstallHint(m.wiz.pkgs), Do: (*Model).confirmPkgs}}
-	if len(blockers(m.wiz.checks)) == 0 {
+	if m.wiz.canSkipPkgs() {
 		acts = append(acts, action{Key: "c", Label: i18n.T("tui.pkgs.skip"), Do: (*Model).skipPkgs})
 	}
 	again.Key = "r"
@@ -95,13 +103,13 @@ func (w wizard) pkgsView() []string {
 	case w.pkgsInstalling:
 		lines = append(lines, i18n.T("deps.installing", strings.Join(p.Names, ", "), p.Manager))
 	case w.pkgsErr != nil:
-		err := w.pkgsErr
+		err, hint := w.pkgsErr, p.Hint()
 		var ie ops.InstallError
 		if errors.As(err, &ie) {
-			err = ie.Err
+			err, hint = ie.Err, ie.Hint
 		}
 		first, _, _ := strings.Cut(err.Error(), "\n")
-		lines = append(lines, badStyle.Render(i18n.T("tui.pkgs.failed", first)), i18n.T("deps.hint", commandStyle.Render(p.Hint())))
+		lines = append(lines, badStyle.Render(i18n.T("tui.pkgs.failed", first)), i18n.T("deps.hint", commandStyle.Render(hint)))
 	}
 	return lines
 }
