@@ -21,6 +21,9 @@ func runDoctor(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	}
 	cs := o.Doctor(ctx)
 	printChecks(w, cs)
+	if p := o.MissingPackages(); len(p.Tools) > 0 && p.CanInstall() {
+		fmt.Fprintln(w, i18n.T("doctor.deps", ops.InstallHint(p)))
+	}
 	if doctor.ExitCode(cs) != 0 {
 		n := 0
 		for _, c := range cs {

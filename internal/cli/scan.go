@@ -1,19 +1,14 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/netip"
-	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"golang.org/x/term"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
@@ -21,6 +16,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 func init() {
@@ -36,6 +32,9 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 		return scanDNSChoice(o, w, dnsFlag, poisoned)
 	}
 	opt.DNSForce = dnsFlag != ""
+	opt.Packages = func(_ context.Context, p sysinfo.Packages) bool {
+		return scanPackages(w, p)
+	}
 	if opt.Site != "" {
 		if opt.Site, err = domain.Normalize(opt.Site); err != nil {
 			return err
@@ -120,12 +119,13 @@ func suggestPresetsUpdate(w io.Writer, o *ops.Ops) {
 	}
 }
 
-// Before blockcheck2 tests poisoned domains, the scan asks a terminal user
-// whether to turn on encrypted DNS; these are the prompt's input.
-var (
-	dnsPromptIn  io.Reader = os.Stdin
-	dnsPromptTTY           = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) }
-)
+// scanPackages answers ops' question before blockcheck2 runs without curl or
+// nslookup/host. Without a terminal it says no, and ops prints the command
+// that installs them.
+func scanPackages(w io.Writer, p sysinfo.Packages) bool {
+	printPackages(w, p)
+	return promptTTY() && askYes(w, i18n.T("deps.ask"))
+}
 
 // scanDNSChoice answers ops' DNS question: dnsFlag is --dns ("" when not given).
 func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) string {
@@ -135,10 +135,8 @@ func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNS
 	choice := dnsFlag
 	switch {
 	case dnsFlag != "":
-	case dnsPromptTTY():
-		fmt.Fprint(w, i18n.T("dns2.scan_ask")+" ")
-		line, _ := bufio.NewReader(dnsPromptIn).ReadString('\n')
-		if slices.Contains(strings.Split(i18n.T("prompt.yes"), ","), strings.ToLower(strings.TrimSpace(line))) {
+	case promptTTY():
+		if askYes(w, i18n.T("dns2.scan_ask")) {
 			choice = dns.Auto
 		}
 	default:

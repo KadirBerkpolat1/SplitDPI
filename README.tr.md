@@ -38,9 +38,12 @@ zorlayıcı modda da çalışır. Kurulu bir zapret ya da zapret2'den geçmek i�
 | Artix, antiX, dinit, s6 veya sysvinit dağıtımları | diğer | hayır: istendiğinde çalıştırın | evet | henüz denenmedi |
 
 SplitDPI, nftables destekli 5.4 veya daha yeni bir x86_64 ya da arm64 çekirdek
-ile `nft` ve `curl` komutlarını ister. `splitdpi doctor` bunların hepsini
-denetler ve paket yöneticinize uygun kurulum komutunu yazar. NixOS
-kullanıcıları zapret2-flake veya zapret2-nix'e bakmalı.
+ile `nft` ve `curl` komutlarını ister; blockcheck2 taraması ayrıca `nslookup`
+ya da `host` ister. Kurulum eksik paketleri dağıtımın paket yöneticisiyle
+kurmadan önce sorar; aynısını komut satırında `sudo splitdpi deps install`
+yapar (`--yes` sormadan kurar). `splitdpi doctor` bunların hepsini denetler ve
+paket yöneticinize uygun kurulum komutunu yazar. NixOS kullanıcıları
+zapret2-flake veya zapret2-nix'e bakmalı.
 
 ## Hızlı başlangıç
 
@@ -52,7 +55,7 @@ sudo splitdpi
 Kurulum betiği indirdiği dosyanın sağlama toplamını doğrular ve programı
 `/usr/local/bin/splitdpi` olarak kurar. `sudo splitdpi` terminal arayüzünü
 açar; kurulumu başlatmak için `w` tuşuna basın. Kurulum sisteminizi denetler,
-zapret2 motorunu kendisi kurar, sağlayıcınızı bulur, hangi uygulamaların
+eksik paketleri sorup kurar, zapret2 motorunu kendisi kurar, sağlayıcınızı bulur, hangi uygulamaların
 çalışması gerektiğini sorar, stratejileri dener ve SplitDPI'yi hemen ya da her
 açılışta çalıştırır.
 
@@ -98,6 +101,7 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 |---|---|
 | `splitdpi` | Terminal arayüzünü açar. |
 | `splitdpi doctor` | Sistemi denetler ve SplitDPI'yi engelleyen her şeyi listeler. |
+| `splitdpi deps [install [--yes]]` | SplitDPI'nin istediği eksik paketleri listeler ya da sorduktan sonra paket yöneticisiyle kurar; `--yes` sormadan kurar. |
 | `splitdpi engine install [--from DOSYA]` / `engine status` | Sabitlenmiş zapret2 sürümünü SHA-256'sını doğrulayarak kurar ya da kurulu olanı gösterir. |
 | `splitdpi detect [--asn N] [--country ÜLKE]` | Sağlayıcınızı bulur ve onun hazır stratejilerini listeler. |
 | `splitdpi scan [--site ALAN] [--dns keep\|auto\|SAĞLAYICI] [--apps ID,ID] [--asn N] [--country ÜLKE] [--blockcheck-only\|--no-blockcheck] [-v]` | Çalışan bir strateji bulur ve kaydeder; bkz. [Strateji bulma](#strateji-bulma). |

@@ -61,6 +61,8 @@ jobs:
         include:
           - image: debian:13
             hint: apt install
+          - image: ubuntu:24.04
+            hint: apt install
           - image: fedora:latest
             hint: dnf install
           - image: archlinux:latest
