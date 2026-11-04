@@ -90,6 +90,7 @@ func trialOps(t *testing.T, root fstest.MapFS) (*Ops, *nftState, *[]*child) {
 	var mu sync.Mutex
 	o := &Ops{
 		P: p, Exec: n.run, Root: root, Now: time.Now, Euid: func() int { return 0 }, GOARCH: "amd64",
+		LookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
 		Spawn: func([]string) (supervisor.Child, error) {
 			c := &child{exit: make(chan error, 1)}
 			mu.Lock()

@@ -138,7 +138,7 @@ func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNS
 	case dnsPromptTTY():
 		fmt.Fprint(w, i18n.T("dns2.scan_ask")+" ")
 		line, _ := bufio.NewReader(dnsPromptIn).ReadString('\n')
-		if slices.Contains(strings.Split(i18n.T("dns2.yes"), ","), strings.ToLower(strings.TrimSpace(line))) {
+		if slices.Contains(strings.Split(i18n.T("prompt.yes"), ","), strings.ToLower(strings.TrimSpace(line))) {
 			choice = dns.Auto
 		}
 	default:

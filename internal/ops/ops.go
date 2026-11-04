@@ -24,6 +24,8 @@ type Ops struct {
 	Now    func() time.Time
 	Euid   func() int
 	GOARCH string
+	// LookPath finds a command on PATH; nil means exec.LookPath.
+	LookPath func(string) (string, error)
 	// Spawn starts nfqws2; nil means supervisor.ExecSpawn under this binary as guard.
 	Spawn func(argv []string) (supervisor.Child, error)
 	// Log receives nfqws2 output and supervisor messages; nil discards them.

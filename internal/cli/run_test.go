@@ -72,6 +72,8 @@ func runOpsFor(t *testing.T, root fstest.MapFS) (*ops.Ops, *fakeNft) {
 		Euid:   func() int { return 0 },
 		Now:    time.Now,
 		GOARCH: "amd64",
+		// Every command is on PATH, whatever the test machine has.
+		LookPath: func(name string) (string, error) { return "/usr/bin/" + name, nil },
 	}, f
 }
 

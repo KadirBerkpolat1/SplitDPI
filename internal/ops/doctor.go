@@ -3,7 +3,6 @@ package ops
 import (
 	"context"
 	"io/fs"
-	"os/exec"
 	"path"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
@@ -22,7 +21,7 @@ func (o *Ops) doctorEnv() doctor.Env {
 		Root:     o.Root,
 		P:        o.P,
 		Run:      o.Exec,
-		LookPath: exec.LookPath,
+		LookPath: o.lookPath,
 		Procs:    o.procs,
 		Euid:     o.Euid,
 		DNSCheck: func(ctx context.Context) []probe.DNSResult {

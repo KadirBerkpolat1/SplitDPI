@@ -2,7 +2,9 @@ package sysinfo
 
 import (
 	"bufio"
+	"bytes"
 	"io"
+	"io/fs"
 	"strings"
 )
 
@@ -41,6 +43,17 @@ func ParseOSRelease(r io.Reader) (OSRelease, error) {
 		}
 	}
 	return o, s.Err()
+}
+
+// ReadOSRelease reads root's os-release; an unreadable one is empty.
+func ReadOSRelease(root fs.FS) OSRelease {
+	for _, p := range []string{"etc/os-release", "usr/lib/os-release"} {
+		if b, err := fs.ReadFile(root, p); err == nil {
+			o, _ := ParseOSRelease(bytes.NewReader(b))
+			return o
+		}
+	}
+	return OSRelease{}
 }
 
 func splitLike(s string) []string {

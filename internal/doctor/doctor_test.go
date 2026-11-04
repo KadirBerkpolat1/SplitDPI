@@ -207,7 +207,7 @@ func TestStrategyOldEngine(t *testing.T) {
 func TestClean(t *testing.T) {
 	f := newFake(t)
 	cs := doctor.Run(context.Background(), f.env)
-	for _, id := range []string{"root", "kernel", "nft", "curl", "nfqueue", "engine", "strategy", "lsm", "conflict", "init", "ipv6"} {
+	for _, id := range []string{"root", "kernel", "nft", "curl", "lookup", "nfqueue", "engine", "strategy", "lsm", "conflict", "init", "ipv6"} {
 		one(t, cs, id, doctor.OK)
 	}
 	if doctor.ExitCode(cs) != 0 {
@@ -225,6 +225,29 @@ func TestNoNft(t *testing.T) {
 	}
 	c := one(t, doctor.Run(context.Background(), f.env), "nft", doctor.Blocker)
 	eq(t, c.Fix, "sudo apt install nftables")
+}
+
+// blockcheck2 accepts host when nslookup is missing; without either, scans
+// cannot run, but splitdpi itself can.
+func TestLookupTool(t *testing.T) {
+	f := newFake(t)
+	gone := map[string]bool{"nslookup": true}
+	f.env.LookPath = func(name string) (string, error) {
+		if gone[name] {
+			return "", errors.New("not found")
+		}
+		return "/usr/bin/" + name, nil
+	}
+	c := one(t, doctor.Run(context.Background(), f.env), "lookup", doctor.OK)
+	has(t, c.Msg, "/usr/bin/host")
+
+	gone["host"] = true
+	cs := doctor.Run(context.Background(), f.env)
+	c = one(t, cs, "lookup", doctor.Warn)
+	eq(t, c.Fix, "sudo apt install bind9-host")
+	if doctor.ExitCode(cs) != 0 {
+		t.Errorf("exit code %d; a missing lookup tool must not block", doctor.ExitCode(cs))
+	}
 }
 
 func TestOldKernel(t *testing.T) {

@@ -2,7 +2,9 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
@@ -62,7 +64,7 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 	if opt.Site != "" {
 		trialHosts = []string{opt.Site}
 	}
-	var dnsErr error
+	var preErr error // stopped blockcheck2 before it ran
 	env := scan.Env{
 		Set: set,
 		Lookup: func(ctx context.Context) (scan.ASNInfo, error) {
@@ -77,8 +79,11 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		},
 		// Trials after this see c, so a DNS turned on here serves them too.
 		Blockcheck: func(ctx context.Context, p scan.BlockcheckParams, prog func(string)) (string, error) {
-			if dnsErr = o.scanDNS(ctx, &c, opt, p.Domains, progress); dnsErr != nil {
-				return "", dnsErr
+			if preErr = o.scanPackages(ctx, opt, progress); preErr != nil {
+				return "", preErr
+			}
+			if preErr = o.scanDNS(ctx, &c, opt, p.Domains, progress); preErr != nil {
+				return "", preErr
 			}
 			if c.DNSOn() {
 				for _, u := range dns.Upstreams(c.DNSProvider, dns.DoH) {
@@ -93,8 +98,8 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		EngineVer: engine.Version,
 	}
 	rep, err := scan.Scan(ctx, env, opt)
-	if dnsErr != nil {
-		return rep, dnsErr
+	if preErr != nil {
+		return rep, preErr
 	}
 	if err != nil {
 		return rep, err
@@ -111,6 +116,29 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		}
 	}
 	return rep, nil
+}
+
+// scanPackages makes sure blockcheck2 finds curl and nslookup or host, which
+// it cannot run without, installing them when opt.Packages agrees.
+func (o *Ops) scanPackages(ctx context.Context, opt scan.Options, progress func(string)) error {
+	p := o.MissingPackages(sysinfo.Curl, sysinfo.Lookup)
+	if len(p.Tools) == 0 {
+		return nil
+	}
+	names := strings.Join(p.Names, ", ")
+	if !p.CanInstall() || opt.Packages == nil || !opt.Packages(ctx, p) {
+		return errors.New(i18n.T("scan.packages", names, InstallHint(p)))
+	}
+	if progress != nil {
+		progress(i18n.T("deps.installing", names, string(p.Manager)))
+	}
+	if err := o.InstallPackages(ctx, p); err != nil {
+		return err
+	}
+	if progress != nil {
+		progress(i18n.T("deps.installed", names))
+	}
+	return nil
 }
 
 // scanDNS runs opt.DNSCheck when DNS is off and some of domains look

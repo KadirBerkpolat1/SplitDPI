@@ -2,7 +2,6 @@
 package doctor
 
 import (
-	"bytes"
 	"context"
 	"io/fs"
 	"path/filepath"
@@ -72,10 +71,10 @@ const fixEngine = "sudo splitdpi engine install"
 
 // Run performs every check in a fixed order.
 func Run(ctx context.Context, env Env) []Check {
-	pm := sysinfo.DetectPkgManager(osRelease(env.Root), env.Root)
+	pm := sysinfo.DetectPkgManager(sysinfo.ReadOSRelease(env.Root), env.Root)
 	cs := []Check{root(env), kernel(env)}
-	nft := tool(env, "nft", "nftables", Blocker, pm)
-	cs = append(cs, nft, tool(env, "curl", "curl", Warn, pm))
+	nft := tool(env, sysinfo.Nft, Blocker, pm)
+	cs = append(cs, nft, tool(env, sysinfo.Curl, Warn, pm), tool(env, sysinfo.Lookup, Warn, pm))
 	if nft.Severity == OK {
 		cs = append(cs, nfqueue(ctx, env))
 	}
@@ -232,16 +231,6 @@ func ParseProcStat(s string) (Proc, bool) {
 	return Proc{PID: pid, PPID: ppid, Comm: s[open+1 : end]}, true
 }
 
-func osRelease(root fs.FS) sysinfo.OSRelease {
-	for _, p := range []string{"etc/os-release", "usr/lib/os-release"} {
-		if b, err := fs.ReadFile(root, p); err == nil {
-			o, _ := sysinfo.ParseOSRelease(bytes.NewReader(b))
-			return o
-		}
-	}
-	return sysinfo.OSRelease{}
-}
-
 func root(env Env) Check {
 	if env.Euid() != 0 {
 		return Check{ID: "root", Severity: Blocker, Msg: i18n.T("doctor.root.no"), Fix: "sudo splitdpi doctor"}
@@ -261,11 +250,13 @@ func kernel(env Env) Check {
 	return Check{ID: "kernel", Msg: i18n.T("doctor.kernel.ok", rel)}
 }
 
-func tool(env Env, name, pkg string, missing Severity, pm sysinfo.PkgManager) Check {
-	if p, err := env.LookPath(name); err == nil {
-		return Check{ID: name, Msg: i18n.T("doctor.tool.ok", name, p)}
+func tool(env Env, t sysinfo.Tool, missing Severity, pm sysinfo.PkgManager) Check {
+	for _, name := range t.Commands {
+		if p, err := env.LookPath(name); err == nil {
+			return Check{ID: t.ID, Msg: i18n.T("doctor.tool.ok", name, p)}
+		}
 	}
-	return Check{ID: name, Severity: missing, Msg: i18n.T("doctor.tool.missing." + name), Fix: sysinfo.InstallHint(pm, pkg)}
+	return Check{ID: t.ID, Severity: missing, Msg: i18n.T("doctor.tool.missing." + t.ID), Fix: sysinfo.InstallHint(pm, t.Package(pm))}
 }
 
 // nfqueue loads a throwaway queue rule to prove the kernel supports NFQUEUE.

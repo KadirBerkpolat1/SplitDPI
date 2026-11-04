@@ -94,7 +94,7 @@ func TestInstallHint(t *testing.T) {
 		{Zypper, []string{"nftables", "curl"}, "sudo zypper install nftables curl"},
 		{Apk, []string{"nftables", "curl"}, "sudo apk add nftables curl"},
 		{Xbps, []string{"nftables", "curl"}, "sudo xbps-install nftables curl"},
-		{Emerge, []string{"nftables", "curl"}, "sudo emerge net-firewall/nftables net-misc/curl"},
+		{Emerge, []string{"net-firewall/nftables", "net-misc/curl"}, "sudo emerge net-firewall/nftables net-misc/curl"},
 		{Unknown, []string{"nftables", "curl"}, "install with your package manager: nftables curl"},
 	}
 	for _, tc := range cases {

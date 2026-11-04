@@ -12,6 +12,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 // ErrNoStrategy means no preset trial and no blockcheck strategy succeeded.
@@ -32,6 +33,10 @@ type Options struct {
 	// DNSForce checks for poisoning even when the system already encrypts
 	// DNS, where the check is otherwise skipped (an explicit --dns).
 	DNSForce bool
+	// Packages is asked before blockcheck2 runs when curl or nslookup/host
+	// is missing and the package manager is known; true installs them. A
+	// nil Packages never installs, and the scan stops there.
+	Packages func(ctx context.Context, missing sysinfo.Packages) bool
 	// Trial, when set, gets each finished trial, preset or blockcheck2, in
 	// place of the progress line a blockcheck2 trial otherwise prints.
 	Trial func(Trial)

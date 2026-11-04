@@ -69,6 +69,7 @@ winner = "Seçilen strateji: %s (kaynak: %s)"
 voice = "sesli görüşme: hazır ayar uygulandı, doğrulanmadı"
 next = "Sonra: sudo splitdpi run   ya da: sudo splitdpi enable"
 presets_stale = "Hazır ayar verisi 30 günden eski. Güncellemek için: splitdpi presets update"
+packages = "blockcheck2'nin istediği paketler kurulu değil: %s. Kurmak için: %s"
 
 [cmd.detect]
 help = "ASN'nizi bulur ve sağlayıcınıza uyan hazır stratejileri listeler."
@@ -136,6 +137,7 @@ usage = "Kullanım: splitdpi doctor"
 fix = "çözüm: %s"
 blockers_one = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce onu giderin."
 blockers_many = "doctor %d engel buldu; splitdpi'yi çalıştırmadan önce bunları giderin."
+deps = "Eksik paketleri tek seferde kurmak için: %s"
 
 [doctor.root]
 ok = "root olarak çalışıyor"
@@ -150,6 +152,7 @@ unknown = "çekirdek sürümü okunamadı: %v"
 ok = "%s bulundu: %s"
 missing.nft = "nft (nftables) kurulu değil; splitdpi trafiği kuyruğa almak için buna ihtiyaç duyar"
 missing.curl = "curl kurulu değil; tarama (blockcheck2) için gerekli"
+missing.lookup = "nslookup da host da kurulu değil; tarama (blockcheck2) bunlardan birini ister"
 
 [doctor.nfqueue]
 ok = "çekirdek nftables kuyruk kurallarını kabul ediyor"
@@ -440,7 +443,6 @@ scan_ask = "Bu tarama için şifreli DNS (otomatik) açılsın ve açık kalsın
 scan_hint = "Şifreli DNS ile taramak ve onu açık bırakmak için taramayı --dns auto ile yeniden çalıştırın."
 scan_kept = "Sistemin DNS çözümleyicisiyle devam ediliyor: zehirlenen alan adlarının sonuçları yanlış olabilir."
 scan_on = "Şifreli DNS (%s) bu tarama için açıldı ve açık kalacak."
-yes = "e,evet,y,yes"
 
 [cmd.uninstall]
 help = "SplitDPI'yi tamamen kaldırır: servis, kurallar, ayarlar, veriler, günlük ve program ([--yes] onaylar)."
@@ -830,3 +832,38 @@ done = "Tamam: SplitDPI'nin kapattığı zapret servisi yeniden açık."
 
 [list_scroll]
 more = "%d daha"
+
+[prompt]
+yes = "e,evet,y,yes"
+
+[cmd.deps]
+help = "splitdpi'nin istediği eksik paketleri gösterir (argümansız) ya da kurar (install [--yes])."
+
+[deps]
+usage = "Kullanım: splitdpi deps [install [--yes]]"
+none = "splitdpi'nin istediği paketlerin hepsi kurulu."
+missing = "Eksik paketler (%s):"
+why.nft = "%s: splitdpi güvenlik duvarı kurallarını nft ile ekler"
+why.curl = "%s: tarama (blockcheck2) siteleri curl ile dener"
+why.lookup = "%s: tarama (blockcheck2) DNS'i nslookup ya da host ile denetler"
+runs = "Çalışacak komut: %s"
+remove = "Sonra kaldırmak için: %s"
+hint = "Kurmak için: %s"
+ask = "Şimdi kurulsun mu? [e/H]"
+confirm = "Sormadan kurmak için şunu çalıştırın: %s"
+installing = "%s, %s ile kuruluyor..."
+installed = "Kuruldu: %s"
+declined = "Hiçbir şey kurulmadı."
+unknown_pm = "Desteklenen bir paket yöneticisi bulunamadı. Bunları kendiniz kurun: %s"
+failed = "Paketler kurulamadı: %v\nKendiniz kurmak için: %s"
+still_missing = "Paket yöneticisi bitti ama bunlar hâlâ eksik: %s"
+
+[tui.pkgs]
+head = "splitdpi'nin istediği bazı paketler eksik:"
+missing = "Eksik paketler: %s"
+install = "Paketleri kur"
+skip = "Onlarsız devam et"
+title = "Paketleri kur"
+change = "%s, %s ile kurulur"
+undo = "Sonra kaldırmak için:"
+failed = "Paket kurulumu başarısız: %v"

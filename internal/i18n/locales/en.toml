@@ -64,6 +64,7 @@ winner = "Selected strategy: %s (from %s)"
 voice = "voice: preset applied, not verified"
 next = "Next: sudo splitdpi run   or: sudo splitdpi enable"
 presets_stale = "Preset data is over 30 days old. Consider: splitdpi presets update"
+packages = "blockcheck2 needs packages that are not installed: %s. To install them: %s"
 
 [cmd.detect]
 help = "Look up your ASN and list matching ISP preset strategies."
@@ -131,6 +132,7 @@ usage = "Usage: splitdpi doctor"
 fix = "fix: %s"
 blockers_one = "doctor found %d blocker; fix it before running splitdpi."
 blockers_many = "doctor found %d blockers; fix them before running splitdpi."
+deps = "Install the missing packages in one go: %s"
 
 [doctor.root]
 ok = "running as root"
@@ -145,6 +147,7 @@ unknown = "cannot read the kernel version: %v"
 ok = "%s found at %s"
 missing.nft = "nft (nftables) is not installed; splitdpi needs it to queue traffic"
 missing.curl = "curl is not installed; scan (blockcheck2) needs it"
+missing.lookup = "neither nslookup nor host is installed; scan (blockcheck2) needs one of them"
 
 [doctor.nfqueue]
 ok = "the kernel accepts nftables queue rules"
@@ -440,7 +443,6 @@ scan_ask = "Use encrypted DNS (automatic) for this scan and keep it on? [y/N]"
 scan_hint = "To scan with encrypted DNS and keep it on, run the scan again with --dns auto."
 scan_kept = "Keeping the system resolver: results for the poisoned domains may be wrong."
 scan_on = "Encrypted DNS (%s) is on for this scan and stays on."
-yes = "y,yes"
 
 [cmd.uninstall]
 help = "Remove SplitDPI completely: service, rules, settings, data, log and the program ([--yes] confirms)."
@@ -830,3 +832,38 @@ done = "Done: the zapret service SplitDPI turned off is on again."
 
 [list_scroll]
 more = "%d more"
+
+[prompt]
+yes = "y,yes"
+
+[cmd.deps]
+help = "Show (no arguments) or install (install [--yes]) the missing packages splitdpi needs."
+
+[deps]
+usage = "Usage: splitdpi deps [install [--yes]]"
+none = "Every package splitdpi needs is installed."
+missing = "Missing packages (%s):"
+why.nft = "%s: splitdpi adds its firewall rules with nft"
+why.curl = "%s: scan (blockcheck2) tests sites with curl"
+why.lookup = "%s: scan (blockcheck2) checks DNS with nslookup or host"
+runs = "Runs: %s"
+remove = "To remove them later: %s"
+hint = "To install them: %s"
+ask = "Install them now? [y/N]"
+confirm = "To install them without a question, run: %s"
+installing = "Installing %s with %s..."
+installed = "Installed: %s"
+declined = "Nothing was installed."
+unknown_pm = "No supported package manager found. Install these yourself: %s"
+failed = "Could not install the packages: %v\nInstall them yourself: %s"
+still_missing = "The package manager finished, but these are still missing: %s"
+
+[tui.pkgs]
+head = "Some packages splitdpi needs are missing:"
+missing = "Missing packages: %s"
+install = "Install packages"
+skip = "Continue without them"
+title = "Install packages"
+change = "Installs %s with %s"
+undo = "To remove them later:"
+failed = "Package install failed: %v"
