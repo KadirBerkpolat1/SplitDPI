@@ -483,7 +483,9 @@ func errText(err error) string {
 	case errors.Is(err, ops.ErrEngineMissing):
 		return i18n.T("engine.not_installed")
 	}
-	return err.Error()
+	// fitNote drops a note's first lines to fit, so a raw error stays on one
+	// line: its cause comes first, before the rule and caret lines nft adds.
+	return strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", " ")
 }
 
 // ring keeps the last max lines written to it.

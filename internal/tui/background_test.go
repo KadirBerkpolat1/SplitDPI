@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -51,6 +52,18 @@ func TestBackgroundActionFailure(t *testing.T) {
 	has(t, flat(m.View()), "did not start in the background")
 	has(t, flat(m.View()), "/var/log/splitdpi.log")
 	has(t, m.View(), "b Run in background")
+}
+
+// A raw error of several lines, as nft prints with its rule and a caret
+// line, keeps its cause in the note at 80x24.
+func TestBackgroundRawErrorKeepsCause(t *testing.T) {
+	f := newFake()
+	f.bgErr = errors.New("load nft table splitdpi: nft: exit status 1: Error: Could not process rule: No such file or directory\n" +
+		"add rule inet splitdpi output meta mark 0x40000000 queue num 200 bypass\n" +
+		"                                                   ^^^^^^^^^^^^^^^^^^^^^")
+	v := press(t, newModel(t, f), "b").View()
+	fits(t, "raw error", v)
+	has(t, flat(v), "Could not process rule")
 }
 
 // A log stream opened before the background run read the journal; starting
