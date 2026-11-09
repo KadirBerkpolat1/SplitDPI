@@ -131,7 +131,11 @@ func TestOpenRCEnableDisable(t *testing.T) {
 	}
 }
 
-func TestRunitEnableRemove(t *testing.T) {
+// runit's link starts the service at once, so Enable leaves it to Start:
+// Enable must not start anything before the run the service replaces has
+// stopped. A new link needs no sv up, runsvdir starts it; a linked service
+// may have been told to stay down.
+func TestRunitStartLinks(t *testing.T) {
 	rec := &recorder{}
 	m, p := manager(t, sysinfo.Runit, rec.run)
 	if err := m.Install(); err != nil {
@@ -140,8 +144,14 @@ func TestRunitEnableRemove(t *testing.T) {
 	if err := m.Enable(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(p.RunitLink); err != nil {
+	if _, err := os.Lstat(p.RunitLink); !os.IsNotExist(err) || len(rec.calls) > 0 {
+		t.Fatalf("Enable started it: link %v, calls %q", err, rec.calls)
+	}
+	if err := m.Start(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(p.RunitLink); err != nil || len(rec.calls) > 0 {
+		t.Fatalf("after Start: link %v, calls %q", err, rec.calls)
 	}
 	if err := m.Start(context.Background()); err != nil {
 		t.Fatal(err)
@@ -173,7 +183,7 @@ func TestRunitFreshManagerDisables(t *testing.T) {
 	if err := installer.Install(); err != nil {
 		t.Fatal(err)
 	}
-	if err := installer.Enable(context.Background()); err != nil {
+	if err := installer.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	fresh, _ := initsys.For(sysinfo.Runit, (&recorder{}).run, bin, p)
@@ -185,6 +195,50 @@ func TestRunitFreshManagerDisables(t *testing.T) {
 	}
 	if _, err := os.Lstat(p.RunitLink); !os.IsNotExist(err) {
 		t.Error("link still exists")
+	}
+}
+
+// Enabled reads only the enable link under a temp root; no init is asked.
+// The link counts even when its host-path target is not there.
+func TestEnabled(t *testing.T) {
+	for kind, link := range map[sysinfo.Init]func(paths.Paths) string{
+		sysinfo.Systemd: func(p paths.Paths) string { return p.SystemdLink },
+		sysinfo.OpenRC:  func(p paths.Paths) string { return p.OpenRCLink },
+		sysinfo.Runit:   func(p paths.Paths) string { return p.RunitLink },
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			rec := &recorder{}
+			m, p := manager(t, kind, rec.run)
+			if m.Enabled() {
+				t.Fatal("enabled without the link")
+			}
+			if err := os.MkdirAll(filepath.Dir(link(p)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink("/nonexistent/splitdpi", link(p)); err != nil {
+				t.Fatal(err)
+			}
+			if !m.Enabled() {
+				t.Error("not enabled with the link there")
+			}
+			if len(rec.calls) > 0 {
+				t.Errorf("init asked: %q", rec.calls)
+			}
+		})
+	}
+}
+
+// runit's Start and Disable are the link itself.
+func TestRunitEnabledFollowsStart(t *testing.T) {
+	m, _ := manager(t, sysinfo.Runit, (&recorder{}).run)
+	if err := m.Install(); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Start(context.Background()); err != nil || !m.Enabled() {
+		t.Fatalf("after Start: %v, enabled %v", err, m.Enabled())
+	}
+	if err := m.Disable(context.Background()); err != nil || m.Enabled() {
+		t.Fatalf("after Disable: %v, enabled %v", err, m.Enabled())
 	}
 }
 

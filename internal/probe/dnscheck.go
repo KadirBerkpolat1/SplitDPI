@@ -8,12 +8,12 @@ import (
 
 // DNSResult compares system resolver answers with DoH.
 type DNSResult struct {
-	Domain    string
-	System    []netip.Addr
-	DoH       []netip.Addr
-	Poisoned  bool
-	Mismatch  bool
-	Reason    string
+	Domain   string
+	System   []netip.Addr
+	DoH      []netip.Addr
+	Poisoned bool
+	Mismatch bool
+	Reason   string
 }
 
 // CheckDNS resolves each domain through sys and doh and classifies poisoning.

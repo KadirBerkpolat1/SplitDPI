@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"testing/fstest"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -20,7 +21,7 @@ func runOps(t *testing.T, o *ops.Ops, args ...string) (string, int) {
 }
 
 func rootOps(t *testing.T) *ops.Ops {
-	return &ops.Ops{P: paths.Under(t.TempDir()), Euid: func() int { return 0 }}
+	return &ops.Ops{P: paths.Under(t.TempDir()), Root: fstest.MapFS{}, Euid: func() int { return 0 }}
 }
 
 func TestPresetsListNonRoot(t *testing.T) {

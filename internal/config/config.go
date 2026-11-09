@@ -21,7 +21,9 @@ const (
 	ModeApps  Mode = "apps"
 )
 
-// RunMode is how the TUI's run key starts the bypass; CLI commands ignore it.
+// RunMode is how the TUI's run key starts the bypass. Whether SplitDPI starts
+// at boot is the init system's to say: enable saves boot, and disable, revert
+// and uninstall drop it.
 type RunMode string
 
 const (
@@ -113,7 +115,7 @@ func Load(p paths.Paths) (Config, error) {
 		c.DNSProtocol = dns.DoH
 	}
 	// A run mode this version does not know falls back to the default
-	// instead of failing: only the TUI reads it.
+	// instead of failing: no run depends on it.
 	if c.RunMode != RunBackground && c.RunMode != RunBoot {
 		c.RunMode = RunWindow
 	}

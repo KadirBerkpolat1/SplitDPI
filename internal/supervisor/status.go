@@ -14,10 +14,11 @@ import (
 
 // Status is written to StatusFile on every state change.
 type Status struct {
-	State      string    `json:"state"` // running|stopped|failed
-	Mode       string    `json:"mode"`  // foreground|background|service|scan
-	PID        int       `json:"pid"`   // the supervisor
-	ChildPID   int       `json:"child_pid,omitempty"`
+	State      string    `json:"state"`                // running|stopped|failed
+	Mode       string    `json:"mode"`                 // foreground|background|service|scan
+	PID        int       `json:"pid"`                  // the supervisor
+	ChildPID   int       `json:"child_pid,omitempty"`  // the guard, nfqws2's parent
+	Nfqws2PID  int       `json:"nfqws2_pid,omitempty"` // nfqws2 itself, once the guard reports it
 	Strategy   string    `json:"strategy"`
 	Engine     string    `json:"engine"`
 	Apps       []string  `json:"apps"`
@@ -88,20 +89,38 @@ func LockInfo(p paths.Paths) (pid int, mode string, held bool) {
 	return li.PID, li.Mode, errors.Is(err, syscall.EWOULDBLOCK)
 }
 
+// lockWait bounds how long lock waits out LockInfo calls: each holds the
+// flock shared for a moment, and an exclusive one cannot be taken meanwhile.
+const lockWait = 2 * time.Second
+
 // lock takes the exclusive flock and records our PID and mode. The returned
-// file must stay open for as long as the lock is needed.
+// file must stay open for as long as the lock is needed. ErrAlreadyRunning
+// means that a live run holds it; a flock held only shared, by LockInfo in
+// status, the TUI or enable, is waited out.
 func lock(p paths.Paths, mode string) (*os.File, error) {
 	f, err := os.OpenFile(p.LockFile, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			_, running, _ := LockInfo(p)
+	deadline := time.Now().Add(lockWait)
+	for delay := time.Millisecond; ; delay = min(2*delay, 50*time.Millisecond) {
+		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		if !errors.Is(err, syscall.EWOULDBLOCK) {
+			break
+		}
+		// Only a run holds it exclusively, and then LockInfo cannot take it shared.
+		if _, running, held := LockInfo(p); held {
+			f.Close()
 			return nil, ErrAlreadyRunning{Mode: running}
 		}
-		return nil, err
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(delay)
+	}
+	if err != nil {
+		f.Close()
+		return nil, fmt.Errorf("%s: %w", p.LockFile, err)
 	}
 	b, _ := json.Marshal(lockInfo{PID: os.Getpid(), Mode: mode})
 	if err := f.Truncate(0); err != nil {

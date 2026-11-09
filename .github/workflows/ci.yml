@@ -1,40 +1,57 @@
 name: ci
 
 on:
+  # Branches only: a v* tag runs CI once, through release.yml.
   push:
+    branches: ['**']
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go vet ./...
-      - run: go test ./...
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt -l lists files that need formatting:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - run: go test -race ./...
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck install.sh test/distro/check.sh
+      - run: shellcheck install.sh scripts/*.sh test/distro/check.sh
 
   integration:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest: the modprobe step needs this image's kernel modules.
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: sudo apt-get update && sudo apt-get install -y nftables curl dnsutils
       # No fallback: without NFQUEUE the netns tests cannot run, and they must not be skipped.
       - run: sudo modprobe -a nfnetlink_queue nft_queue
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
-          path: /tmp/z2/zapret2-v1.0.6.tar.gz
-          key: zapret2-v1.0.6
+          path: /tmp/z2/zapret2-v1.0.7.tar.gz
+          key: zapret2-v1.0.7
       - run: |
-          if [ ! -f /tmp/z2/zapret2-v1.0.6.tar.gz ]; then
+          if [ ! -f /tmp/z2/zapret2-v1.0.7.tar.gz ]; then
             mkdir -p /tmp/z2
-            curl -fsSL -o /tmp/z2/zapret2-v1.0.6.tar.gz https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz
+            curl -fsSL -o /tmp/z2/zapret2-v1.0.7.tar.gz https://github.com/bol-van/zapret2/releases/download/v1.0.7/zapret2-v1.0.7.tar.gz
           fi
       - run: go build -o /tmp/splitdpi ./cmd/splitdpi
       - run: sudo -E env "PATH=$PATH" SPLITDPI_BIN=/tmp/splitdpi go test -count=1 -tags integration -v ./test/integration/...
@@ -42,12 +59,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: CGO_ENABLED=0 go build -o splitdpi ./cmd/splitdpi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: splitdpi
           path: splitdpi
@@ -74,8 +91,8 @@ jobs:
           - image: ghcr.io/void-linux/void-glibc:latest
             hint: xbps-install
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: splitdpi
       - run: chmod +x splitdpi

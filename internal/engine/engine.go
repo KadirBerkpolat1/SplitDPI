@@ -2,8 +2,6 @@
 package engine
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -12,22 +10,37 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
 )
 
 const (
-	Version = "v1.0.6"
-	URL     = "https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz"
-	SHA256  = "eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4"
+	Version = "v1.0.7"
+	URL     = "https://github.com/bol-van/zapret2/releases/download/v1.0.7/zapret2-v1.0.7.tar.gz"
+	SHA256  = "547a5dce3f4820721a425680ea3f7f3971b7e9c772b8c795dd2d623148da0928"
 )
 
 var (
 	ErrChecksum   = errors.New("engine archive SHA-256 mismatch")
-	ErrUnsafePath = errors.New("unsafe path in engine archive")
+	ErrUnsafePath = safetar.ErrUnsafePath
 	ErrArch       = errors.New("unsupported architecture")
 )
+
+// limits caps what the archive may unpack to. zapret2 v1.0.7 holds 306 files,
+// 19.1 MB in total and 3.3 MB at most; keep both limits at least twice that.
+var limits = safetar.Limits{File: 16 << 20, Total: 128 << 20}
+
+// maxTarball caps the bytes Install reads from tarball and stores in StateDir
+// before it can check their SHA-256. The zapret2 v1.0.7 tarball is 9.6 MB;
+// keep the cap at least twice that.
+var maxTarball int64 = 64 << 20
+
+// rename is os.Rename, replaced in tests to make the swap fail.
+var rename = os.Rename
 
 var archDirs = map[string]string{"amd64": "linux-x86_64", "arm64": "linux-arm64"}
 
@@ -42,8 +55,13 @@ func (e Engine) Mdig() string        { return filepath.Join(e.Dir, "binaries", e
 func (e Engine) Blockcheck2() string { return filepath.Join(e.Dir, "blockcheck2.sh") }
 func (e Engine) LuaDir() string      { return filepath.Join(e.Dir, "lua") }
 
-// Install verifies tarball against wantSHA256, unpacks it and swaps it into
-// EngineDir. On any failure the previously installed engine is left as it was.
+// Install verifies tarball against wantSHA256, unpacks it, moves it to
+// EngineDir/zapret2-<Version> and records it in EngineDir/current. A failure
+// before the move leaves both as they were. If the move fails, the engine that
+// was there is moved back; if that fails too, it is kept in a directory under
+// EngineDir that the error names. If recording fails, the new engine stays and
+// current is left as it was. The engine lock is held shared from the move to
+// the record, so RemoveOld never finds the new engine before current names it.
 func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engine, error) {
 	arch, ok := archDirs[goarch]
 	if !ok {
@@ -59,8 +77,12 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	defer os.Remove(f.Name())
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, h), tarball); err != nil {
+	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(tarball, maxTarball+1))
+	if err != nil {
 		return Engine{}, err
+	}
+	if n > maxTarball {
+		return Engine{}, fmt.Errorf("%w: the tarball is over %d bytes", safetar.ErrTooLarge, maxTarball)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != wantSHA256 {
 		return Engine{}, fmt.Errorf("%w: got %s, want %s", ErrChecksum, got, wantSHA256)
@@ -73,8 +95,13 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	if err != nil {
 		return Engine{}, err
 	}
-	defer os.RemoveAll(tmp)
-	if err := untar(f, tmp); err != nil {
+	keep := false
+	defer func() {
+		if !keep {
+			os.RemoveAll(tmp)
+		}
+	}()
+	if err := safetar.Extract(f, tmp, limits); err != nil {
 		return Engine{}, err
 	}
 	name := "zapret2-" + Version
@@ -84,82 +111,36 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	}
 
 	e := Engine{Dir: filepath.Join(p.EngineDir, name), ArchDir: arch}
-	old := filepath.Join(tmp, "old")
-	if err := os.Rename(e.Dir, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	lf, err := lock(p, syscall.LOCK_SH)
+	if err != nil {
 		return Engine{}, err
 	}
-	if err := os.Rename(staged, e.Dir); err != nil {
-		os.Rename(old, e.Dir)
+	defer lf.Close()
+	old := filepath.Join(tmp, "old")
+	hadOld := true
+	if err := rename(e.Dir, old); errors.Is(err, fs.ErrNotExist) {
+		hadOld = false
+	} else if err != nil {
+		return Engine{}, err
+	}
+	if err := rename(staged, e.Dir); err != nil {
+		if hadOld {
+			if rerr := rename(old, e.Dir); rerr != nil {
+				keep = true
+				_ = os.RemoveAll(staged)
+				err = fmt.Errorf("%w; restoring the previous engine failed too, it is kept in %s: %w", err, old, rerr)
+			}
+		}
 		return Engine{}, err
 	}
 	cur := filepath.Join(p.EngineDir, "current")
 	if err := os.WriteFile(cur+".new", []byte(name+"\n"+arch+"\n"), 0o644); err != nil {
 		return Engine{}, err
 	}
-	if err := os.Rename(cur+".new", cur); err != nil {
+	if err := rename(cur+".new", cur); err != nil {
 		return Engine{}, err
 	}
 	return e, nil
-}
-
-// untar unpacks a .tar.gz into dir. Entries must be directories, regular files,
-// or symlinks with a relative target that never climbs ("..").
-func untar(r io.Reader, dir string) error {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-	tr := tar.NewReader(gz)
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if !filepath.IsLocal(h.Name) {
-			return fmt.Errorf("%w: %s", ErrUnsafePath, h.Name)
-		}
-		switch h.Typeflag {
-		case tar.TypeDir:
-			err = root.MkdirAll(h.Name, 0o755)
-		case tar.TypeReg:
-			err = writeFile(root, h.Name, tr, fs.FileMode(h.Mode)&0o777)
-		case tar.TypeSymlink:
-			if !filepath.IsLocal(h.Linkname) {
-				return fmt.Errorf("%w: %s -> %s", ErrUnsafePath, h.Name, h.Linkname)
-			}
-			if err = root.MkdirAll(filepath.Dir(h.Name), 0o755); err == nil {
-				err = root.Symlink(h.Linkname, h.Name)
-			}
-		default:
-			return fmt.Errorf("%w: %s (type %c)", ErrUnsafePath, h.Name, h.Typeflag)
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func writeFile(root *os.Root, name string, r io.Reader, mode fs.FileMode) error {
-	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		return err
-	}
-	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, r); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
 }
 
 // Installed returns the engine recorded in EngineDir/current if its nfqws2 exists.
@@ -177,4 +158,75 @@ func Installed(p paths.Paths) (Engine, bool) {
 		return Engine{}, false
 	}
 	return e, true
+}
+
+// LockShared takes the engine lock shared, waiting while RemoveOld holds it.
+// Until release, RemoveOld deletes nothing, so an engine read from current
+// in the meantime stays. A missing EngineDir is made first: an engine
+// installed after LockShared is covered too. release may be called more than
+// once.
+func LockShared(p paths.Paths) (release func(), err error) {
+	if err := os.MkdirAll(p.EngineDir, 0o755); err != nil {
+		return nil, err
+	}
+	lf, err := lock(p, syscall.LOCK_SH)
+	if err != nil {
+		return nil, err
+	}
+	return func() { lf.Close() }, nil
+}
+
+// lock flocks EngineDir itself, the engine lock, with how. The lock lasts
+// until the returned file is closed.
+func lock(p paths.Paths, how int) (*os.File, error) {
+	f, err := os.Open(p.EngineDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), how); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+// RemoveOld deletes the zapret2-* directories in EngineDir other than the
+// engine recorded in current and those in keep. It deletes nothing while
+// current records no installed engine, while anyone holds the engine lock
+// (LockShared, Install), or if running reports an instance that may run an
+// engine current no longer names. running is asked under the lock: a run
+// holds that shared until it holds the run lock, so running cannot miss it.
+// The next call retries what RemoveOld skips.
+func RemoveOld(p paths.Paths, running func() bool, keep ...Engine) error {
+	lf, err := lock(p, syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EWOULDBLOCK) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	if running != nil && running() {
+		return nil
+	}
+	cur, ok := Installed(p)
+	if !ok {
+		return nil
+	}
+	ents, err := lf.ReadDir(-1)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, ent := range ents {
+		dir := filepath.Join(p.EngineDir, ent.Name())
+		if !ent.IsDir() || !strings.HasPrefix(ent.Name(), "zapret2-") || dir == cur.Dir ||
+			slices.ContainsFunc(keep, func(e Engine) bool { return e.Dir == dir }) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }

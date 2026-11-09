@@ -31,6 +31,13 @@ type Child interface {
 	Pid() int
 }
 
+// nfqws2Child is a Child that runs nfqws2 under the guard: Pid is the guard's,
+// Nfqws2PID nfqws2's own, or 0 if the guard did not report it.
+type nfqws2Child interface {
+	Child
+	Nfqws2PID() int
+}
+
 type Supervisor struct {
 	P     paths.Paths
 	Exec  execx.Runner
@@ -99,11 +106,17 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 		child, err := s.Spawn(out.Argv)
 		var tail []string
 		if err == nil {
-			st.State, st.ChildPID, st.Since = "running", child.Pid(), start
+			pid := child.Pid()
+			if c, ok := child.(nfqws2Child); ok {
+				pid = c.Nfqws2PID()
+			}
+			st.State, st.ChildPID, st.Nfqws2PID, st.Since = "running", child.Pid(), pid, start
 			if werr := writeStatus(s.P, st); werr != nil {
 				fmt.Fprintln(log, werr)
 			}
-			fmt.Fprintln(log, i18n.T("supervisor.started", child.Pid()))
+			if pid != 0 {
+				fmt.Fprintln(log, i18n.T("supervisor.started", pid))
+			}
 			done := make(chan error, 1)
 			go func() { done <- child.Wait() }()
 			select {
@@ -125,7 +138,7 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 		if now.Sub(start) >= maxBackoff {
 			quick = 0
 		}
-		st.ChildPID, st.LastError, st.StderrTail = 0, err.Error(), tail
+		st.ChildPID, st.Nfqws2PID, st.LastError, st.StderrTail = 0, 0, err.Error(), tail
 		if len(fails) >= maxFails {
 			fmt.Fprintln(log, i18n.T("supervisor.crash_loop", maxFails, failWindow))
 			return s.finish(ctx, st, "failed", ErrCrashLoop)
@@ -182,7 +195,7 @@ func (s *Supervisor) finish(ctx context.Context, st Status, state string, cause 
 			}
 		}
 	}
-	st.State, st.ChildPID = state, 0
+	st.State, st.ChildPID, st.Nfqws2PID = state, 0, 0
 	switch {
 	case errors.Is(cause, ErrCrashLoop) && st.LastError != "":
 		st.LastError = cause.Error() + ": " + st.LastError
@@ -212,36 +225,56 @@ func stopChild(c Child, done <-chan error) {
 // ExecSpawn starts real processes. Output goes to log; the last stderr lines
 // are kept for status.json. With guard set (the splitdpi binary), argv runs
 // under Guard with guardOpts, which gets SIGTERM if we die and takes argv
-// down with it. The child gets its own process group, so a terminal Ctrl-C
-// reaches only us and the stop stays orderly.
+// down with it; the spawn waits for the guard to report argv's PID.
+// The child gets its own process group, so a terminal Ctrl-C reaches only us
+// and the stop stays orderly.
 func ExecSpawn(log io.Writer, guard string, guardOpts ...string) func(argv []string) (Child, error) {
 	if log == nil {
 		log = io.Discard
 	}
 	return func(argv []string) (Child, error) {
+		var pidR, pidW *os.File
 		if guard != "" {
-			argv = slices.Concat([]string{guard, GuardArg}, guardOpts, []string{"--"}, argv)
+			var err error
+			if pidR, pidW, err = os.Pipe(); err != nil {
+				return nil, err
+			}
+			defer pidR.Close()
+			argv = slices.Concat([]string{guard, GuardArg}, guardOpts, []string{pidFlag, "--"}, argv)
 		}
 		cmd := exec.Command(argv[0], argv[1:]...)
 		t := &tail{max: 20}
 		cmd.Stdout = log
 		cmd.Stderr = io.MultiWriter(log, t)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM, Setpgid: true}
-		if err := cmd.Start(); err != nil {
+		if pidW != nil {
+			cmd.ExtraFiles = []*os.File{pidW} // pidFD in the guard
+		}
+		err := cmd.Start()
+		if pidW != nil {
+			pidW.Close() // only the guard may hold it, or readPID misses its exit
+		}
+		if err != nil {
 			return nil, err
 		}
-		return &execChild{cmd: cmd, tail: t}, nil
+		c := &execChild{cmd: cmd, tail: t, nfqws2: cmd.Process.Pid}
+		if pidR != nil {
+			c.nfqws2 = readPID(pidR)
+		}
+		return c, nil
 	}
 }
 
 type execChild struct {
-	cmd  *exec.Cmd
-	tail *tail
+	cmd    *exec.Cmd
+	tail   *tail
+	nfqws2 int
 }
 
 func (c *execChild) Wait() error              { return c.cmd.Wait() }
 func (c *execChild) Signal(s os.Signal) error { return c.cmd.Process.Signal(s) }
 func (c *execChild) Pid() int                 { return c.cmd.Process.Pid }
+func (c *execChild) Nfqws2PID() int           { return c.nfqws2 }
 func (c *execChild) StderrTail() []string     { return c.tail.lines() }
 
 // tail keeps the last max complete lines written to it.

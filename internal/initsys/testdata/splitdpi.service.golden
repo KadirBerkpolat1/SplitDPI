@@ -9,7 +9,7 @@ ExecStart=/usr/local/bin/splitdpi run --service
 ExecStopPost=/usr/local/bin/splitdpi revert --rules-only
 Restart=on-failure
 RestartSec=5
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
 
 [Install]
 WantedBy=multi-user.target

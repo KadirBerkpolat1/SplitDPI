@@ -46,8 +46,9 @@ var commands = map[string]Command{
 	"version": {Name: "version", Help: "cmd.version.help", Run: runVersion},
 }
 
-// Main runs one command and returns the process exit code:
-// 0 ok, 1 failure, 2 usage, 3 crash loop.
+// Main runs one command and returns the process exit code: 0 ok, 1 failure,
+// 2 usage; `run --service` also exits 3 after a crash loop and 4 when
+// splitdpi already runs, which the service definitions do not restart.
 func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 	lang, rest, ok := splitLang(args)
 	if lang == "" {

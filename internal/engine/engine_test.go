@@ -16,6 +16,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
 )
 
 type ent struct {
@@ -26,12 +27,12 @@ type ent struct {
 
 func good() []ent {
 	return []ent{
-		{name: "zapret2-v1.0.6/", typ: tar.TypeDir, mode: 0o755},
-		{name: "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2", body: "elf", mode: 0o755},
-		{name: "zapret2-v1.0.6/binaries/linux-x86_64/mdig", body: "elf", mode: 0o755},
-		{name: "zapret2-v1.0.6/binaries/linux-arm64/nfqws2", body: "elf", mode: 0o755},
-		{name: "zapret2-v1.0.6/blockcheck2.sh", body: "#!/bin/sh\n", mode: 0o755},
-		{name: "zapret2-v1.0.6/lua/zapret-lib.lua", body: "-- lib\n", mode: 0o644},
+		{name: "zapret2-v1.0.7/", typ: tar.TypeDir, mode: 0o755},
+		{name: "zapret2-v1.0.7/binaries/linux-x86_64/nfqws2", body: "elf", mode: 0o755},
+		{name: "zapret2-v1.0.7/binaries/linux-x86_64/mdig", body: "elf", mode: 0o755},
+		{name: "zapret2-v1.0.7/binaries/linux-arm64/nfqws2", body: "elf", mode: 0o755},
+		{name: "zapret2-v1.0.7/blockcheck2.sh", body: "#!/bin/sh\n", mode: 0o755},
+		{name: "zapret2-v1.0.7/lua/zapret-lib.lua", body: "-- lib\n", mode: 0o644},
 	}
 }
 
@@ -92,29 +93,29 @@ func entries(t *testing.T, dir string) []string {
 // seedPrevious installs a fake earlier engine that a failed install must leave alone.
 func seedPrevious(t *testing.T, p paths.Paths) {
 	t.Helper()
-	dir := filepath.Join(p.EngineDir, "zapret2-v1.0.6")
+	dir := filepath.Join(p.EngineDir, "zapret2-v1.0.7")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "marker"), []byte("old"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(p.EngineDir, "current"), []byte("zapret2-v1.0.6\nlinux-x86_64\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(p.EngineDir, "current"), []byte("zapret2-v1.0.7\nlinux-x86_64\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func checkPrevious(t *testing.T, p paths.Paths) {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join(p.EngineDir, "zapret2-v1.0.6", "marker"))
+	b, err := os.ReadFile(filepath.Join(p.EngineDir, "zapret2-v1.0.7", "marker"))
 	if err != nil || string(b) != "old" {
 		t.Errorf("previous engine changed: %q, %v", b, err)
 	}
 	b, err = os.ReadFile(filepath.Join(p.EngineDir, "current"))
-	if err != nil || string(b) != "zapret2-v1.0.6\nlinux-x86_64\n" {
+	if err != nil || string(b) != "zapret2-v1.0.7\nlinux-x86_64\n" {
 		t.Errorf("current changed: %q, %v", b, err)
 	}
-	if got := entries(t, p.EngineDir); !slices.Equal(got, []string{"current", "zapret2-v1.0.6"}) {
+	if got := entries(t, p.EngineDir); !slices.Equal(got, []string{"current", "zapret2-v1.0.7"}) {
 		t.Errorf("engine dir entries = %v", got)
 	}
 	if got := entries(t, p.StateDir); !slices.Equal(got, []string{"engine"}) {
@@ -130,7 +131,7 @@ func TestInstallOK(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if e.Dir != p.EngineDir+"/zapret2-v1.0.6" {
+		if e.Dir != p.EngineDir+"/zapret2-v1.0.7" {
 			t.Errorf("Dir = %q", e.Dir)
 		}
 		st, err := os.Stat(e.Nfqws2())
@@ -146,7 +147,7 @@ func TestInstallOK(t *testing.T) {
 			t.Errorf("Installed = %+v, %v; want %+v", got, ok, e)
 		}
 	}
-	if got := entries(t, p.EngineDir); !slices.Equal(got, []string{"current", "zapret2-v1.0.6"}) {
+	if got := entries(t, p.EngineDir); !slices.Equal(got, []string{"current", "zapret2-v1.0.7"}) {
 		t.Errorf("engine dir entries = %v", got)
 	}
 	if got := entries(t, p.StateDir); !slices.Equal(got, []string{"engine"}) {
@@ -178,12 +179,12 @@ func TestInstallRejectsTraversal(t *testing.T) {
 	cases := map[string][]ent{
 		"dotdot":   {{name: "../../evil", body: "x"}},
 		"absolute": {{name: "ABS/evil", body: "x"}},
-		"symlink":  {{name: "zapret2-v1.0.6/etc", typ: tar.TypeSymlink, link: "/etc"}},
+		"symlink":  {{name: "zapret2-v1.0.7/etc", typ: tar.TypeSymlink, link: "/etc"}},
 		"symlink-up-then-write": {
-			{name: "zapret2-v1.0.6/up", typ: tar.TypeSymlink, link: "../../.."},
-			{name: "zapret2-v1.0.6/up/evil", body: "x"},
+			{name: "zapret2-v1.0.7/up", typ: tar.TypeSymlink, link: "../../.."},
+			{name: "zapret2-v1.0.7/up/evil", body: "x"},
 		},
-		"hardlink": {{name: "zapret2-v1.0.6/pw", typ: tar.TypeLink, link: "/etc/passwd"}},
+		"hardlink": {{name: "zapret2-v1.0.7/pw", typ: tar.TypeLink, link: "/etc/passwd"}},
 	}
 	for name, bad := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -204,6 +205,95 @@ func TestInstallRejectsTraversal(t *testing.T) {
 				}
 				return nil
 			})
+		})
+	}
+}
+
+func TestInstallRejectsOversized(t *testing.T) {
+	// good() holds 26 bytes in files.
+	cases := map[string][]ent{
+		"file": {{name: "zapret2-v1.0.7/big", body: strings.Repeat("x", 65)}},
+		"total": {
+			{name: "zapret2-v1.0.7/a", body: strings.Repeat("x", 60)},
+			{name: "zapret2-v1.0.7/b", body: strings.Repeat("x", 60)},
+		},
+	}
+	for name, extra := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(engine.SetLimits(safetar.Limits{File: 64, Total: 100}))
+			p := paths.Under(t.TempDir())
+			seedPrevious(t, p)
+			_, err := install(p, build(t, append(good(), extra...)))
+			if !errors.Is(err, safetar.ErrTooLarge) {
+				t.Fatalf("err = %v", err)
+			}
+			checkPrevious(t, p)
+		})
+	}
+}
+
+func TestInstallCapsTarball(t *testing.T) {
+	b := build(t, good())
+	t.Cleanup(engine.SetMaxTarball(int64(len(b))))
+	if _, err := install(paths.Under(t.TempDir()), b); err != nil {
+		t.Fatalf("tarball at the cap: %v", err)
+	}
+	p := paths.Under(t.TempDir())
+	seedPrevious(t, p)
+	r := bytes.NewReader(append(b, make([]byte, 1<<20)...))
+	if _, err := engine.Install(p, r, sum(b), "amd64"); !errors.Is(err, safetar.ErrTooLarge) {
+		t.Fatalf("err = %v", err)
+	}
+	if read := r.Size() - int64(r.Len()); read > int64(len(b))+1 {
+		t.Errorf("read %d bytes with a cap of %d", read, len(b))
+	}
+	checkPrevious(t, p)
+}
+
+func TestInstallSwapFails(t *testing.T) {
+	errSwap, errRestore := errors.New("swap failed"), errors.New("restore failed")
+	cases := map[string]struct{ previous, restoreFails bool }{
+		"no previous engine": {},
+		"previous restored":  {previous: true},
+		"restore fails":      {previous: true, restoreFails: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			p := paths.Under(t.TempDir())
+			if tc.previous {
+				seedPrevious(t, p)
+			}
+			dir := filepath.Join(p.EngineDir, "zapret2-v1.0.7")
+			t.Cleanup(engine.SetRename(func(from, to string) error {
+				switch {
+				case to != dir:
+					return os.Rename(from, to)
+				case filepath.Base(from) != "old":
+					return errSwap
+				case tc.restoreFails:
+					return errRestore
+				}
+				return os.Rename(from, to)
+			}))
+			_, err := install(p, build(t, good()))
+			if !errors.Is(err, errSwap) || errors.Is(err, errRestore) != tc.restoreFails || errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("err = %v", err)
+			}
+			if tc.previous && !tc.restoreFails {
+				checkPrevious(t, p)
+			}
+			if tc.restoreFails {
+				kept, _ := filepath.Glob(filepath.Join(p.EngineDir, ".tmp-*", "old"))
+				if len(kept) != 1 || !strings.Contains(err.Error(), kept[0]) {
+					t.Fatalf("kept %v; err = %v", kept, err)
+				}
+				if b, err := os.ReadFile(filepath.Join(kept[0], "marker")); err != nil || string(b) != "old" {
+					t.Errorf("previous engine in %s: %q, %v", kept[0], b, err)
+				}
+				if got := entries(t, filepath.Dir(kept[0])); !slices.Equal(got, []string{"old"}) {
+					t.Errorf("%s holds %v", filepath.Dir(kept[0]), got)
+				}
+			}
 		})
 	}
 }
@@ -241,5 +331,117 @@ func TestInstallRejectsArch(t *testing.T) {
 	}
 	if got := entries(t, p.StateDir); got != nil {
 		t.Errorf("state dir entries = %v", got)
+	}
+}
+
+// unpacked makes EngineDir/name look like an unpacked engine.
+func unpacked(t *testing.T, p paths.Paths, name string) {
+	t.Helper()
+	bin := filepath.Join(p.EngineDir, name, "binaries", "linux-x86_64")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "nfqws2"), []byte("elf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRemoveOld(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	cur, err := install(p, build(t, good()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// .tmp-* is an install in progress, or the engine a failed restore kept.
+	for _, name := range []string{"zapret2-v1.0.5", "zapret2-v1.0.6", ".tmp-1"} {
+		unpacked(t, p, name)
+	}
+	kept := engine.Engine{Dir: filepath.Join(p.EngineDir, "zapret2-v1.0.5"), ArchDir: "linux-x86_64"}
+	if err := engine.RemoveOld(p, nil, kept); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := entries(t, p.EngineDir), []string{".tmp-1", "current", "zapret2-v1.0.5", "zapret2-v1.0.7"}; !slices.Equal(got, want) {
+		t.Errorf("engine dir entries = %v, want %v", got, want)
+	}
+	if got, ok := engine.Installed(p); !ok || got != cur {
+		t.Errorf("Installed = %+v, %v; want %+v", got, ok, cur)
+	}
+}
+
+// Without an installed engine in current, any directory may be the one in use.
+func TestRemoveOldWithoutCurrent(t *testing.T) {
+	for name, current := range map[string]string{"missing": "", "broken": "zapret2-v1.0.8\nlinux-x86_64\n"} {
+		t.Run(name, func(t *testing.T) {
+			p := paths.Under(t.TempDir())
+			unpacked(t, p, "zapret2-v1.0.6")
+			unpacked(t, p, "zapret2-v1.0.7")
+			if current != "" {
+				if err := os.WriteFile(filepath.Join(p.EngineDir, "current"), []byte(current), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := engine.RemoveOld(p, nil); err != nil {
+				t.Fatal(err)
+			}
+			for _, n := range []string{"zapret2-v1.0.6", "zapret2-v1.0.7"} {
+				if _, err := os.Stat(filepath.Join(p.EngineDir, n)); err != nil {
+					t.Errorf("%s: %v", n, err)
+				}
+			}
+		})
+	}
+}
+
+// A run's cleanup between the move of the new engine and its record in
+// current still reads the old engine from current, and would take the new one
+// for an old one.
+func TestRemoveOldDuringInstall(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	unpacked(t, p, "zapret2-v1.0.6")
+	cur := filepath.Join(p.EngineDir, "current")
+	if err := os.WriteFile(cur, []byte("zapret2-v1.0.6\nlinux-x86_64\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	picked := engine.Engine{Dir: filepath.Join(p.EngineDir, "zapret2-v1.0.6"), ArchDir: "linux-x86_64"}
+	cleanupErr := errors.New("no cleanup between the renames")
+	t.Cleanup(engine.SetRename(func(from, to string) error {
+		if to == cur {
+			cleanupErr = engine.RemoveOld(p, nil, picked)
+		}
+		return os.Rename(from, to)
+	}))
+	e, err := install(p, build(t, good()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanupErr != nil {
+		t.Fatal(cleanupErr)
+	}
+	if got, ok := engine.Installed(p); !ok || got != e {
+		t.Errorf("Installed = %+v, %v; want %+v", got, ok, e)
+	}
+	if got, want := entries(t, p.EngineDir), []string{"current", "zapret2-v1.0.6", "zapret2-v1.0.7"}; !slices.Equal(got, want) {
+		t.Errorf("engine dir entries = %v, want %v", got, want)
+	}
+}
+
+// running must be asked under the lock, or a run could take the run lock and
+// let go of the engine lock between the answer and the cleanup.
+func TestRemoveOldAsksRunningUnderLock(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	if _, err := install(p, build(t, good())); err != nil {
+		t.Fatal(err)
+	}
+	unpacked(t, p, "zapret2-v1.0.6")
+	var innerErr error
+	err := engine.RemoveOld(p, func() bool {
+		innerErr = engine.RemoveOld(p, nil)
+		return true
+	})
+	if err != nil || innerErr != nil {
+		t.Fatal(err, innerErr)
+	}
+	if _, err := os.Stat(filepath.Join(p.EngineDir, "zapret2-v1.0.6")); err != nil {
+		t.Errorf("a cleanup ran while running was asked: %v", err)
 	}
 }

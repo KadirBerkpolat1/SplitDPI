@@ -21,6 +21,7 @@ type fakeNft struct {
 	calls []string
 	hooks map[string]func() // run after the command is recorded, e.g. a service starting
 	out   map[string]string
+	errs  map[string]error // commands that fail
 }
 
 var errNoTable = errors.New("nft: exit status 1: Error: No such file or directory")
@@ -30,6 +31,9 @@ func (f *fakeNft) run(_ context.Context, _ string, name string, args ...string) 
 	defer f.mu.Unlock()
 	cmd := strings.Join(append([]string{name}, args...), " ")
 	f.calls = append(f.calls, cmd)
+	if err := f.errs[cmd]; err != nil {
+		return nil, err
+	}
 	if h, ok := f.hooks[cmd]; ok {
 		h()
 	}
@@ -50,6 +54,13 @@ func (f *fakeNft) run(_ context.Context, _ string, name string, args ...string) 
 		}
 	}
 	return nil, nil
+}
+
+// record puts what happened besides a command, like a signal, among the calls.
+func (f *fakeNft) record(s string) {
+	f.mu.Lock()
+	f.calls = append(f.calls, s)
+	f.mu.Unlock()
 }
 
 func (f *fakeNft) saw(cmd string) bool {

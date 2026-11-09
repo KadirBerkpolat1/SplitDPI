@@ -53,6 +53,12 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 	if len(opt.Apps) == 0 && len(opt.Sites) == 0 && opt.Site == "" {
 		return scan.Report{}, NoAppsError{}
 	}
+	// blockcheck2 starts nfqws2 from eng, with no run lock, until the scan ends.
+	release, err := engine.LockShared(o.P)
+	if err != nil {
+		return scan.Report{}, err
+	}
+	defer release()
 	eng, ok := engine.Installed(o.P)
 	if !ok {
 		return scan.Report{}, fmt.Errorf("%s", i18n.T("engine.not_installed"))

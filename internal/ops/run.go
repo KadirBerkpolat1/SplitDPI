@@ -76,15 +76,35 @@ func (o *Ops) run(ctx context.Context, mode string) error {
 			log = io.MultiWriter(log, f)
 		}
 	}
+	// Until the supervisor holds the run lock, only the engine lock keeps the
+	// engine prepare picks from removal.
+	release, err := engine.LockShared(o.P)
+	if err != nil {
+		return err
+	}
+	defer release()
 	j, err := o.prepare(cfg, mode, log, nil)
 	if err != nil {
 		return err
+	}
+	// The supervisor spawns only while it holds the run lock: no other run can
+	// be using an engine then. The engine lock goes first, or RemoveOld could
+	// not take it.
+	spawn := j.sup.Spawn
+	var once sync.Once
+	j.sup.Spawn = func(argv []string) (supervisor.Child, error) {
+		once.Do(func() {
+			release()
+			o.removeOldEngines(log, nil, j.eng)
+		})
+		return spawn(argv)
 	}
 	return j.sup.Run(ctx, j.out, j.ruleset, j.meta)
 }
 
 type job struct {
 	sup     *supervisor.Supervisor
+	eng     engine.Engine
 	out     render.Output
 	ruleset string
 	meta    supervisor.Status
@@ -151,6 +171,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 			P: o.P, Exec: o.Exec, Spawn: spawn, Now: now, Sleep: time.Sleep, Log: log, UID: uid, GID: gid,
 			StartDNS: startDNS,
 		},
+		eng:     eng,
 		out:     out,
 		ruleset: ruleset,
 		meta: supervisor.Status{
@@ -301,13 +322,10 @@ func (o *Ops) Stop() error {
 	} else if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return err
 	}
-	for range 100 {
-		if _, _, held := supervisor.LockInfo(o.P); !held {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
+	if !o.waitReleased() {
+		return ErrStopTimeout
 	}
-	return ErrStopTimeout
+	return nil
 }
 
 // Status returns the last recorded status, corrected to "stopped" when no

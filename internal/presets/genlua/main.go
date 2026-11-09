@@ -1,6 +1,6 @@
 // Command genlua writes the --lua-desync allow-list from the pinned engine's Lua files.
 //
-//	go run ./genlua -engine v1.0.6 -o luafuncs_gen.go <file.lua>...
+//	go run ./genlua -engine v1.0.7 -o luafuncs_gen.go <file.lua>...
 package main
 
 import (

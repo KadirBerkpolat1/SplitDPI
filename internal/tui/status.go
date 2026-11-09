@@ -64,6 +64,9 @@ func (statusPage) Actions(m Model) []action {
 			acts = append(acts, action{Key: "b", Label: i18n.T("background_tui.act"), CLI: runModeCLI(config.RunBackground), Do: (*Model).runBackground})
 		}
 	}
+	if m.bootUnset() && !m.canStart() { // else r sets the service up
+		acts = append(acts, m.setUpBootAction("e"))
+	}
 	return append(acts, action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps})
 }
 
@@ -100,6 +103,9 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 			return m, tea.Quit, true
 		}
 		return m, m.refresh(), true
+	case enableMsg:
+		next, cmd := m.enabled(msg.err)
+		return next, cmd, true
 	case bgDoneMsg:
 		m.bgStarting = false
 		if msg.err != nil {
@@ -172,8 +178,7 @@ func (m *Model) stop() tea.Cmd {
 		if err := b.Stop(); err != nil {
 			return probeMsg{err: err}
 		}
-		st, cfg, err := b.Status()
-		return statusMsg{st, cfg, err}
+		return readStatus(b)
 	}
 }
 
@@ -328,16 +333,18 @@ type statusFit struct {
 	spacers bool // blank lines between the parts
 	names   int  // blocked sites named
 	bar     bool // the reachability bar over the counts
+	boot    bool // whether SplitDPI starts at boot
 	hint    bool // what b (or r) does
 }
 
 var statusFits = []statusFit{
-	{true, 3, true, true},
-	{false, 3, true, true},
-	{false, 2, true, true},
-	{false, 1, true, true},
-	{false, 1, false, true},
-	{false, 1, false, false},
+	{true, 3, true, true, true},
+	{false, 3, true, true, true},
+	{false, 2, true, true, true},
+	{false, 1, true, true, true},
+	{false, 1, false, true, true},
+	{false, 1, false, false, true},
+	{false, 1, false, false, false},
 }
 
 // View draws the first fit that takes at most h lines. If none does, the
@@ -378,6 +385,9 @@ func (m Model) statusView(w int, fit statusFit) string {
 		state = mutedStyle.Render(state)
 	}
 	lines = append(lines, row(w, i18n.T("tui.state"), state))
+	if fit.boot {
+		lines = append(lines, row(w, i18n.T("boot.status_label"), bootValue(m)))
+	}
 
 	if s := m.cfg.Strategy; s != nil {
 		lines = append(lines, row(w, i18n.T("tui.strategy"), s.ID+mutedStyle.Render("  "+s.Source)))

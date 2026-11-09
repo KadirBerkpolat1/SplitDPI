@@ -20,6 +20,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -52,7 +53,9 @@ type Backend interface {
 	StrategySet(id string) (ops.StrategyChoice, bool, error)
 	Scan(ctx context.Context, opt scan.Options, progress func(string)) (scan.Report, error)
 	HasIPv6(ctx context.Context) bool
-	Enable(ctx context.Context) error
+	Enable(ctx context.Context, stopHere func()) (ops.EnableReport, error)
+	Disable(ctx context.Context) error
+	ServiceState() ops.ServiceState
 	AcceptDisclaimer() error
 	SetLang(lang string) error
 	SetRunMode(mode config.RunMode) error
@@ -89,8 +92,15 @@ type (
 		st  supervisor.Status
 		cfg config.Config
 		err error
+		svc ops.ServiceState
 	}
 )
+
+// readStatus is what the pages show of the bypass, the config and the service.
+func readStatus(b Backend) statusMsg {
+	st, cfg, err := b.Status()
+	return statusMsg{st, cfg, err, b.ServiceState()}
+}
 
 type Model struct {
 	ctx     context.Context
@@ -112,6 +122,7 @@ type Model struct {
 	st         supervisor.Status
 	cfg        config.Config
 	stErr      error
+	svc        ops.ServiceState
 	note       string // result of the last action
 	probe      map[string][]probe.Result
 	probeNames map[string]string // the probed apps' names by id
@@ -140,26 +151,36 @@ type Model struct {
 	bgStarting   bool
 	toBackground bool // quitting moves the bypass run here to the background
 	bgPID        int  // the background run quitting left behind
+
+	// The service change under way, if any, and the quit that waits for it.
+	svcOp     *serviceOp
+	quitAfter bool
+	quitNote  string // what that change did, printed once the screen is back
 }
 
 func New(ctx context.Context, b Backend, version string) Model {
 	m := Model{ctx: ctx, b: b, version: version, g: glyphsFor(os.Getenv), every: tea.Tick, out: os.Stdout, logs: &ring{max: 500}, width: 80, height: 24}
-	m.st, m.cfg, m.stErr = b.Status()
+	s := readStatus(b)
+	m.st, m.cfg, m.stErr, m.svc = s.st, s.cfg, s.err, s.svc
 	return m
 }
 
-// Run opens the TUI on the terminal. The bypass it may run is stopped (and
-// its rules removed) before Run returns; then the share link of a strategy
-// saved in this session, and the background run quitting left, are printed
-// where the scrollback keeps them.
+// Run opens the TUI on the terminal. A service change the program ended in
+// the middle of is waited for, and the bypass it may run is stopped (and its
+// rules removed), before Run returns; then the share link of a strategy
+// saved in this session, the background run quitting left and what the
+// service change quitting waited for did are printed where the scrollback
+// keeps them.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx), tea.WithOutput(m.out)).Run()
 	if fm, ok := final.(Model); ok {
+		fm.waitService(m.out)
 		fm.stopRun()
 		fm.printShare(m.out)
 		fm.printBackground(m.out)
+		fm.printQuitNote(m.out)
 	}
 	return err
 }
@@ -179,13 +200,14 @@ func (m Model) tick() tea.Cmd {
 }
 
 func (m Model) refresh() tea.Cmd {
-	return func() tea.Msg {
-		st, cfg, err := m.b.Status()
-		return statusMsg{st, cfg, err}
-	}
+	b := m.b
+	return func() tea.Msg { return readStatus(b) }
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if d, ok := msg.(serviceDoneMsg); ok {
+		return m.serviceDone(d)
+	}
 	for _, p := range pages {
 		if next, cmd, ok := p.Update(m, msg); ok {
 			return next, cmd
@@ -203,7 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.refresh(), m.tick())
 	case statusMsg:
-		m.st, m.cfg, m.stErr = msg.st, msg.cfg, msg.err
+		m.st, m.cfg, m.stErr, m.svc = msg.st, msg.cfg, msg.err, msg.svc
 		return m, nil
 	case tea.MouseMsg:
 		return m.mouse(msg)
@@ -231,9 +253,20 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.confirmQuit:
 		switch s {
 		case "y", "e", "enter", "b":
-			// runDoneMsg quits, or first starts the background run for "b".
-			m.confirmQuit, m.quitting, m.toBackground = false, true, s == "b"
+			m.confirmQuit = false
+			// In run mode boot, "b" sets the service up, which stops the run
+			// here only once nothing stands in the way; quitting follows.
+			if s == "b" && m.quitMove() == config.RunBoot {
+				m.quitAfter = true
+				cmd := m.enable()
+				return m, cmd
+			}
+			// runDoneMsg quits, or for "b" first starts the background run.
+			m.quitting, m.toBackground = true, s == "b"
 			m.stopAll()
+			if m.runCancel == nil { // the run here ended while the prompt was open
+				return m.Update(runDoneMsg{})
+			}
 			m.runCancel()
 		case "n", "h", "esc":
 			m.confirmQuit = false
@@ -384,10 +417,16 @@ func keyMsg(k string) tea.KeyMsg {
 }
 
 // quit leaves the TUI, but first asks when it runs the bypass itself. It does
-// not leave while packages install: that would kill the package manager.
+// not leave while packages install: that would kill the package manager. Nor
+// during a service change, which cut short could leave no bypass running:
+// the quit goes on once that is done.
 func (m *Model) quit() tea.Cmd {
 	if m.wiz.pkgsInstalling {
 		m.note = i18n.T("tui.pkgs.wait")
+		return nil
+	}
+	if m.svcOp != nil {
+		m.note, m.quitAfter = i18n.T("tui.service_wait"), true
 		return nil
 	}
 	if m.running {
@@ -412,12 +451,25 @@ func (m *Model) stopAll() {
 
 // errText words an ops error for the note line, as the CLI does.
 func errText(err error) string {
+	var takeover ops.TakeoverError
 	var conflict ops.ConflictError
 	var already supervisor.ErrAlreadyRunning
 	var notStarted ops.BackgroundNotStartedError
+	var nobin ops.BinaryMissingError
+	var unsafe ops.UnsafeBinaryError
 	switch {
+	case errors.As(err, &takeover):
+		return takeoverText(takeover)
 	case errors.As(err, &notStarted):
 		return i18n.T("background.not_started", notStarted.Log)
+	case errors.Is(err, initsys.ErrUnsupportedInit):
+		return i18n.T("service.unsupported")
+	case errors.As(err, &nobin):
+		return i18n.T("service.no_binary", nobin.Path, nobin.Path)
+	case errors.As(err, &unsafe):
+		return unsafeText(unsafe)
+	case errors.Is(err, ops.ErrStopTimeout):
+		return i18n.T("stop.timeout")
 	case errors.As(err, &already):
 		return i18n.T("run.already", i18n.Enum("mode", already.Mode))
 	case errors.As(err, &conflict):
@@ -431,7 +483,9 @@ func errText(err error) string {
 	case errors.Is(err, ops.ErrEngineMissing):
 		return i18n.T("engine.not_installed")
 	}
-	return err.Error()
+	// fitNote drops a note's first lines to fit, so a raw error stays on one
+	// line: its cause comes first, before the rule and caret lines nft adds.
+	return strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", " ")
 }
 
 // ring keeps the last max lines written to it.

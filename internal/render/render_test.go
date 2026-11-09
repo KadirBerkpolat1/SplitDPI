@@ -42,7 +42,7 @@ func input() render.Input {
 	cfg.Apps = []string{"discord", "youtube"}
 	cfg.Strategy = &config.Strategy{ID: "tt-multidisorder", TCPTLS: multidisorder}
 	return render.Input{
-		Engine:  engine.Engine{Dir: "/var/lib/splitdpi/engine/zapret2-v1.0.6", ArchDir: "linux-x86_64"},
+		Engine:  engine.Engine{Dir: "/var/lib/splitdpi/engine/zapret2-v1.0.7", ArchDir: "linux-x86_64"},
 		Cfg:     cfg,
 		Set:     set(),
 		Country: "TR",
@@ -145,14 +145,14 @@ func TestLuaInitOnceGlobal(t *testing.T) {
 		}
 	}
 	want := []string{
-		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.6/lua/zapret-lib.lua",
-		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.6/lua/zapret-antidpi.lua",
-		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.6/lua/zapret-auto.lua",
+		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.7/lua/zapret-lib.lua",
+		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.7/lua/zapret-antidpi.lua",
+		"--lua-init=@/var/lib/splitdpi/engine/zapret2-v1.0.7/lua/zapret-auto.lua",
 	}
 	if !slices.Equal(inits, want) {
 		t.Errorf("lua inits %q, want %q", inits, want)
 	}
-	if argv[0] != "/var/lib/splitdpi/engine/zapret2-v1.0.6/binaries/linux-x86_64/nfqws2" {
+	if argv[0] != "/var/lib/splitdpi/engine/zapret2-v1.0.7/binaries/linux-x86_64/nfqws2" {
 		t.Errorf("argv[0] = %q", argv[0])
 	}
 }

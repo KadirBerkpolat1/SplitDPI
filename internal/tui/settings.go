@@ -84,6 +84,7 @@ func label(key string) func() string { return func() string { return i18n.T(key)
 var settings = []setting{
 	{id: "lang", group: grpGeneral, label: label("shell.settings.lang"), value: langValue, actions: langActions},
 	{id: "run_mode", group: grpGeneral, label: label("run_mode.label"), value: runModeValue, actions: runModeActions},
+	{id: "boot", group: grpGeneral, label: label("boot.label"), value: bootValue, actions: bootActions},
 	{id: "mode", group: grpBypass, label: label("settings_mode.label"), value: modeValue, actions: modeActions},
 	{id: "exclude", group: grpBypass, label: label("settings_exclude.label"), value: excludeValue, actions: excludeActions},
 	{id: "strategy", group: grpBypass, label: label("settings_strategy.label"), value: strategyValue, actions: strategyActions},
@@ -108,8 +109,9 @@ const repoURL = "github.com/KadirBerkpolat1/SplitDPI"
 type (
 	langMsg    struct{ err error }
 	runModeMsg struct {
-		mode config.RunMode
-		err  error
+		mode     config.RunMode
+		disabled bool // the service was removed first
+		err      error
 	}
 	dnsSetMsg struct {
 		name    string
@@ -314,11 +316,14 @@ func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 	case runModeMsg:
 		if msg.err != nil {
 			m.note = errText(msg.err)
-			return m, nil, true
+			return m, m.refresh(), true
 		}
 		m.cfg.RunMode = msg.mode
 		m.note = i18n.T("run_mode.saved", runModeName(msg.mode))
-		return m, nil, true
+		if msg.disabled {
+			m.note = i18n.T("run_mode.disabled", runModeName(msg.mode))
+		}
+		return m, m.refresh(), true
 	case dnsSetMsg:
 		switch {
 		case msg.err != nil:
@@ -494,12 +499,29 @@ func runModeActions(m Model) []action {
 	}}}
 }
 
-// chooseRunMode only saves the choice, so it needs no confirm: nothing
-// starts or stops until r is pressed.
+// chooseRunMode applies the choice. Boot sets the service up at once, and
+// leaving boot removes it, each after a confirm. Between window and
+// background it only saves the choice: nothing starts or stops until r is
+// pressed.
 func (m *Model) chooseRunMode(mode config.RunMode) tea.Cmd {
 	m.settings.pick = nil
+	switch {
+	case mode == config.RunBoot && !m.svc.Enabled:
+		return m.confirmEnable()
+	case mode != config.RunBoot && m.svc.Enabled:
+		return m.confirmDisable(mode)
+	}
 	b := m.b
-	return func() tea.Msg { return runModeMsg{mode, b.SetRunMode(mode)} }
+	return func() tea.Msg { return runModeMsg{mode: mode, err: b.SetRunMode(mode)} }
+}
+
+// runModeChoices are the run modes the picker offers: boot only where the
+// init has a service.
+func (m Model) runModeChoices() []config.RunMode {
+	if m.svc.Supported {
+		return runModes
+	}
+	return slices.DeleteFunc(slices.Clone(runModes), func(r config.RunMode) bool { return r == config.RunBoot })
 }
 
 // choiceList lays out a picker's choices, each name with its note wrapped

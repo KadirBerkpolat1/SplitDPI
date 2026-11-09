@@ -54,12 +54,16 @@ func (m Model) choicesFor(id string) choices {
 		}
 		return c
 	case "run_mode":
-		c := choices{head: i18n.T("run_mode.head"), inUse: slices.Index(runModes, m.runMode())}
-		for _, r := range runModes {
+		offered := m.runModeChoices()
+		c := choices{head: i18n.T("run_mode.head"), inUse: slices.Index(offered, m.runMode())}
+		if !m.svc.Supported {
+			c.head += "\n" + i18n.T("service.unsupported")
+		}
+		for _, r := range offered {
 			c.names, c.notes = append(c.names, runModeName(r)), append(c.notes, i18n.T("run_mode."+string(r)+"_note"))
 		}
-		c.cli = func(i int) string { return runModeCLI(runModes[i]) }
-		c.choose = func(m *Model, i int) tea.Cmd { return m.chooseRunMode(runModes[i]) }
+		c.cli = func(i int) string { return runModeCLI(offered[i]) }
+		c.choose = func(m *Model, i int) tea.Cmd { return m.chooseRunMode(offered[i]) }
 		return c
 	}
 	c := choices{head: i18n.T("settings_mode.head"), inUse: slices.Index(modes, m.mode())}

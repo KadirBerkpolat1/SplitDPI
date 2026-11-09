@@ -1,7 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +14,8 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
@@ -55,18 +60,25 @@ func holdLockAs(t *testing.T, p paths.Paths, mode string, pid int) func() {
 	return release
 }
 
-func installBinary(t *testing.T, p paths.Paths) {
+// installBinary puts splitdpi at BinPath as install.sh run with sudo does:
+// on the host, the file and every directory above it are root's, mode 0755.
+func installBinary(t *testing.T, o *ops.Ops) {
 	t.Helper()
-	os.MkdirAll(filepath.Dir(p.BinPath), 0o755)
-	if err := os.WriteFile(p.BinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	os.MkdirAll(filepath.Dir(o.P.BinPath), 0o755)
+	if err := os.WriteFile(o.P.BinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	host := o.Root.(fstest.MapFS)
+	host["usr/local/bin/splitdpi"] = &fstest.MapFile{Mode: 0o755, Sys: &syscall.Stat_t{Uid: 0}}
+	for _, d := range []string{"usr/local/bin", "usr/local", "usr", "."} {
+		host[d] = &fstest.MapFile{Mode: fs.ModeDir | 0o755, Sys: &syscall.Stat_t{Uid: 0}}
 	}
 }
 
 func TestEnableUnsupportedInit(t *testing.T) {
 	o, f := runOpsFor(t, fstest.MapFS{})
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	out, code := runOps(t, o, "enable")
 	eq(t, code, 1)
 	has(t, out, "splitdpi run")
@@ -77,7 +89,7 @@ func TestEnableUnsupportedInit(t *testing.T) {
 
 func TestEnableNoStrategy(t *testing.T) {
 	o, _ := runOpsFor(t, systemdRoot())
-	installBinary(t, o.P)
+	installBinary(t, o)
 	out, code := runOps(t, o, "enable")
 	eq(t, code, 1)
 	has(t, out, "splitdpi scan")
@@ -91,10 +103,77 @@ func TestEnableNeedsInstalledBinary(t *testing.T) {
 	has(t, out, o.P.BinPath)
 }
 
+// A config the service's run could not start with is refused as run refuses it.
+func TestEnableRunCannotStart(t *testing.T) {
+	for _, tc := range []struct {
+		name, config string
+		engine       bool
+		want         string
+	}{
+		{"no engine", withStrategy, false, "The engine is not installed. Run: sudo splitdpi engine install"},
+		{"app the presets dropped", "apps = [\"nosuch\"]\n" + withStrategy, true, `config.toml: unknown app "nosuch"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o, _ := runOpsFor(t, systemdRoot())
+			writeConfig(t, o.P, tc.config)
+			installBinary(t, o)
+			if tc.engine {
+				installEngine(t, o.P)
+			}
+			out, code := runOps(t, o, "enable")
+			eq(t, code, 1)
+			has(t, out, tc.want)
+		})
+	}
+}
+
+// A run that did not stop in time is not said to still run: it was started
+// again once it had stopped, or it is still stopping, and enable says how to
+// start the bypass once it has.
+func TestEnableStopTimeoutText(t *testing.T) {
+	stop := ops.StopRunError{Mode: "background", PID: 4343, Err: ops.ErrStopTimeout}
+	for _, tc := range []struct {
+		name string
+		e    ops.TakeoverError
+		want string
+	}{
+		{"restarted", ops.TakeoverError{Stopped: "background", PID: 4343, Err: stop, Restarted: 5151},
+			"The previous run was restarted in the background (pid 5151)."},
+		{"still stopping", ops.TakeoverError{Stopped: "background", PID: 4343, Err: stop, Stopping: "background"},
+			"The background run is still stopping. Once it has stopped, start the bypass with: sudo splitdpi run --background"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := takeoverText(io.Discard, tc.e)
+			has(t, out, "The background run (pid 4343) did not stop within 10 s, so the service was not started.\n"+tc.want)
+			if strings.Contains(out, "still runs") {
+				t.Errorf("says the bypass still runs:\n%s", out)
+			}
+		})
+	}
+}
+
+// An error that ends with a period, as systemctl's stderr does, ends the
+// sentence it is in with one period, not two.
+func TestTakeoverTextOnePeriod(t *testing.T) {
+	i18n.Init("en")
+	err := errors.New("systemctl: exit status 1: Job for splitdpi.service failed because the control process exited with error code.\n" +
+		`See "systemctl status splitdpi.service" and "journalctl -xeu splitdpi.service" for details.`)
+	for name, e := range map[string]ops.TakeoverError{
+		"start": {Err: err},
+		"undo":  {Err: ops.ErrServiceNotStarted, Undo: err},
+		"stop":  {Stopped: "background", PID: 4343, Err: ops.StopRunError{Mode: "background", PID: 4343, Err: err}, Running: "background"},
+	} {
+		if out := takeoverText(io.Discard, e); strings.Contains(out, "..") || !strings.Contains(out, "for details.") {
+			t.Errorf("%s: %q", name, out)
+		}
+	}
+}
+
 func TestEnableSystemd(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
+	installEngine(t, o.P)
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	out, code := runOps(t, o, "enable")
 	if code != 0 {
@@ -145,13 +224,19 @@ func TestRevertRemovesService(t *testing.T) {
 }
 
 // --rules-only runs from inside the service's own stop (ExecStopPost):
-// calling the service manager there would deadlock.
+// calling the service manager there would deadlock. It says no rules are
+// left, not that run files are gone: it does not look at them.
 func TestRevertRulesOnlyLeavesService(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	os.MkdirAll(filepath.Dir(o.P.SystemdUnit), 0o755)
 	os.WriteFile(o.P.SystemdUnit, []byte("[Unit]\n"), 0o644)
-	if _, code := runOps(t, o, "revert", "--rules-only"); code != 0 {
+	out, code := runOps(t, o, "revert", "--rules-only")
+	if code != 0 {
 		t.Fatalf("code %d", code)
+	}
+	has(t, out, "No splitdpi firewall rules are left.")
+	if strings.Contains(out, "run files") {
+		t.Errorf("speaks of run files it did not look at:\n%s", out)
 	}
 	for _, c := range f.calls {
 		if strings.HasPrefix(c, "systemctl") {

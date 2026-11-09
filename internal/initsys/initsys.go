@@ -16,12 +16,17 @@ var ErrUnsupportedInit = errors.New("unsupported init system")
 
 type Manager interface {
 	Install() error
+	// Enable makes the init start the service at boot without starting it
+	// now. runit's link does both at once, so there Start makes it.
 	Enable(ctx context.Context) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Disable(ctx context.Context) error
 	Remove() error
 	Installed() bool
+	// Enabled reports whether the init starts the service at boot: its
+	// enable link is there.
+	Enabled() bool
 	LogsCmd(follow bool) []string
 }
 
@@ -40,6 +45,10 @@ func For(kind sysinfo.Init, run execx.Runner, bin string, p paths.Paths) (Manage
 	}
 }
 
+// `run --service` exits 3 after a crash loop and 4 when another splitdpi
+// already runs. Starting it again would not help, so the systemd unit and the
+// runit finish script do not restart it after either.
+
 func SystemdUnitContent(bin string) string {
 	return fmt.Sprintf(`[Unit]
 Description=SplitDPI DPI bypass (zapret2)
@@ -52,7 +61,7 @@ ExecStart=%s run --service
 ExecStopPost=%s revert --rules-only
 Restart=on-failure
 RestartSec=5
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
 
 [Install]
 WantedBy=multi-user.target
@@ -85,7 +94,7 @@ func RunitRunContent(bin string) string {
 func RunitFinishContent(bin string) string {
 	return fmt.Sprintf(`#!/bin/sh
 %s revert --rules-only
-[ "$1" = 3 ] && sv down splitdpi
+case "$1" in 3 | 4) sv down splitdpi ;; esac
 exit 0
 `, bin)
 }
@@ -131,6 +140,8 @@ func (m *systemd) Installed() bool {
 	_, err := os.Stat(m.p.SystemdUnit)
 	return err == nil
 }
+
+func (m *systemd) Enabled() bool { return linked(m.p.SystemdLink) }
 
 func (m *systemd) LogsCmd(follow bool) []string {
 	args := []string{"journalctl", "-u", "splitdpi", "--no-pager"}
@@ -179,6 +190,8 @@ func (m *openrc) Installed() bool {
 	return err == nil
 }
 
+func (m *openrc) Enabled() bool { return linked(m.p.OpenRCLink) }
+
 func (m *openrc) LogsCmd(bool) []string { return nil }
 
 type runit struct {
@@ -194,21 +207,26 @@ func (m *runit) Install() error {
 	return writeFile(filepath.Join(m.p.RunitDir, "finish"), RunitFinishContent(m.bin), 0o755)
 }
 
-func (m *runit) Enable(context.Context) error {
+// Enable does nothing: the link that makes runit start the service at boot
+// also starts it at once, so Start makes it.
+func (m *runit) Enable(context.Context) error { return nil }
+
+// Start links the service into runit's service directory: runsvdir starts
+// it within 5 s, and at every boot. A service runit supervises already may
+// have been told to stay down, so that one is told to come up.
+func (m *runit) Start(ctx context.Context) error {
+	if linked(m.p.RunitLink) {
+		_, err := m.run(ctx, "", "sv", "up", "splitdpi")
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(m.p.RunitLink), 0o755); err != nil {
 		return err
 	}
-	_ = os.Remove(m.p.RunitLink)
 	target, err := filepath.Abs(m.p.RunitDir)
 	if err != nil {
 		return err
 	}
 	return os.Symlink(target, m.p.RunitLink)
-}
-
-func (m *runit) Start(ctx context.Context) error {
-	_, err := m.run(ctx, "", "sv", "up", "splitdpi")
-	return err
 }
 
 func (m *runit) Stop(ctx context.Context) error {
@@ -233,7 +251,16 @@ func (m *runit) Installed() bool {
 	return err == nil
 }
 
+func (m *runit) Enabled() bool { return linked(m.p.RunitLink) }
+
 func (m *runit) LogsCmd(bool) []string { return nil }
+
+// linked reports whether the enable link at path is there. The link itself
+// counts, not what it points at: its target is a host path.
+func linked(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
 
 func writeFile(path, content string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

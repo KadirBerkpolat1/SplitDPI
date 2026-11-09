@@ -21,8 +21,9 @@ func (o *Ops) SetLang(lang string) error {
 	})
 }
 
-// SetRunMode saves how the TUI's run key starts the bypass; it starts or
-// stops nothing.
+// SetRunMode saves how the TUI's run key starts the bypass; it starts, stops,
+// enables and disables nothing. Run mode boot asks for the service, which
+// Enable sets up.
 func (o *Ops) SetRunMode(mode config.RunMode) error {
 	if mode != config.RunWindow && mode != config.RunBackground && mode != config.RunBoot {
 		return errors.New(i18n.T("config.err_run_mode", string(mode)))

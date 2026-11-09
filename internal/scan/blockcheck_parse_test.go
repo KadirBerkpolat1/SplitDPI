@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	wantSimulateTLS = "--payload=tls_client_hello --lua-desync=tcpseg:pos=0,-1:seqovl=1 --lua-desync=drop"
+	wantSimulateTLS  = "--payload=tls_client_hello --lua-desync=tcpseg:pos=0,-1:seqovl=1 --lua-desync=drop"
 	wantSimulateQUIC = "--payload=quic_initial --lua-desync=send:ipfrag:ipfrag_pos_udp=16 --lua-desync=drop"
-	queueErr        = "nftables queue support is not available. pls install modules."
+	queueErr         = "nftables queue support is not available. pls install modules."
 )
 
 func readFixture(t *testing.T, name string) string {

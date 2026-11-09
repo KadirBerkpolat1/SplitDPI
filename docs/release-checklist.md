@@ -7,7 +7,14 @@ written down here.
 ## Automated
 
 - [x] CI is green on the release commit: `test`, `integration` (netns),
-      `build` and every `distros` job.
+      `build` and every `distros` job (seven since 2026-11-04: Debian 13,
+      Ubuntu 24.04, Fedora, Arch, openSUSE Tumbleweed, Alpine, Void glibc).
+- [ ] The tag's own run: pushing a `v*` tag runs `release.yml`, which runs the
+      same CI again and builds, checksums and publishes the binaries only
+      after every job passes. GitHub writes the release notes from merged pull
+      requests (`--generate-notes`), so commits pushed straight to `main` show
+      up only through its compare link: check the notes on the release page.
+      Not run yet: `release.yml` waits for CI since `a98ce31` (2026-11-09).
 - [x] Locally: `go vet ./... && go test ./...` and
       `sudo -E SPLITDPI_BIN=/tmp/splitdpi go test -tags integration ./test/integration/...`
       after `go build -o /tmp/splitdpi ./cmd/splitdpi`. (v0.1.0, 2026-10-29)
@@ -31,9 +38,23 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
   - Fedora Cloud 44 (systemd, SELinux enforcing; `doctor` shows 0 denials in
     `/var/log/audit/audit.log`)
   - Alpine 3.24.3 (OpenRC)
+- [ ] Boot path from the TUI across a real reboot: with the bypass running in
+      the UI window, Settings → Run mode → "Also at boot" moves it to the
+      service; after a reboot, Status shows it running in service mode and
+      its "At boot" row reads "yes" (`sudo splitdpi status` prints
+      "Starts at boot: yes."); Run mode → "In this window" removes the
+      service, and after another reboot nothing runs and `revert` prints
+      clean. Not recorded on a real system yet. In an Incus Ubuntu 26.04
+      container (2026-11-09, `9147ee9`), the Status page's prompt moved a
+      running v0.2.6 background run to the service, and the service was
+      running after a container restart.
 - [ ] Fedora Silverblue or Bazzite: `install.sh`, `enable`, reboot, `revert`.
       Not tested yet.
 - [ ] Void (runit): `enable`, reboot, `revert`. Not tested yet.
+- [ ] CachyOS (systemd): `enable`, reboot, `revert`. On 2026-11-09 (Türk
+      Telekom, `9147ee9`), `enable` moved a running background run to the
+      service with the bypass off for 151 ms, and the engine upgrade's
+      service restart took 193 ms. Reboot and `revert` not recorded yet.
 
 ## Known gaps
 
@@ -75,3 +96,54 @@ results there still hold for what they covered; the features new in v0.2.0
 (the terminal UI, `sites import`, `takeover`, encrypted DNS providers and
 DNS-over-TLS, the DNS check in `scan`, plain-language errors, the share link
 and `uninstall`) are covered only by automated tests and CI.
+
+## v0.2.1 to v0.2.6
+
+Recorded afterwards from `git tag` and `git log`: the tag's date and the
+tagged commit.
+
+- v0.2.1, 2026-10-29, `0b0a2a0`: DNS sends local names to the network's own
+  DNS, skips VPN interfaces and detects an already encrypted system resolver.
+  Checks: not recorded.
+- v0.2.2, 2026-10-29, `82db1b4`: `run --background` keeps the bypass on after
+  the terminal closes, until reboot; `probe` counts domains without an address
+  as not tested. Checks: not recorded.
+- v0.2.3, 2026-10-30, `520cca0`: the run mode setting chooses what `r` on
+  Status does. Checks: not recorded.
+- v0.2.4, 2026-10-30, `6d04fd1`: `splitdpi config get|set|reset`; Settings
+  lists every setting in groups, with search. Checks: not recorded.
+- v0.2.5, 2026-10-31, `0190cc9`: the TUI's bottom dock of buttons, toast line
+  and clickable status pill; Status adapts to short screens. Checks: not
+  recorded.
+- v0.2.6, 2026-10-31, `a5965e6`: 10 new apps, Russia defaults and exclude
+  list, the UZ, PK, OM, MM, TZ and SY countries; presets VERSION 2026-10-31.
+  Checks: not recorded.
+
+## v0.2.7
+
+Tick these on the release commit, with the date.
+
+- [x] `go vet ./...` passes.
+- [x] `go test -count=1 ./...` passes (also with `-race`, plus gofmt,
+      staticcheck, govulncheck, shellcheck and actionlint).
+- [x] The integration tests pass: 7/7 with the v1.0.7 engine in an Incus
+      Ubuntu 26.04 container (`security.nesting=true`), and in CI's
+      `integration` job. They were not run with `sudo` on the development
+      machine, whose own bypass had to stay up.
+- [x] `splitdpi presets check internal/presets/data` exits 0 (version
+      2026-10-31, 6 ISPs, 14 apps).
+- [x] CI is green, all 10 jobs: `test`, `integration`, `build` and the seven
+      `distros` jobs (Debian 13, Ubuntu 24.04, Fedora, Arch, openSUSE
+      Tumbleweed, Alpine, Void glibc); the tag's `release` run passes them
+      again before it publishes. Green on `e1c3007`, in both its push run
+      (42674565960) and its pull_request run (42674578154).
+- [x] The latest SplitDPI-presets release carries `presets.tar.gz.sha256`;
+      `splitdpi presets update` now refuses a bundle without it. Release
+      `2026-11-09` is the first with it; `splitdpi presets update` verified
+      it and updated to 2026-11-09.
+- [ ] The boot path from the TUI across a real reboot, under
+      [On real systems](#on-real-systems). Container and CachyOS results
+      are recorded there; a real-system reboot is not recorded yet.
+
+(2026-11-09, on `e1c3007`; the release commit changes only `README.md`,
+`README.tr.md` and this file.)

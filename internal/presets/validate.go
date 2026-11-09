@@ -11,7 +11,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 )
 
-//go:generate go run ./genlua -engine v1.0.6 -o luafuncs_gen.go $SPLITDPI_ENGINE_DIR/lua/zapret-antidpi.lua $SPLITDPI_ENGINE_DIR/lua/zapret-auto.lua
+//go:generate go run ./genlua -engine v1.0.7 -o luafuncs_gen.go $SPLITDPI_ENGINE_DIR/lua/zapret-antidpi.lua $SPLITDPI_ENGINE_DIR/lua/zapret-auto.lua
 
 // Strategy strings run as root inside nfqws2, which executes Lua, so they are
 // untrusted input wherever they come from.

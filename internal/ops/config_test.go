@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -211,7 +213,13 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 
 func TestPresetsUpdate(t *testing.T) {
 	body := presetBundle(t)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write(body) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".sha256") {
+			fmt.Fprintf(w, "%x  presets.tar.gz\n", sha256.Sum256(body))
+			return
+		}
+		w.Write(body)
+	}))
 	defer srv.Close()
 	var asked string
 	o := &Ops{P: paths.Under(t.TempDir()), HTTP: localClient(srv, &asked)}

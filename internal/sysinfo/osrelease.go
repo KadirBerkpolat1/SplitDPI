@@ -59,8 +59,6 @@ func ReadOSRelease(root fs.FS) OSRelease {
 func splitLike(s string) []string {
 	s = strings.ReplaceAll(s, ",", " ")
 	var out []string
-	for _, p := range strings.Fields(s) {
-		out = append(out, p)
-	}
+	out = append(out, strings.Fields(s)...)
 	return out
 }

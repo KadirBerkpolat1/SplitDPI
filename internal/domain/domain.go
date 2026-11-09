@@ -29,9 +29,7 @@ func Normalize(in string) (string, error) {
 	if s == "" {
 		return "", InvalidError{in}
 	}
-	if strings.HasPrefix(s, "*.") {
-		s = s[2:]
-	}
+	s = strings.TrimPrefix(s, "*.")
 	if strings.Contains(s, "://") {
 		u, err := url.Parse(s)
 		if err != nil {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
 // The Maintenance rows: refresh the presets, install the engine, check the
@@ -66,6 +68,19 @@ func (m *Model) updatePresets() tea.Cmd {
 		v, n, err := b.PresetsUpdate(ctx)
 		return presetsMsg{v, n, err}
 	}
+}
+
+// presetsErrText words a presets update error as `presets update` does.
+func presetsErrText(err error) string {
+	switch {
+	case errors.Is(err, presets.ErrNoChecksum):
+		return i18n.T("presets.update.no_checksum")
+	case errors.Is(err, presets.ErrBadChecksum):
+		return i18n.T("presets.update.bad_checksum")
+	case errors.Is(err, presets.ErrChecksumMismatch):
+		return i18n.T("presets.update.mismatch")
+	}
+	return errText(err)
 }
 
 func engineVersion(e engine.Engine) string {
@@ -291,7 +306,7 @@ func (m Model) maintUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		s.busy = ""
 		if msg.err != nil {
 			fmt.Fprintln(m.logs, msg.err)
-			s.result = []string{badStyle.Render(errText(msg.err))}
+			s.result = []string{badStyle.Render(presetsErrText(msg.err))}
 			return m, nil, true
 		}
 		s.presets = msg.version

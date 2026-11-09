@@ -9,7 +9,7 @@ import (
 func TestUninstallWithoutYesChangesNothing(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	os.MkdirAll(filepath.Dir(o.P.SystemdUnit), 0o755)
 	os.WriteFile(o.P.SystemdUnit, []byte("[Unit]\n"), 0o644)
 	out, code := runOps(t, o, "uninstall")
@@ -38,7 +38,7 @@ func TestUninstallNothingInstalled(t *testing.T) {
 func TestUninstallYes(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	os.MkdirAll(filepath.Dir(o.P.SystemdUnit), 0o755)
 	os.WriteFile(o.P.SystemdUnit, []byte("[Unit]\n"), 0o644)
 	out, code := runOps(t, o, "uninstall", "--yes")
@@ -62,7 +62,7 @@ func TestUninstallLeftoverFails(t *testing.T) {
 		t.Skip("root ignores directory permissions")
 	}
 	o, _ := runOpsFor(t, systemdRoot())
-	installBinary(t, o.P)
+	installBinary(t, o)
 	logDir := filepath.Dir(o.P.LogFile)
 	os.MkdirAll(logDir, 0o755)
 	os.WriteFile(o.P.LogFile, []byte("x\n"), 0o644)

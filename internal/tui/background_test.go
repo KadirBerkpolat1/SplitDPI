@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 func TestBackgroundAction(t *testing.T) {
@@ -33,9 +35,13 @@ func TestBackgroundAction(t *testing.T) {
 	if strings.Contains(m.View(), "b Run in background") {
 		t.Error("b still offered while the background run is on")
 	}
+	f.st = supervisor.Status{State: "stopped"} // what Status says once Stop returns
 	m = press(t, m, "s")
 	if !f.called("stop") {
 		t.Error("s did not stop the background run")
+	}
+	if m.st.State != "stopped" || !strings.Contains(m.View(), "b Run in background") {
+		t.Errorf("after s: state %q, b offered %v", m.st.State, strings.Contains(m.View(), "b Run in background"))
 	}
 }
 
@@ -46,6 +52,18 @@ func TestBackgroundActionFailure(t *testing.T) {
 	has(t, flat(m.View()), "did not start in the background")
 	has(t, flat(m.View()), "/var/log/splitdpi.log")
 	has(t, m.View(), "b Run in background")
+}
+
+// A raw error of several lines, as nft prints with its rule and a caret
+// line, keeps its cause in the note at 80x24.
+func TestBackgroundRawErrorKeepsCause(t *testing.T) {
+	f := newFake()
+	f.bgErr = errors.New("load nft table splitdpi: nft: exit status 1: Error: Could not process rule: No such file or directory\n" +
+		"add rule inet splitdpi output meta mark 0x40000000 queue num 200 bypass\n" +
+		"                                                   ^^^^^^^^^^^^^^^^^^^^^")
+	v := press(t, newModel(t, f), "b").View()
+	fits(t, "raw error", v)
+	has(t, flat(v), "Could not process rule")
 }
 
 // A log stream opened before the background run read the journal; starting
@@ -111,6 +129,9 @@ func TestQuitPromptThreeWay(t *testing.T) {
 			if _, ok := cmd().(tea.QuitMsg); !ok || f.called("background") {
 				t.Errorf("did not just quit; calls %q", f.calls)
 			}
+			if m.running || !m.quitting {
+				t.Errorf("after the run here ended: running %v, quitting %v", m.running, m.quitting)
+			}
 		})
 
 		t.Run(lang+" background", func(t *testing.T) {
@@ -165,6 +186,42 @@ func TestQuitPromptThreeWay(t *testing.T) {
 			}
 			m.stopRun()
 			<-done
+		})
+	}
+}
+
+// The run here may end by itself, in a crash loop say, while the quit
+// prompt is open: its answer then has no run to stop, and y still just
+// quits, b still starts the background run first.
+func TestQuitPromptAfterRunEnded(t *testing.T) {
+	for _, k := range []string{"y", "b"} {
+		t.Run(k, func(t *testing.T) {
+			f := newFake()
+			m, done := runHere(t, f)
+			m, _ = update(t, m, key("q"))
+			end := m.runCancel
+			end()
+			<-done
+			m, _ = update(t, m, runDoneMsg{supervisor.ErrCrashLoop})
+			m, cmd := update(t, m, key(k))
+			if k == "b" {
+				if cmd == nil {
+					t.Fatal("b started nothing")
+				}
+				m, cmd = update(t, m, cmd())
+				if !f.called("background") || m.bgPID != 4343 {
+					t.Errorf("calls %q, background pid %d", f.calls, m.bgPID)
+				}
+			}
+			if cmd == nil {
+				t.Fatal("did not quit")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("did not quit")
+			}
+			if k == "y" && f.called("background") {
+				t.Errorf("calls %q: y started the background run", f.calls)
+			}
 		})
 	}
 }

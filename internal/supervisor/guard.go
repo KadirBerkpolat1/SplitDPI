@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,11 @@ const GuardArg = "__guard"
 const (
 	guardKillAfter = 3 * time.Second
 	dropChainFlag  = "--drop-chain="
+	// pidFlag makes the guard write the PID of argv and a newline to pidFD
+	// once argv has started. ExecSpawn waits up to pidWait for it.
+	pidFlag = "--report-pid"
+	pidFD   = 3
+	pidWait = 5 * time.Second
 )
 
 // DropChainOpt makes the guard delete chain of our inet table when it is told
@@ -34,13 +40,19 @@ func DropChainOpt(table, chain string) string { return dropChainFlag + table + "
 // It returns the child's exit code.
 func Guard(args []string) int {
 	var drop [][2]string // table, chain
+	var report *os.File
 	for len(args) > 0 && args[0] != "--" {
 		table, chain, ok := strings.Cut(strings.TrimPrefix(args[0], dropChainFlag), "/")
-		if !strings.HasPrefix(args[0], dropChainFlag) || !ok {
+		switch {
+		case args[0] == pidFlag:
+			syscall.CloseOnExec(pidFD) // argv must not inherit the pipe
+			report = os.NewFile(pidFD, "pid")
+		case strings.HasPrefix(args[0], dropChainFlag) && ok:
+			drop = append(drop, [2]string{table, chain})
+		default:
 			os.Stderr.WriteString("guard: unknown option " + args[0] + "\n")
 			return 2
 		}
-		drop = append(drop, [2]string{table, chain})
 		args = args[1:]
 	}
 	if len(args) < 2 {
@@ -55,6 +67,10 @@ func Guard(args []string) int {
 	if err := cmd.Start(); err != nil {
 		os.Stderr.WriteString(err.Error() + "\n")
 		return 1
+	}
+	if report != nil {
+		report.WriteString(strconv.Itoa(cmd.Process.Pid) + "\n")
+		report.Close()
 	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
@@ -84,4 +100,18 @@ func Guard(args []string) int {
 			return 1
 		}
 	}
+}
+
+// readPID returns the PID a guard run with pidFlag writes to r, or 0 when the
+// guard exits, or stays silent for pidWait, without one. The guard writes it
+// in one write of less than PIPE_BUF bytes, so one read gets all of it.
+func readPID(r *os.File) int {
+	r.SetReadDeadline(time.Now().Add(pidWait))
+	var b [24]byte
+	n, _ := r.Read(b[:])
+	if n == 0 || b[n-1] != '\n' {
+		return 0
+	}
+	pid, _ := strconv.Atoi(string(b[:n-1]))
+	return pid
 }

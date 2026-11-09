@@ -7,7 +7,7 @@ Engine
 
 SplitDPI downloads and runs zapret2; it does not redistribute it.
 
-zapret2 (https://github.com/bol-van/zapret2), v1.0.6
+zapret2 (https://github.com/bol-van/zapret2), v1.0.7
 Copyright (c) 2016-2026 bol-van
 Licensed under the MIT License.
 
@@ -59,7 +59,7 @@ Licensed under the MIT License:
 - charmbracelet/lipgloss, Copyright (c) 2021-2023 Charmbracelet, Inc
 - charmbracelet/x/ansi, x/cellbuf, x/term, Copyright (c) 2023 Charmbracelet, Inc.
 - aymanbagabas/go-osc52, Copyright (c) 2022 Ayman Bagabas
-- clipperhouse/displaywidth, stringish, Copyright (c) 2025 Matt Sherman
+- clipperhouse/displaywidth, Copyright (c) 2025 Matt Sherman
 - clipperhouse/uax29, Copyright (c) 2020 Matt Sherman
 - lucasb-eyer/go-colorful, Copyright (c) 2013 Lucas Beyer
 - mattn/go-isatty, go-runewidth, Copyright (c) 2016 Yasuhiro Matsumoto

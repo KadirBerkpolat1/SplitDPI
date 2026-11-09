@@ -11,9 +11,9 @@ import (
 func TestNormalizeDomain(t *testing.T) {
 	ok := map[string]string{
 		"https://Discord.com/app": "discord.com",
-		"discord.com.":              "discord.com",
-		"*.ziraat.com.tr":           "ziraat.com.tr",
-		" Roblox.com:443 ":          "roblox.com",
+		"discord.com.":            "discord.com",
+		"*.ziraat.com.tr":         "ziraat.com.tr",
+		" Roblox.com:443 ":        "roblox.com",
 	}
 	for in, want := range ok {
 		got, err := domain.Normalize(in)

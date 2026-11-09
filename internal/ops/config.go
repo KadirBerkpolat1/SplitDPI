@@ -85,6 +85,8 @@ func (o *Ops) SetQNum(n int) error {
 
 // PresetsUpdate downloads the latest preset data and replaces the cache.
 func (o *Ops) PresetsUpdate(ctx context.Context) (version string, apps int, err error) {
+	ctx, cancel := context.WithTimeout(ctx, presetsTimeout)
+	defer cancel()
 	set, err := presets.Update(ctx, o.HTTP, o.P, presets.UpdateURL)
 	if err != nil {
 		return "", 0, err
