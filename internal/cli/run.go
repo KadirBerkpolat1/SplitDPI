@@ -68,7 +68,11 @@ func runError(w io.Writer, err error, service bool) error {
 	case errors.Is(err, render.ErrNoStrategy):
 		return errors.New(i18n.T("run.no_strategy"))
 	case errors.As(err, &already):
-		return errors.New(i18n.T("run.already", i18n.Enum("mode", already.Mode)))
+		msg := errors.New(i18n.T("run.already", i18n.Enum("mode", already.Mode)))
+		if service {
+			return exitError{code: 4, err: msg}
+		}
+		return msg
 	case errors.Is(err, ops.ErrEngineMissing):
 		return errors.New(i18n.T("engine.not_installed"))
 	case errors.Is(err, supervisor.ErrCrashLoop):
@@ -112,6 +116,7 @@ func runStatus(_ context.Context, o *ops.Ops, w io.Writer, args []string) error 
 			fmt.Fprintln(w, i18n.T("background.until_reboot"))
 		}
 	}
+	printBoot(w, o.ServiceState(), cfg.RunMode)
 	if cfg.Strategy != nil {
 		fmt.Fprintln(w, i18n.T("status.strategy", cfg.Strategy.ID, cfg.Strategy.Source))
 	} else {
@@ -151,6 +156,10 @@ func runRevert(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	}
 	for _, s := range r.Restored {
 		fmt.Fprintln(w, i18n.T("takeover.restored", s))
+	}
+	if r.InUse != "" {
+		fmt.Fprintln(w, i18n.T("revert.in_use", i18n.Enum("mode", r.InUse)))
+		return nil
 	}
 	if len(r.Leftover) == 0 {
 		fmt.Fprintln(w, i18n.T("revert.clean"))

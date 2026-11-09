@@ -22,6 +22,9 @@ type Manager interface {
 	Disable(ctx context.Context) error
 	Remove() error
 	Installed() bool
+	// Enabled reports whether the init starts the service at boot: its
+	// enable link is there.
+	Enabled() bool
 	LogsCmd(follow bool) []string
 }
 
@@ -40,6 +43,10 @@ func For(kind sysinfo.Init, run execx.Runner, bin string, p paths.Paths) (Manage
 	}
 }
 
+// `run --service` exits 3 after a crash loop and 4 when another splitdpi
+// already runs. Starting it again would not help, so the systemd unit and the
+// runit finish script do not restart it after either.
+
 func SystemdUnitContent(bin string) string {
 	return fmt.Sprintf(`[Unit]
 Description=SplitDPI DPI bypass (zapret2)
@@ -52,7 +59,7 @@ ExecStart=%s run --service
 ExecStopPost=%s revert --rules-only
 Restart=on-failure
 RestartSec=5
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
 
 [Install]
 WantedBy=multi-user.target
@@ -85,7 +92,7 @@ func RunitRunContent(bin string) string {
 func RunitFinishContent(bin string) string {
 	return fmt.Sprintf(`#!/bin/sh
 %s revert --rules-only
-[ "$1" = 3 ] && sv down splitdpi
+case "$1" in 3 | 4) sv down splitdpi ;; esac
 exit 0
 `, bin)
 }
@@ -131,6 +138,8 @@ func (m *systemd) Installed() bool {
 	_, err := os.Stat(m.p.SystemdUnit)
 	return err == nil
 }
+
+func (m *systemd) Enabled() bool { return linked(m.p.SystemdLink) }
 
 func (m *systemd) LogsCmd(follow bool) []string {
 	args := []string{"journalctl", "-u", "splitdpi", "--no-pager"}
@@ -178,6 +187,8 @@ func (m *openrc) Installed() bool {
 	_, err := os.Stat(m.p.OpenRCScript)
 	return err == nil
 }
+
+func (m *openrc) Enabled() bool { return linked(m.p.OpenRCLink) }
 
 func (m *openrc) LogsCmd(bool) []string { return nil }
 
@@ -233,7 +244,16 @@ func (m *runit) Installed() bool {
 	return err == nil
 }
 
+func (m *runit) Enabled() bool { return linked(m.p.RunitLink) }
+
 func (m *runit) LogsCmd(bool) []string { return nil }
+
+// linked reports whether the enable link at path is there. The link itself
+// counts, not what it points at: its target is a host path.
+func linked(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
 
 func writeFile(path, content string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

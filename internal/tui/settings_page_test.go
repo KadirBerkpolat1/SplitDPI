@@ -30,7 +30,7 @@ func shownIDs(m Model) []string {
 func TestSettingsGroupsInOrder(t *testing.T) {
 	defer i18n.Init("en")
 	want := [][]string{
-		{"lang", "run_mode"},
+		{"lang", "run_mode", "boot"},
 		{"mode", "exclude", "strategy"},
 		{"dns"},
 		{"skip_ifaces", "ipinfo_url"},
@@ -556,6 +556,7 @@ func TestSettingsRevertStopsOwnRun(t *testing.T) {
 	if i, j := slices.Index(f.calls, "run ended"), slices.Index(f.calls, "revert false false"); i < 0 || j < i {
 		t.Errorf("calls %q", f.calls)
 	}
+	has(t, flat(m.View()), i18n.T("settings_revert.done"))
 }
 
 // settingsFits checks that a view fills the 80x24 screen exactly and lacks no key.

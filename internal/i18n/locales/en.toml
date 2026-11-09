@@ -225,6 +225,9 @@ engine = "Engine: zapret2 %s"
 apps = "Apps: %s"
 last_error = "Last error: %s"
 dns = "Encrypted DNS is on; VPN DNS and local network names still use your normal DNS. Turn it off with `sudo splitdpi dns off`."
+boot_yes = "Starts at boot: yes."
+boot_no = "Starts at boot: no."
+boot_unsupported = "Starts at boot: no (this init system has no splitdpi service)."
 
 [cmd.dns]
 help = "Encrypt DNS (port 53) while splitdpi runs: off | auto | cloudflare | google | quad9 | adguard, over DoH or with --dot DoT. Without an argument, show the current choice."
@@ -240,6 +243,7 @@ removed = "Removed %s"
 clean = "Revert complete, system is clean: no splitdpi rules or run files are left."
 leftover = "Still present: %s"
 not_clean = "Revert did not finish; the items above are still present."
+in_use = "Kept the firewall rules: they belong to the splitdpi running now (%s)."
 
 [cmd.enable]
 help = "Install and start splitdpi as a service that also starts on boot."
@@ -261,6 +265,12 @@ unsupported = "Service mode is not supported on this init system. Use `splitdpi 
 no_binary = "The service needs the splitdpi binary at %s. Install it first: sudo install -m 755 ./splitdpi %s"
 not_started = "The service did not start within 10 s. See `sudo splitdpi logs` and `sudo splitdpi status`."
 no_logs = "No service log yet."
+took_over = "Stopped the %s run (pid %d): the service runs the bypass instead."
+stop_failed = "Could not stop the %s run (pid %d): %v. Stop it with `sudo splitdpi stop`, then run `sudo splitdpi enable` again."
+unsafe = "The service cannot run %s: %s. Install splitdpi where only root can change it, for example: sudo install -m 755 %s %s"
+unsafe_owner = "it or its directory does not belong to root"
+unsafe_writable = "users other than root can change it or its directory"
+unsafe_location = "it is in /tmp or in a home directory"
 
 [state]
 running = "running"
@@ -403,6 +413,15 @@ title = "Start SplitDPI at boot?"
 service = "Install the splitdpi service for this system's init (systemd, OpenRC or runit)."
 boot = "Start the bypass now and after every reboot."
 rules = "While it runs, add firewall (nftables) rules that send matching traffic through nfqws2."
+move_here = "Stop the bypass running in this window and run it as the service instead: about a second without bypass."
+move = "Stop the %s run (pid %d) and run the bypass as the service instead: about a second without bypass."
+
+[shell.disable]
+title = "Stop starting SplitDPI at boot?"
+service = "Stop and remove the splitdpi service: SplitDPI no longer starts at boot."
+stops = "The bypass it runs stops now; r on the Status page starts it again."
+mode = "Save the run mode: %s."
+working = "Removing the service..."
 
 [shell.sites]
 app = "app"
@@ -672,6 +691,7 @@ started = "Running in the background (pid %d). You can close this window."
 quit = "The bypass runs in this window. What should happen to it?"
 quit_stop = "stop and quit"
 quit_background = "keep it in the background, quit"
+quit_boot = "move it to the boot service, quit"
 quit_cancel = "cancel"
 
 [run_mode]
@@ -683,10 +703,22 @@ window_note = "The bypass stops when the window closes."
 background = "In the background"
 background_note = "Keeps running when the window closes; stops when the computer restarts."
 boot = "Also at boot"
-boot_note = "Installed as a service; starts by itself at every boot."
+boot_note = "Installed as a service right away; starts by itself at every boot."
 saved = "Run mode: %s. It applies the next time you press r on the Status page."
+disabled = "The service is removed: SplitDPI no longer starts at boot. Run mode: %s."
 run_background = "Run (in background)"
 run_boot = "Run (also at boot)"
+boot_not_enabled = "SplitDPI does not start at boot yet: the service is not set up. To set it up: sudo splitdpi enable"
+boot_still_enabled = "The service still starts SplitDPI at boot. To stop that: sudo splitdpi disable"
+
+[boot]
+label = "Starts at boot"
+status_label = "At boot"
+yes = "yes"
+no = "no"
+unsupported = "no, not supported here"
+not_set_up = "no, the service is not set up"
+set_up = "Set it up now"
 
 [cmd.config]
 help = "Show or change settings (get KEY | set KEY VALUE | reset KEY)."
@@ -733,7 +765,8 @@ working = "in progress..."
 
 [settings_help]
 lang = "The language of this window and of the splitdpi commands."
-run_mode = "How r on the Status page starts the bypass: in this window, in the background, or also at every boot."
+run_mode = "How r on the Status page starts the bypass: in this window, in the background, or as a service that also starts at every boot. Also at boot sets the service up at once; the other run modes remove it."
+boot = "Whether SplitDPI starts by itself when the computer starts, as the init system says. The run mode Also at boot sets the service up."
 mode = "Which traffic the bypass handles: every site that looks blocked, or only the apps you turned on and your own sites."
 exclude = "Sites the bypass never touches, for sites that break with it. They are listed at the end of the Sites page."
 strategy = "How packets are changed to get past the block. The Strategy page lists the choices; the Scan page finds one that works."

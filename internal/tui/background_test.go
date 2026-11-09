@@ -10,6 +10,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 func TestBackgroundAction(t *testing.T) {
@@ -33,9 +34,13 @@ func TestBackgroundAction(t *testing.T) {
 	if strings.Contains(m.View(), "b Run in background") {
 		t.Error("b still offered while the background run is on")
 	}
+	f.st = supervisor.Status{State: "stopped"} // what Status says once Stop returns
 	m = press(t, m, "s")
 	if !f.called("stop") {
 		t.Error("s did not stop the background run")
+	}
+	if m.st.State != "stopped" || !strings.Contains(m.View(), "b Run in background") {
+		t.Errorf("after s: state %q, b offered %v", m.st.State, strings.Contains(m.View(), "b Run in background"))
 	}
 }
 
@@ -110,6 +115,9 @@ func TestQuitPromptThreeWay(t *testing.T) {
 			m, cmd := update(t, m, runDoneMsg{})
 			if _, ok := cmd().(tea.QuitMsg); !ok || f.called("background") {
 				t.Errorf("did not just quit; calls %q", f.calls)
+			}
+			if m.running || !m.quitting {
+				t.Errorf("after the run here ended: running %v, quitting %v", m.running, m.quitting)
 			}
 		})
 

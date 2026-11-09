@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 )
 
@@ -179,9 +180,13 @@ func (m Model) toast() string {
 	note := lipgloss.NewStyle().Width(m.width).MaxHeight(3)
 	switch {
 	case m.confirmQuit:
+		move := i18n.T("background_tui.quit_background")
+		if m.quitMove() == config.RunBoot {
+			move = i18n.T("background_tui.quit_boot")
+		}
 		return note.Render(warnStyle.Render(i18n.T("background_tui.quit")) + "\n" +
 			hint(i18n.T("confirm_keys.yes"), i18n.T("background_tui.quit_stop")) + "   " +
-			hint("b", i18n.T("background_tui.quit_background")) + "   " +
+			hint("b", move) + "   " +
 			hint(i18n.T("confirm_keys.no"), i18n.T("background_tui.quit_cancel")))
 	case m.note != "":
 		return note.Foreground(accent).Render(m.note)

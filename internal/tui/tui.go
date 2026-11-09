@@ -20,6 +20,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/doctor"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -52,7 +53,9 @@ type Backend interface {
 	StrategySet(id string) (ops.StrategyChoice, bool, error)
 	Scan(ctx context.Context, opt scan.Options, progress func(string)) (scan.Report, error)
 	HasIPv6(ctx context.Context) bool
-	Enable(ctx context.Context) error
+	Enable(ctx context.Context) (ops.EnableReport, error)
+	Disable(ctx context.Context) error
+	ServiceState() ops.ServiceState
 	AcceptDisclaimer() error
 	SetLang(lang string) error
 	SetRunMode(mode config.RunMode) error
@@ -89,8 +92,15 @@ type (
 		st  supervisor.Status
 		cfg config.Config
 		err error
+		svc ops.ServiceState
 	}
 )
+
+// readStatus is what the pages show of the bypass, the config and the service.
+func readStatus(b Backend) statusMsg {
+	st, cfg, err := b.Status()
+	return statusMsg{st, cfg, err, b.ServiceState()}
+}
 
 type Model struct {
 	ctx     context.Context
@@ -112,6 +122,7 @@ type Model struct {
 	st         supervisor.Status
 	cfg        config.Config
 	stErr      error
+	svc        ops.ServiceState
 	note       string // result of the last action
 	probe      map[string][]probe.Result
 	probeNames map[string]string // the probed apps' names by id
@@ -137,14 +148,18 @@ type Model struct {
 	quitting    bool
 
 	// The bypass this TUI starts in the background (run --background).
-	bgStarting   bool
-	toBackground bool // quitting moves the bypass run here to the background
-	bgPID        int  // the background run quitting left behind
+	bgStarting bool
+	// Where quitting moves the bypass run here: the background, the service
+	// (boot) or nowhere ("").
+	moveTo    config.RunMode
+	bgPID     int  // the background run quitting left behind
+	toService bool // quitting left the bypass to the service
 }
 
 func New(ctx context.Context, b Backend, version string) Model {
 	m := Model{ctx: ctx, b: b, version: version, g: glyphsFor(os.Getenv), every: tea.Tick, out: os.Stdout, logs: &ring{max: 500}, width: 80, height: 24}
-	m.st, m.cfg, m.stErr = b.Status()
+	s := readStatus(b)
+	m.st, m.cfg, m.stErr, m.svc = s.st, s.cfg, s.err, s.svc
 	return m
 }
 
@@ -160,6 +175,7 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 		fm.stopRun()
 		fm.printShare(m.out)
 		fm.printBackground(m.out)
+		fm.printService(m.out)
 	}
 	return err
 }
@@ -179,10 +195,8 @@ func (m Model) tick() tea.Cmd {
 }
 
 func (m Model) refresh() tea.Cmd {
-	return func() tea.Msg {
-		st, cfg, err := m.b.Status()
-		return statusMsg{st, cfg, err}
-	}
+	b := m.b
+	return func() tea.Msg { return readStatus(b) }
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -203,7 +217,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.refresh(), m.tick())
 	case statusMsg:
-		m.st, m.cfg, m.stErr = msg.st, msg.cfg, msg.err
+		m.st, m.cfg, m.stErr, m.svc = msg.st, msg.cfg, msg.err, msg.svc
 		return m, nil
 	case tea.MouseMsg:
 		return m.mouse(msg)
@@ -231,8 +245,11 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.confirmQuit:
 		switch s {
 		case "y", "e", "enter", "b":
-			// runDoneMsg quits, or first starts the background run for "b".
-			m.confirmQuit, m.quitting, m.toBackground = false, true, s == "b"
+			// runDoneMsg quits, or for "b" first moves the bypass on.
+			m.confirmQuit, m.quitting, m.moveTo = false, true, ""
+			if s == "b" {
+				m.moveTo = m.quitMove()
+			}
 			m.stopAll()
 			m.runCancel()
 		case "n", "h", "esc":
@@ -415,9 +432,24 @@ func errText(err error) string {
 	var conflict ops.ConflictError
 	var already supervisor.ErrAlreadyRunning
 	var notStarted ops.BackgroundNotStartedError
+	var nobin ops.BinaryMissingError
+	var unsafe ops.UnsafeBinaryError
+	var stop ops.StopRunError
 	switch {
 	case errors.As(err, &notStarted):
 		return i18n.T("background.not_started", notStarted.Log)
+	case errors.Is(err, initsys.ErrUnsupportedInit):
+		return i18n.T("service.unsupported")
+	case errors.As(err, &nobin):
+		return i18n.T("service.no_binary", nobin.Path, nobin.Path)
+	case errors.As(err, &unsafe):
+		return i18n.T("service.unsafe", unsafe.Path, i18n.T("service.unsafe_"+unsafe.Reason), unsafe.Path, unsafe.Install)
+	case errors.As(err, &stop):
+		return i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, stop.Err)
+	case errors.Is(err, ops.ErrServiceNotStarted):
+		return i18n.T("service.not_started")
+	case errors.Is(err, ops.ErrStopTimeout):
+		return i18n.T("stop.timeout")
 	case errors.As(err, &already):
 		return i18n.T("run.already", i18n.Enum("mode", already.Mode))
 	case errors.As(err, &conflict):

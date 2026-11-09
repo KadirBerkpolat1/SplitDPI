@@ -188,6 +188,50 @@ func TestRunitFreshManagerDisables(t *testing.T) {
 	}
 }
 
+// Enabled reads only the enable link under a temp root; no init is asked.
+// The link counts even when its host-path target is not there.
+func TestEnabled(t *testing.T) {
+	for kind, link := range map[sysinfo.Init]func(paths.Paths) string{
+		sysinfo.Systemd: func(p paths.Paths) string { return p.SystemdLink },
+		sysinfo.OpenRC:  func(p paths.Paths) string { return p.OpenRCLink },
+		sysinfo.Runit:   func(p paths.Paths) string { return p.RunitLink },
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			rec := &recorder{}
+			m, p := manager(t, kind, rec.run)
+			if m.Enabled() {
+				t.Fatal("enabled without the link")
+			}
+			if err := os.MkdirAll(filepath.Dir(link(p)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink("/nonexistent/splitdpi", link(p)); err != nil {
+				t.Fatal(err)
+			}
+			if !m.Enabled() {
+				t.Error("not enabled with the link there")
+			}
+			if len(rec.calls) > 0 {
+				t.Errorf("init asked: %q", rec.calls)
+			}
+		})
+	}
+}
+
+// runit's Enable and Disable are the link itself.
+func TestRunitEnabledFollowsEnable(t *testing.T) {
+	m, _ := manager(t, sysinfo.Runit, (&recorder{}).run)
+	if err := m.Install(); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Enable(context.Background()); err != nil || !m.Enabled() {
+		t.Fatalf("after Enable: %v, enabled %v", err, m.Enabled())
+	}
+	if err := m.Disable(context.Background()); err != nil || m.Enabled() {
+		t.Fatalf("after Disable: %v, enabled %v", err, m.Enabled())
+	}
+}
+
 func TestSystemdLogsCmd(t *testing.T) {
 	m, _ := manager(t, sysinfo.Systemd, execx.Real)
 	if got := strings.Join(m.LogsCmd(false), " "); got != "journalctl -u splitdpi --no-pager" {

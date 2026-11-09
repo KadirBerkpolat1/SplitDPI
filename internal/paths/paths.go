@@ -26,8 +26,11 @@ type Paths struct {
 	SystemdUnit  string
 	OpenRCScript string
 	RunitDir     string
-	RunitLink    string
-	NftTable     string
+	// The links that make each init start the service at boot.
+	SystemdLink string
+	OpenRCLink  string
+	RunitLink   string
+	NftTable    string
 }
 
 // Under returns the paths prefixed by root. An empty root means "/".
@@ -60,6 +63,8 @@ func Under(root string) Paths {
 		SystemdUnit:  j("etc/systemd/system", name+".service"),
 		OpenRCScript: j("etc/init.d", name),
 		RunitDir:     j("etc/sv", name),
+		SystemdLink:  j("etc/systemd/system/multi-user.target.wants", name+".service"),
+		OpenRCLink:   j("etc/runlevels/default", name),
 		RunitLink:    j("var/service", name),
 		NftTable:     name,
 	}

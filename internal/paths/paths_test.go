@@ -20,6 +20,8 @@ func TestUnder(t *testing.T) {
 	eq(t, p.TakeoverFile, "/tmp/r/var/lib/splitdpi/takeover.json")
 	eq(t, p.StatusFile, "/tmp/r/run/splitdpi/status.json")
 	eq(t, p.SystemdUnit, "/tmp/r/etc/systemd/system/splitdpi.service")
+	eq(t, p.SystemdLink, "/tmp/r/etc/systemd/system/multi-user.target.wants/splitdpi.service")
+	eq(t, p.OpenRCLink, "/tmp/r/etc/runlevels/default/splitdpi")
 	eq(t, p.RunitLink, "/tmp/r/var/service/splitdpi")
 	eq(t, p.NftTable, "splitdpi")
 	eq(t, p.HostlistFile, "/tmp/r/run/splitdpi/hostlist.txt")

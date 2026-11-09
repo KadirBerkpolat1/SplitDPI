@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
@@ -26,10 +27,15 @@ func runEnable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	if len(args) != 0 {
 		return usageError(i18n.T("service.enable_usage"))
 	}
-	err := o.Enable(ctx)
+	r, err := o.Enable(ctx)
+	if r.Stopped != "" {
+		fmt.Fprintln(w, i18n.T("service.took_over", i18n.Enum("mode", r.Stopped), r.PID))
+	}
 	var conflict ops.ConflictError
 	var already supervisor.ErrAlreadyRunning
 	var nobin ops.BinaryMissingError
+	var unsafe ops.UnsafeBinaryError
+	var stop ops.StopRunError
 	switch {
 	case err == nil:
 		fmt.Fprintln(w, i18n.T("service.enabled"))
@@ -40,9 +46,13 @@ func runEnable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 		return errors.New(i18n.T("service.unsupported"))
 	case errors.As(err, &nobin):
 		return errors.New(i18n.T("service.no_binary", nobin.Path, nobin.Path))
+	case errors.As(err, &unsafe):
+		return errors.New(i18n.T("service.unsafe", unsafe.Path, i18n.T("service.unsafe_"+unsafe.Reason), unsafe.Path, unsafe.Install))
 	case errors.As(err, &conflict):
 		printChecks(w, conflict.Checks)
 		return errors.New(i18n.T("run.conflict"))
+	case errors.As(err, &stop):
+		return errors.New(i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, stop.Err))
 	case errors.As(err, &already):
 		return errors.New(i18n.T("run.already", i18n.Enum("mode", already.Mode)))
 	case errors.Is(err, ops.ErrServiceNotStarted):
@@ -66,6 +76,34 @@ func runDisable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) err
 	}
 	fmt.Fprintln(w, i18n.T("service.disabled"))
 	return nil
+}
+
+// printBoot says whether SplitDPI starts at boot, as the init has it, and
+// warns when the run mode disagrees.
+func printBoot(w io.Writer, s ops.ServiceState, mode config.RunMode) {
+	switch {
+	case s.Enabled:
+		fmt.Fprintln(w, i18n.T("status.boot_yes"))
+	case !s.Supported:
+		fmt.Fprintln(w, i18n.T("status.boot_unsupported"))
+	default:
+		fmt.Fprintln(w, i18n.T("status.boot_no"))
+	}
+	warnBoot(w, s, mode)
+}
+
+// warnBoot warns when run mode and the service disagree: boot without the
+// service, or another mode while the service still starts SplitDPI at boot.
+// Saving a run mode changes neither.
+func warnBoot(w io.Writer, s ops.ServiceState, mode config.RunMode) {
+	switch {
+	case mode == config.RunBoot && !s.Supported:
+		fmt.Fprintln(w, i18n.T("service.unsupported"))
+	case mode == config.RunBoot && !s.Enabled:
+		fmt.Fprintln(w, i18n.T("run_mode.boot_not_enabled"))
+	case mode != config.RunBoot && s.Enabled:
+		fmt.Fprintln(w, i18n.T("run_mode.boot_still_enabled"))
+	}
 }
 
 func runLogs(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {

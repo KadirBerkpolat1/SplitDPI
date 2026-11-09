@@ -104,7 +104,6 @@ type (
 		err error
 	}
 	scanTickMsg struct{}
-	enableMsg   struct{ err error }
 	engineMsg   struct {
 		eng engine.Engine
 		err error
@@ -311,17 +310,6 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			}
 		}
 		return m, m.refresh(), true
-	case enableMsg:
-		if msg.err != nil {
-			m.note = errText(msg.err)
-			return m, nil, true
-		}
-		// The status page's r enables too; it leaves the wizard alone.
-		if m.page == pgScan && m.wiz.step == wDone {
-			m.finishWizard()
-		}
-		m.note = i18n.T("service.enabled")
-		return m, m.refresh(), true
 	}
 	return m, nil, false
 }
@@ -454,23 +442,14 @@ func (m Model) wizardActions() []action {
 	case wDone:
 		acts := []action{
 			{Key: "r", Label: i18n.T("tui.wiz.run_now"), CLI: "sudo splitdpi run", Do: func(m *Model) tea.Cmd { m.finishWizard(); return m.runNow() }},
-			{Key: "b", Label: i18n.T("tui.wiz.at_boot"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable},
+		}
+		if m.svc.Supported {
+			acts = append(acts, action{Key: "b", Label: i18n.T("tui.wiz.at_boot"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable})
 		}
 		if w.shared != "" {
 			acts = append(acts, action{Key: "c", Label: i18n.T("scan_page.copy"), Do: (*Model).copyLink})
 		}
 		return acts
-	}
-	return nil
-}
-
-// confirmEnable asks before the service is installed and started.
-func (m *Model) confirmEnable() tea.Cmd {
-	m.dialog = &confirm{
-		title:   i18n.T("shell.enable.title"),
-		changes: []string{i18n.T("shell.enable.service"), i18n.T("shell.enable.boot"), i18n.T("shell.enable.rules")},
-		undo:    "sudo splitdpi disable",
-		yes:     (*Model).enable,
 	}
 	return nil
 }
@@ -609,12 +588,6 @@ func (m *Model) cancelScan() tea.Cmd {
 		m.wiz.scanCancel()
 	}
 	return nil
-}
-
-func (m *Model) enable() tea.Cmd {
-	m.note = i18n.T("tui.wiz.enabling")
-	b, ctx := m.b, m.ctx
-	return func() tea.Msg { return enableMsg{b.Enable(ctx)} }
 }
 
 // wizardKey handles list movement, the site input and scan cancelling; false

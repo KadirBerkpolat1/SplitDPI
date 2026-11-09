@@ -103,8 +103,11 @@ func setConfig(o *ops.Ops, w io.Writer, s setting, v string) error {
 		return err
 	}
 	fmt.Fprintln(w, i18n.T("config.saved", s.key, showValue(s, c)))
-	if s.key == "qnum" {
+	switch s.key {
+	case "qnum":
 		fmt.Fprintln(w, i18n.T("config.qnum_note"))
+	case "run_mode":
+		warnBoot(w, o.ServiceState(), c.RunMode)
 	}
 	switch {
 	case s.restart && o.Running():

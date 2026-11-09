@@ -137,25 +137,16 @@ func TestRunBackgroundRefuses(t *testing.T) {
 	})
 }
 
-// A background run blocks the others like a foreground one, and says what it is.
-func TestBackgroundBlocksRunAndEnable(t *testing.T) {
+// A background run blocks another run like a foreground one, and says what
+// it is. enable takes its place instead (TestEnableTakesOverBackgroundRun).
+func TestBackgroundBlocksRun(t *testing.T) {
 	o := backgroundOps(t, systemdRoot())
 	installBinary(t, o.P)
 	holdLock(t, o.P, "background")
-	for _, cmd := range []string{"run", "enable"} {
-		out, code := runOps(t, o, cmd)
-		eq(t, code, 1)
-		has(t, out, "already running (background).")
-		has(t, out, "splitdpi stop")
-	}
-	o2, f := runOpsFor(t, systemdRoot())
-	writeConfig(t, o2.P, withStrategy)
-	installBinary(t, o2.P)
-	holdLock(t, o2.P, "background")
-	runOps(t, o2, "enable")
-	if slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "systemctl") }) {
-		t.Errorf("service touched while a background run holds the lock: %q", f.calls)
-	}
+	out, code := runOps(t, o, "run")
+	eq(t, code, 1)
+	has(t, out, "already running (background).")
+	has(t, out, "splitdpi stop")
 }
 
 func TestStatusBackground(t *testing.T) {
