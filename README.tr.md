@@ -6,11 +6,13 @@ derin paket incelemesiyle (DPI) engellediğinde bunları Linux'ta yeniden
 stratejisi bulur, onu istediğinizde ya da servis olarak çalıştırır ve tek
 komutla geride iz bırakmadan kaldırır.
 
-**Durum:** v0.2.6. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
-Fedora, Alpine sanal makinelerinde denendi. v0.2.0'dan bu yana gelen
-özellikler otomatik testlerle ve yedi dağıtımda çalışan CI ile sınanıyor; gerçek
-bir bağlantıda ya da sanal makinelerde yeniden denenmedi. Ayrıntılar
-[yayın kontrol listesinde](docs/release-checklist.md).
+**Durum:** v0.2.7. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
+Fedora, Alpine sanal makinelerinde denendi. v0.2.7'nin açılış servisi CachyOS'ta
+gerçek bir Türk Telekom bağlantısında, çalışan bir engel aşmadan kuruldu;
+yeniden başlatmada nasıl davrandığı bir Ubuntu 26.04 konteynerinde denendi.
+v0.2.0'dan bu yana gelen diğer özellikler otomatik testlerle ve yedi dağıtımda
+çalışan CI ile sınanıyor; gerçek bir bağlantıda ya da sanal makinelerde yeniden
+denenmedi. Ayrıntılar [yayın kontrol listesinde](docs/release-checklist.md).
 
 [English](README.md)
 
@@ -26,10 +28,10 @@ zorlayıcı modda da çalışır. Kurulu bir zapret ya da zapret2'den geçmek i�
 | Dağıtım | Init | Servis modu | İstendiğinde | Denendi |
 |---|---|---|---|---|
 | Debian | systemd | evet | evet | Sanal makinede 13.7: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
-| Ubuntu LTS, Linux Mint | systemd | evet | evet | henüz denenmedi |
+| Ubuntu LTS, Linux Mint | systemd | evet | evet | Incus konteynerinde 26.04: entegrasyon testleri, yeniden başlatmalarda servis modu, çalışan engel aşmanın servise taşınması, servis başlayamayınca geri alma (2026-11-09) |
 | Fedora (Workstation, Cloud) | systemd | evet | evet | Sanal makinede 44 Cloud, SELinux zorlayıcı modda: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
 | Fedora Atomic (Silverblue, Bazzite) | systemd | evet | evet | henüz denenmedi |
-| CachyOS | systemd | evet | evet | Türk Telekom bağlantısında: `scan` (hazır ayarlar ve `--site`), Discord, Roblox, Pastebin ve diğerlerinde `probe`, `revert` (2026-10-29) |
+| CachyOS | systemd | evet | evet | Türk Telekom bağlantısında: `scan` (hazır ayarlar ve `--site`), Discord, Roblox, Pastebin ve diğerlerinde `probe`, `revert` (2026-10-29); arka plan çalışması açıkken `enable`, motorun v1.0.7'ye yükseltilmesi (2026-11-09) |
 | Arch, EndeavourOS | systemd | evet | evet | henüz denenmedi |
 | openSUSE Tumbleweed | systemd | evet | evet | henüz denenmedi |
 | Alpine | OpenRC | evet | evet | Sanal makinede 3.24.3: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |

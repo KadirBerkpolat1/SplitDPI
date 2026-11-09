@@ -5,10 +5,13 @@ Linux when your ISP blocks them with deep packet inspection (DPI). It finds a
 [zapret2](https://github.com/bol-van/zapret2) strategy that works on your ISP,
 runs it on demand or as a service, and removes every trace with one command.
 
-**Status:** v0.2.6. v0.1.0 was tested on a real Türk Telekom connection and in
-Debian, Fedora and Alpine VMs. The features added since v0.2.0 are covered by
-automated tests and by CI on seven distros, but were not retested on a real
-connection or in VMs; see [the release checklist](docs/release-checklist.md).
+**Status:** v0.2.7. v0.1.0 was tested on a real Türk Telekom connection and in
+Debian, Fedora and Alpine VMs. v0.2.7's boot service was set up from a running
+bypass on CachyOS with a real Türk Telekom connection, and tested across a
+restart in an Ubuntu 26.04 container. The other features added since v0.2.0
+are covered by automated tests and by CI on seven distros, but were not
+retested on a real connection or in VMs; see
+[the release checklist](docs/release-checklist.md).
 
 [Türkçe](README.tr.md)
 
@@ -23,10 +26,10 @@ zapret or zapret2 install over to SplitDPI.
 | Distro | Init | Service mode | On demand | Tested |
 |---|---|---|---|---|
 | Debian | systemd | yes | yes | 13.7 in a VM: service mode across reboot, revert (2026-10-29) |
-| Ubuntu LTS, Linux Mint | systemd | yes | yes | not tested yet |
+| Ubuntu LTS, Linux Mint | systemd | yes | yes | 26.04 in an Incus container: integration tests, service mode across reboot, moving a running bypass to the service, rollback when the service cannot start (2026-11-09) |
 | Fedora (Workstation, Cloud) | systemd | yes | yes | 44 Cloud in a VM, SELinux enforcing: service mode across reboot, revert (2026-10-29) |
 | Fedora Atomic (Silverblue, Bazzite) | systemd | yes | yes | not tested yet |
-| CachyOS | systemd | yes | yes | Türk Telekom connection: `scan` (presets and `--site`), `probe` on Discord, Roblox, Pastebin and more, `revert` (2026-10-29) |
+| CachyOS | systemd | yes | yes | Türk Telekom connection: `scan` (presets and `--site`), `probe` on Discord, Roblox, Pastebin and more, `revert` (2026-10-29); `enable` while a background run was active, engine upgrade to v1.0.7 (2026-11-09) |
 | Arch, EndeavourOS | systemd | yes | yes | not tested yet |
 | openSUSE Tumbleweed | systemd | yes | yes | not tested yet |
 | Alpine | OpenRC | yes | yes | 3.24.3 in a VM: service mode across reboot, revert (2026-10-29) |

@@ -44,11 +44,17 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
       its "At boot" row reads "yes" (`sudo splitdpi status` prints
       "Starts at boot: yes."); Run mode → "In this window" removes the
       service, and after another reboot nothing runs and `revert` prints
-      clean. Not recorded yet.
+      clean. Not recorded on a real system yet. In an Incus Ubuntu 26.04
+      container (2026-11-09, `9147ee9`), the Status page's prompt moved a
+      running v0.2.6 background run to the service, and the service was
+      running after a container restart.
 - [ ] Fedora Silverblue or Bazzite: `install.sh`, `enable`, reboot, `revert`.
       Not tested yet.
 - [ ] Void (runit): `enable`, reboot, `revert`. Not tested yet.
-- [ ] CachyOS (systemd): `enable`, reboot, `revert`. Not recorded yet.
+- [ ] CachyOS (systemd): `enable`, reboot, `revert`. On 2026-11-09 (Türk
+      Telekom, `9147ee9`), `enable` moved a running background run to the
+      service with the bypass off for 151 ms, and the engine upgrade's
+      service restart took 193 ms. Reboot and `revert` not recorded yet.
 
 ## Known gaps
 
@@ -117,19 +123,27 @@ tagged commit.
 
 Tick these on the release commit, with the date.
 
-- [ ] `go vet ./...` passes.
-- [ ] `go test -count=1 ./...` passes.
-- [ ] `sudo -E SPLITDPI_BIN=/tmp/splitdpi go test -tags integration ./test/integration/...`
-      passes after `go build -o /tmp/splitdpi ./cmd/splitdpi`.
-- [ ] `splitdpi presets check internal/presets/data` exits 0.
-- [ ] CI is green, all 10 jobs: `test`, `integration`, `build` and the seven
+- [x] `go vet ./...` passes.
+- [x] `go test -count=1 ./...` passes (also with `-race`, plus gofmt,
+      staticcheck, govulncheck, shellcheck and actionlint).
+- [x] The integration tests pass: 7/7 with the v1.0.7 engine in an Incus
+      Ubuntu 26.04 container (`security.nesting=true`), and in CI's
+      `integration` job. They were not run with `sudo` on the development
+      machine, whose own bypass had to stay up.
+- [x] `splitdpi presets check internal/presets/data` exits 0 (version
+      2026-10-31, 6 ISPs, 14 apps).
+- [x] CI is green, all 10 jobs: `test`, `integration`, `build` and the seven
       `distros` jobs (Debian 13, Ubuntu 24.04, Fedora, Arch, openSUSE
       Tumbleweed, Alpine, Void glibc); the tag's `release` run passes them
-      again before it publishes.
-- [ ] The latest SplitDPI-presets release carries `presets.tar.gz.sha256`;
-      `splitdpi presets update` now refuses a bundle without it. Its release
-      workflow gets that step from `scripts/export-presets.sh` (since
-      `a98ce31`); on 2026-11-09 its latest release, `2026-10-31`, had only
-      `presets.tar.gz`.
+      again before it publishes. Green on `e1c3007`, in both its push run
+      (42674565960) and its pull_request run (42674578154).
+- [x] The latest SplitDPI-presets release carries `presets.tar.gz.sha256`;
+      `splitdpi presets update` now refuses a bundle without it. Release
+      `2026-11-09` is the first with it; `splitdpi presets update` verified
+      it and updated to 2026-11-09.
 - [ ] The boot path from the TUI across a real reboot, under
-      [On real systems](#on-real-systems).
+      [On real systems](#on-real-systems). Container and CachyOS results
+      are recorded there; a real-system reboot is not recorded yet.
+
+(2026-11-09, on `e1c3007`; the release commit changes only `README.md`,
+`README.tr.md` and this file.)
