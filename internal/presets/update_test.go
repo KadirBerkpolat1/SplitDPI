@@ -180,19 +180,20 @@ func TestUpdateChecksum(t *testing.T) {
 	cases := map[string]struct {
 		files map[string]string
 		want  string // in the error; "" for success
+		is    error  // the checksum error it wraps, if any
 	}{
-		"match":            {withSum(sum), ""},
-		"match no newline": {withSum(strings.TrimSuffix(sum, "\n")), ""},
-		"mismatch":         {withSum(sumLine([]byte("other"))), "SHA-256 mismatch"},
-		"missing":          {map[string]string{"/presets.tar.gz": bundle}, "presets.tar.gz.sha256: HTTP 404"},
-		"empty":            {withSum(""), "is not one"},
-		"short digest":     {withSum(sum[1:]), "is not one"},
-		"not hex":          {withSum("g" + sum[1:]), "is not one"},
-		"other file":       {withSum(sum[:64] + "  other.tar.gz\n"), "is not one"},
-		"one space":        {withSum(sum[:64] + " presets.tar.gz\n"), "is not one"},
-		"trailing space":   {withSum(sum[:64] + "  presets.tar.gz "), "is not one"},
-		"two lines":        {withSum(sum + sum), "more than 81 bytes"},
-		"bundle missing":   {map[string]string{"/presets.tar.gz.sha256": sum}, "presets.tar.gz: HTTP 404"},
+		"match":            {withSum(sum), "", nil},
+		"match no newline": {withSum(strings.TrimSuffix(sum, "\n")), "", nil},
+		"mismatch":         {withSum(sumLine([]byte("other"))), "SHA-256 mismatch", ErrChecksumMismatch},
+		"missing":          {map[string]string{"/presets.tar.gz": bundle}, "presets.tar.gz.sha256: HTTP 404", ErrNoChecksum},
+		"empty":            {withSum(""), "is not one", ErrBadChecksum},
+		"short digest":     {withSum(sum[1:]), "is not one", ErrBadChecksum},
+		"not hex":          {withSum("g" + sum[1:]), "is not one", ErrBadChecksum},
+		"other file":       {withSum(sum[:64] + "  other.tar.gz\n"), "is not one", ErrBadChecksum},
+		"one space":        {withSum(sum[:64] + " presets.tar.gz\n"), "is not one", ErrBadChecksum},
+		"trailing space":   {withSum(sum[:64] + "  presets.tar.gz "), "is not one", ErrBadChecksum},
+		"two lines":        {withSum(sum + sum), "more than 81 bytes", ErrBadChecksum},
+		"bundle missing":   {map[string]string{"/presets.tar.gz.sha256": sum}, "presets.tar.gz: HTTP 404", nil},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -209,9 +210,30 @@ func TestUpdateChecksum(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err = %v, want %q", err, tc.want)
 			}
+			for _, sentinel := range []error{ErrNoChecksum, ErrBadChecksum, ErrChecksumMismatch} {
+				if errors.Is(err, sentinel) != (sentinel == tc.is) {
+					t.Errorf("err = %v: wraps %v is %v", err, sentinel, errors.Is(err, sentinel))
+				}
+			}
 			checkCache(t, p)
 		})
 	}
+}
+
+// Only a release that lacks the checksum file is ErrNoChecksum: a server
+// that fails says nothing about the release.
+func TestUpdateChecksumServerFails(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	p := paths.Under(t.TempDir())
+	seedCache(t, p)
+	_, err := Update(context.Background(), srv.Client(), p, srv.URL+"/presets.tar.gz")
+	if err == nil || errors.Is(err, ErrNoChecksum) || !strings.Contains(err.Error(), "presets.tar.gz.sha256: HTTP 503") {
+		t.Fatalf("err = %v", err)
+	}
+	checkCache(t, p)
 }
 
 func TestUpdateRejectsBadArchive(t *testing.T) {

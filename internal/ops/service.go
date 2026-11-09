@@ -116,6 +116,11 @@ func (e TakeoverError) Error() string {
 
 func (e TakeoverError) Unwrap() error { return e.Err }
 
+// TrimPeriod is s, the text of an error, without the period it may end with,
+// for a message that ends the sentence itself: the error of a failed command
+// keeps its stderr, which often ends with one.
+func TrimPeriod(s string) string { return strings.TrimRight(s, ".") }
+
 // TerminateRun sends SIGTERM to the supervisor of a run, which then stops and
 // removes its rules. Tests replace it so that no real process is signalled.
 var TerminateRun = func(pid int) error { return syscall.Kill(pid, syscall.SIGTERM) }

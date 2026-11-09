@@ -175,9 +175,12 @@ func (m Model) actions() []action {
 	return pages[m.page].Actions(m)
 }
 
+// toastLines is how many lines the toast may take.
+const toastLines = 3
+
 // toast is the last action's result or a pending question, over the dock.
 func (m Model) toast() string {
-	note := lipgloss.NewStyle().Width(m.width).MaxHeight(3)
+	note := lipgloss.NewStyle().Width(m.width).MaxHeight(toastLines)
 	switch {
 	case m.confirmQuit:
 		move := i18n.T("background_tui.quit_background")
@@ -189,9 +192,22 @@ func (m Model) toast() string {
 			hint("b", move) + "   " +
 			hint(i18n.T("confirm_keys.no"), i18n.T("background_tui.quit_cancel")))
 	case m.note != "":
-		return note.Foreground(accent).Render(m.note)
+		return note.Foreground(accent).Render(fitNote(m.note, m.width))
 	}
 	return ""
+}
+
+// fitNote drops the first lines of note, each whole, while it wraps to more
+// than toastLines lines at width; the last line always stays. A note puts
+// what to do now last, and a command on a line of its own: lipgloss would
+// break a command at a hyphen, and one cut in two cannot be copied.
+func fitNote(note string, width int) string {
+	lines := strings.Split(note, "\n")
+	wrap := lipgloss.NewStyle().Width(width)
+	for len(lines) > 1 && lipgloss.Height(wrap.Render(strings.Join(lines, "\n"))) > toastLines {
+		lines = lines[1:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // cmdLine echoes the CLI command of the focused action, the first one

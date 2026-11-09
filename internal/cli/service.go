@@ -60,6 +60,10 @@ func unsafeText(e ops.UnsafeBinaryError) string {
 	return i18n.T("service.unsafe", e.Path, reason, e.Path, e.Install)
 }
 
+// startBackground is the command that starts the bypass in the background,
+// which service.takeover_stopping and service.takeover_down lead up to.
+const startBackground = "sudo splitdpi run --background"
+
 // takeoverText words a TakeoverError, one line each: why the service did not
 // take over, whether removing it failed, and what runs the bypass now.
 func takeoverText(w io.Writer, e ops.TakeoverError) string {
@@ -69,23 +73,23 @@ func takeoverText(w io.Writer, e ops.TakeoverError) string {
 	case errors.As(e.Err, &stop) && errors.Is(stop.Err, ops.ErrStopTimeout):
 		lines = append(lines, i18n.T("service.stop_slow", i18n.Enum("mode", stop.Mode), stop.PID))
 	case errors.As(e.Err, &stop):
-		lines = append(lines, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, stop.Err))
+		lines = append(lines, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, ops.TrimPeriod(stop.Err.Error())))
 	case errors.Is(e.Err, ops.ErrServiceNotStarted):
 		lines = append(lines, i18n.T("service.not_started"))
 	default:
-		lines = append(lines, i18n.T("service.start_failed", e.Err))
+		lines = append(lines, i18n.T("service.start_failed", ops.TrimPeriod(e.Err.Error())))
 	}
 	if e.Undo != nil {
-		lines = append(lines, i18n.T("service.undo_failed", e.Undo))
+		lines = append(lines, i18n.T("service.undo_failed", ops.TrimPeriod(e.Undo.Error())))
 	}
 	switch {
 	case e.Stopped == "":
 	case e.Running != "":
 		lines = append(lines, i18n.T("service.takeover_kept", i18n.Enum("mode", e.Running)))
 	case e.Stopping != "":
-		lines = append(lines, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping)))
+		lines = append(lines, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping))+" "+startBackground)
 	case e.RestartErr != nil:
-		lines = append(lines, runError(w, e.RestartErr, false).Error(), i18n.T("service.takeover_down"))
+		lines = append(lines, runError(w, e.RestartErr, false).Error(), i18n.T("service.takeover_down")+" "+startBackground)
 	default:
 		lines = append(lines, i18n.T("service.takeover_restarted", e.Restarted))
 	}

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
 // fullList is the settings list drawn tall enough for every row.
@@ -422,6 +424,30 @@ func TestSettingsPresetsUpdate(t *testing.T) {
 
 	f.presetsErr = errors.New("fetch failed: 503")
 	has(t, fullList(press(t, m, "enter")), "fetch failed: 503")
+}
+
+// A checksum file that fails the presets release is explained in plain
+// words, whole on an 80x24 screen in every language: why nothing changed
+// and what to do, not the error underneath.
+func TestSettingsPresetsChecksumErrors(t *testing.T) {
+	defer i18n.Init("en")
+	for _, lang := range []string{"en", "tr", "ru"} {
+		i18n.Init(lang)
+		for key, err := range map[string]error{
+			"presets.update.no_checksum":  presets.ErrNoChecksum,
+			"presets.update.bad_checksum": presets.ErrBadChecksum,
+			"presets.update.mismatch":     presets.ErrChecksumMismatch,
+		} {
+			f := newFake()
+			f.presetsErr = fmt.Errorf("%w: GET https://example.org/presets.tar.gz.sha256: HTTP 404", err)
+			v := press(t, toSetting(t, f, "presets"), "enter").View()
+			fits(t, lang+" "+key, v)
+			has(t, flat(pageText(v)), flat(i18n.T(key)))
+			if strings.Contains(v, "example.org") {
+				t.Errorf("%s %s: shows the error underneath:\n%s", lang, key, v)
+			}
+		}
+	}
 }
 
 func TestSettingsEngineInstall(t *testing.T) {

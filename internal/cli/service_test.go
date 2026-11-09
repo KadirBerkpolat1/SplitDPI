@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
@@ -150,6 +152,23 @@ func TestEnableStopTimeoutText(t *testing.T) {
 	}
 }
 
+// An error that ends with a period, as systemctl's stderr does, ends the
+// sentence it is in with one period, not two.
+func TestTakeoverTextOnePeriod(t *testing.T) {
+	i18n.Init("en")
+	err := errors.New("systemctl: exit status 1: Job for splitdpi.service failed because the control process exited with error code.\n" +
+		`See "systemctl status splitdpi.service" and "journalctl -xeu splitdpi.service" for details.`)
+	for name, e := range map[string]ops.TakeoverError{
+		"start": {Err: err},
+		"undo":  {Err: ops.ErrServiceNotStarted, Undo: err},
+		"stop":  {Stopped: "background", PID: 4343, Err: ops.StopRunError{Mode: "background", PID: 4343, Err: err}, Running: "background"},
+	} {
+		if out := takeoverText(io.Discard, e); strings.Contains(out, "..") || !strings.Contains(out, "for details.") {
+			t.Errorf("%s: %q", name, out)
+		}
+	}
+}
+
 func TestEnableSystemd(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
@@ -205,13 +224,19 @@ func TestRevertRemovesService(t *testing.T) {
 }
 
 // --rules-only runs from inside the service's own stop (ExecStopPost):
-// calling the service manager there would deadlock.
+// calling the service manager there would deadlock. It says no rules are
+// left, not that run files are gone: it does not look at them.
 func TestRevertRulesOnlyLeavesService(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	os.MkdirAll(filepath.Dir(o.P.SystemdUnit), 0o755)
 	os.WriteFile(o.P.SystemdUnit, []byte("[Unit]\n"), 0o644)
-	if _, code := runOps(t, o, "revert", "--rules-only"); code != 0 {
+	out, code := runOps(t, o, "revert", "--rules-only")
+	if code != 0 {
 		t.Fatalf("code %d", code)
+	}
+	has(t, out, "No splitdpi firewall rules are left.")
+	if strings.Contains(out, "run files") {
+		t.Errorf("speaks of run files it did not look at:\n%s", out)
 	}
 	for _, c := range f.calls {
 		if strings.HasPrefix(c, "systemctl") {

@@ -183,42 +183,46 @@ func (m Model) enabled(err error) (Model, tea.Cmd) {
 	return m, batch(m.refresh(), m.restartLogs())
 }
 
-// takeoverText words a TakeoverError as the CLI does, on the note line: the
-// first line of why the service did not take over, and what runs the bypass
-// now. All of the error is in the log.
+// takeoverText words a TakeoverError as the CLI does, one line each: the
+// first line of why the service did not take over, whether removing it
+// failed, and what runs the bypass now, with the command that starts it on a
+// line of its own. The toast drops the first lines when they do not all
+// fit; all of the error is in the log.
 func takeoverText(e ops.TakeoverError) string {
 	var stop ops.StopRunError
-	var parts []string
+	var lines []string
 	switch {
 	case errors.As(e.Err, &stop) && errors.Is(stop.Err, ops.ErrStopTimeout):
-		parts = append(parts, i18n.T("service.stop_slow", i18n.Enum("mode", stop.Mode), stop.PID))
+		lines = append(lines, i18n.T("service.stop_slow", i18n.Enum("mode", stop.Mode), stop.PID))
 	case errors.As(e.Err, &stop):
-		parts = append(parts, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, firstLine(stop.Err)))
+		lines = append(lines, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, firstLine(stop.Err)))
 	case errors.Is(e.Err, ops.ErrServiceNotStarted):
-		parts = append(parts, i18n.T("service.not_started"))
+		lines = append(lines, i18n.T("service.not_started"))
 	default:
-		parts = append(parts, i18n.T("service.start_failed", firstLine(e.Err)))
+		lines = append(lines, i18n.T("service.start_failed", firstLine(e.Err)))
 	}
 	if e.Undo != nil {
-		parts = append(parts, i18n.T("service.undo_failed", firstLine(e.Undo)))
+		lines = append(lines, i18n.T("service.undo_failed", firstLine(e.Undo)))
 	}
 	switch {
 	case e.Stopped == "":
 	case e.Running != "":
-		parts = append(parts, i18n.T("service.takeover_kept", i18n.Enum("mode", e.Running)))
+		lines = append(lines, i18n.T("service.takeover_kept", i18n.Enum("mode", e.Running)))
 	case e.Stopping != "":
-		parts = append(parts, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping)))
+		lines = append(lines, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping)), runModeCLI(config.RunBackground))
 	case e.RestartErr != nil:
-		parts = append(parts, i18n.T("service.takeover_down"))
+		lines = append(lines, i18n.T("service.takeover_down"), runModeCLI(config.RunBackground))
 	default:
-		parts = append(parts, i18n.T("service.takeover_restarted", e.Restarted))
+		lines = append(lines, i18n.T("service.takeover_restarted", e.Restarted))
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(lines, "\n")
 }
 
+// firstLine is the first line of err without the period it may end with:
+// the message it goes in ends the sentence itself.
 func firstLine(err error) string {
 	first, _, _ := strings.Cut(err.Error(), "\n")
-	return first
+	return ops.TrimPeriod(first)
 }
 
 // unsafeText words an UnsafeBinaryError as the CLI does.

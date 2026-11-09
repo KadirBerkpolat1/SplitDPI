@@ -166,7 +166,11 @@ func runRevert(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 		return nil
 	}
 	if len(r.Leftover) == 0 {
-		fmt.Fprintln(w, i18n.T("revert.clean"))
+		clean := "revert.clean"
+		if rulesOnly { // it looks at the rules alone
+			clean = "revert.rules_clean"
+		}
+		fmt.Fprintln(w, i18n.T(clean))
 		return nil
 	}
 	for _, l := range r.Leftover {

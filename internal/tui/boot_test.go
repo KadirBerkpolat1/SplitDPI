@@ -94,10 +94,89 @@ func TestBootTakeoverRunStillStopping(t *testing.T) {
 	}
 	m := press(t, chooseRunMode(t, f, 2), "y")
 	v := flat(m.View())
-	has(t, v, "The background run (pid 4343) did not stop within 10 s, so the service was not started. "+
-		"The background run is still stopping. Once it has stopped, start the bypass with: sudo splitdpi run --background")
+	has(t, v, "The background run is still stopping. Once it has stopped, start the bypass with: sudo splitdpi run --background")
 	if strings.Contains(v, "still runs") {
 		t.Errorf("says the bypass still runs:\n%s", m.View())
+	}
+}
+
+// The command that starts the bypass again shows whole on one line of the
+// note at 80x24, in every language and with a 7-digit pid: lipgloss breaks
+// lines at a hyphen, and a split command cannot be copied. What runs now
+// and what to do stay; why the service did not start gives way first.
+func TestTakeoverNoteKeepsCommandWhole(t *testing.T) {
+	defer i18n.Init("en")
+	const pid, cmd = 1234567, "sudo splitdpi run --background"
+	stop := ops.StopRunError{Mode: "background", PID: pid, Err: ops.ErrStopTimeout}
+	for _, lang := range []string{"en", "tr", "ru"} {
+		i18n.Init(lang)
+		for name, e := range map[string]ops.TakeoverError{
+			"stop slow, bypass down":       {Stopped: "background", PID: pid, Err: stop, RestartErr: ops.ErrEngineMissing},
+			"start failed, still stopping": {Stopped: "background", PID: pid, Err: errors.New("systemctl: exit status 1"), Stopping: "background"},
+		} {
+			f := newFake()
+			f.st = supervisor.Status{State: "running", Mode: "background", PID: pid}
+			f.enableErr = e
+			v := press(t, chooseRunMode(t, f, 2), "y").View()
+			fits(t, lang+" "+name, v)
+			whole := slices.ContainsFunc(strings.Split(v, "\n"), func(l string) bool {
+				return !strings.HasPrefix(l, "$ ") && strings.Contains(l, cmd)
+			})
+			if !whole {
+				t.Errorf("%s %s: %q is not whole on one line:\n%s", lang, name, cmd, v)
+			}
+			lead := i18n.T("service.takeover_down")
+			if e.Stopping != "" {
+				lead = i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping))
+			}
+			has(t, flat(v), flat(lead))
+		}
+	}
+}
+
+// An error that ends with a period, as systemctl's stderr does, ends its
+// line of the note with one period, not two.
+func TestTakeoverNoteOnePeriod(t *testing.T) {
+	err := errors.New("systemctl: exit status 1: Job for splitdpi.service failed because the control process exited with error code.\n" +
+		`See "systemctl status splitdpi.service" and "journalctl -xeu splitdpi.service" for details.`)
+	for name, e := range map[string]ops.TakeoverError{
+		"start": {Err: err},
+		"undo":  {Err: ops.ErrServiceNotStarted, Undo: err},
+		"stop":  {Stopped: "background", PID: 4343, Err: ops.StopRunError{Mode: "background", PID: 4343, Err: err}, Running: "background"},
+	} {
+		if note := takeoverText(e); strings.Contains(note, "..") || !strings.Contains(note, "error code.") {
+			t.Errorf("%s: %q", name, note)
+		}
+	}
+}
+
+// The enable confirm says how long the bypass is off and what happens if
+// the service does not start, whole on an 80x24 screen down to its keys,
+// in every language, with a 7-digit pid or with the run in this window.
+func TestEnableConfirmFits(t *testing.T) {
+	defer i18n.Init("en")
+	for _, lang := range []string{"en", "tr", "ru"} {
+		i18n.Init(lang)
+		f := newFake()
+		f.st = supervisor.Status{State: "running", Mode: "background", PID: 1234567}
+		m := chooseRunMode(t, f, 2)
+		here, done := runHere(t, newFake())
+		here = chooseBootHere(t, here)
+		for name, c := range map[string]struct {
+			m    Model
+			move string
+		}{
+			"other run": {m, i18n.T("shell.enable.move", i18n.Enum("mode", "background"), 1234567)},
+			"run here":  {here, i18n.T("shell.enable.move_here")},
+		} {
+			v := c.m.View()
+			fits(t, lang+" "+name, v)
+			if !wholeBox(v, c.m.dialogView()) || !strings.Contains(flat(pageText(v)), flat(c.move)) {
+				t.Errorf("%s %s: confirm cut off or without %q:\n%s", lang, name, c.move, v)
+			}
+		}
+		here.stopRun()
+		<-done
 	}
 }
 

@@ -32,6 +32,33 @@ var bundleLimits = safetar.Limits{File: 1 << 20, Total: 4 << 20}
 
 var errNoApps = errors.New("preset bundle has no usable apps")
 
+// Update's error wraps one of these when the release's checksum file fails
+// the bundle: there is none, it is not one sha256sum line, or the bundle does
+// not match it.
+var (
+	ErrNoChecksum       = errors.New("preset bundle checksum missing")
+	ErrBadChecksum      = errors.New("preset bundle checksum malformed")
+	ErrChecksumMismatch = errors.New("preset bundle SHA-256 mismatch")
+)
+
+// statusError is a GET of url answered with code instead of 200.
+type statusError struct {
+	url  string
+	code int
+}
+
+func (e statusError) Error() string { return fmt.Sprintf("GET %s: HTTP %d", e.url, e.code) }
+
+// tooLargeError is a GET of url whose body is over limit bytes.
+type tooLargeError struct {
+	url   string
+	limit int64
+}
+
+func (e tooLargeError) Error() string {
+	return fmt.Sprintf("GET %s: more than %d bytes", e.url, e.limit)
+}
+
 // Update downloads a preset tarball and the sha256sum file published next to
 // it (url + ".sha256"), checks one against the other, validates the bundle,
 // and swaps PresetCache. Nothing is written before the checksum matches.
@@ -48,7 +75,7 @@ func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set
 		return Set{}, err
 	}
 	if got := sha256.Sum256(bundle); got != want {
-		return Set{}, fmt.Errorf("preset bundle SHA-256 mismatch: got %x, want %x", got, want)
+		return Set{}, fmt.Errorf("%w: got %x, want %x", ErrChecksumMismatch, got, want)
 	}
 
 	if err := os.MkdirAll(p.StateDir, 0o755); err != nil {
@@ -76,11 +103,18 @@ func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set
 	return set, nil
 }
 
-// fetchSum reads the bundle's SHA-256 from the sha256sum line at url.
+// fetchSum reads the bundle's SHA-256 from the sha256sum line at url. A
+// release without that file answers 404.
 func fetchSum(ctx context.Context, c *http.Client, url string) ([sha256.Size]byte, error) {
 	var sum [sha256.Size]byte
 	b, err := get(ctx, c, url, sumLineLen)
-	if err != nil {
+	var status statusError
+	switch {
+	case errors.As(err, &status) && status.code == http.StatusNotFound:
+		return sum, fmt.Errorf("%w: %w", ErrNoChecksum, err)
+	case errors.As(err, new(tooLargeError)):
+		return sum, fmt.Errorf("%w: %w", ErrBadChecksum, err)
+	case err != nil:
 		return sum, fmt.Errorf("preset bundle checksum: %w", err)
 	}
 	digest, name, ok := strings.Cut(strings.TrimSuffix(string(b), "\n"), "  ")
@@ -89,7 +123,7 @@ func fetchSum(ctx context.Context, c *http.Client, url string) ([sha256.Size]byt
 			return sum, nil
 		}
 	}
-	return sum, fmt.Errorf("preset bundle checksum: %s is not one %q line", url, "<sha256>  "+bundleName)
+	return sum, fmt.Errorf("%w: %s is not one %q line", ErrBadChecksum, url, "<sha256>  "+bundleName)
 }
 
 // get returns the body of url, which must answer 200 with at most limit bytes.
@@ -104,14 +138,14 @@ func get(ctx context.Context, c *http.Client, url string, limit int64) ([]byte, 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
+		return nil, statusError{url, resp.StatusCode}
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(b)) > limit {
-		return nil, fmt.Errorf("GET %s: more than %d bytes", url, limit)
+		return nil, tooLargeError{url, limit}
 	}
 	return b, nil
 }
