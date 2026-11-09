@@ -40,10 +40,11 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
   - Alpine 3.24.3 (OpenRC)
 - [ ] Boot path from the TUI across a real reboot: with the bypass running in
       the UI window, Settings → Run mode → "Also at boot" moves it to the
-      service; after a reboot, Status shows it running in service mode with
-      "At boot: yes"; Run mode → "In this window" removes the service, and
-      after another reboot nothing runs and `revert` prints clean. Not
-      recorded yet.
+      service; after a reboot, Status shows it running in service mode and
+      its "At boot" row reads "yes" (`sudo splitdpi status` prints
+      "Starts at boot: yes."); Run mode → "In this window" removes the
+      service, and after another reboot nothing runs and `revert` prints
+      clean. Not recorded yet.
 - [ ] Fedora Silverblue or Bazzite: `install.sh`, `enable`, reboot, `revert`.
       Not tested yet.
 - [ ] Void (runit): `enable`, reboot, `revert`. Not tested yet.

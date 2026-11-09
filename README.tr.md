@@ -68,15 +68,22 @@ curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/insta
 
 Servis, `/usr/local/bin/splitdpi` varsa onu, yoksa servisi kuran programı
 gerçek yoluyla çalıştırır. Servisi her açılışta root çalıştırdığı için
-`enable` şu programları reddeder: `/tmp`, `/home`, `/var/home`, `/root` ya da
-`/var/roothome` altındakileri ve dosyası ya da dizini root'a ait olmayan veya
-root dışındaki kullanıcıların değiştirebildiği programları. Hata mesajı
-programı nereye kurmanız gerektiğini de söyler.
+`enable` bu programı, `/usr/local/bin/splitdpi` de dahil, ancak onu root'tan
+başkası değiştiremiyorsa kabul eder: programın kendisi ve `/` dizininden
+başlayıp sembolik bağlantıları izleyerek ona giden yoldaki her dizin root'a
+ait olmalı, grup ve diğer kullanıcılar için yazma izni taşımamalı; program
+`/tmp`, `/var/tmp`, `/dev/shm` ya da bir ev dizini (`/home`, `/var/home`,
+`/root`, `/var/roothome`) altında olmamalı, bir bağlantı üzerinden de oraya
+varmamalı. Hata mesajı sorunlu dosyayı ya da dizini söyler.
+`/usr/local/bin/splitdpi` için onu düzeltmenizi ister; başka bir program için
+onu `/usr/local/bin/splitdpi` olarak kuran `sudo install` komutunu verir.
 
 SplitDPI'yi güncelledikten sonra kurulu zapret2 motoru,
 `sudo splitdpi engine install` yeni sürümün sabitlediği motoru kurana kadar
 kullanılmaya devam eder; `doctor` eski motoru bildirir ve yeniden tarama
-ister.
+ister. Bir motor kurulunca eski zapret2 motor dizinleri de, onları kullanan
+kalmadığında silinir: SplitDPI ya da bir tarama çalışmıyorsa hemen, aksi
+halde SplitDPI bir sonraki başladığında.
 
 Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
 `splitdpi run`) çalışırsa pencere kapanınca durur. Arka planda (`b` ya da
@@ -87,7 +94,11 @@ sürer, bilgisayar kapanırken de kurallarını kaldırarak düzgünce durur. sy
 ya da `systemd-run` yoksa veya `systemd-run` başarısız olursa onun yerine
 ayrık bir süreç olarak çalışır. Her açılışta (`sudo splitdpi enable`) servis
 olarak çalışır; `enable` arka planda ya da bir pencerede çalışan engel aşmayı
-durdurur ve yerine servis geçer. Hangisi olursa olsun `sudo splitdpi stop`
+durdurur ve yerine servis geçer. Servis onun yerine geçemezse `enable` servisi
+yeniden kaldırır, durdurduğu engel aşmayı arka planda yeniden başlatır ve
+mesaj bunu bildirir: "Önceki engel aşma arka planda yeniden başlatıldı
+(pid N)." Bu da olmazsa mesaj onu başlatacak komutu verir:
+`sudo splitdpi run --background`. Hangisi olursa olsun `sudo splitdpi stop`
 durdurur.
 
 Durum sayfasındaki `r` tuşunun bunlardan hangisini kullanacağı Ayarlar →
@@ -103,14 +114,19 @@ söylediğine göre, Ayarlar'daki "Açılışta başlar" ve Durum sayfasındaki
 halde servis kurulu değilse ikisi de uyarır; Ayarlar'daki o satırda Enter
 servisi kurar, Durum sayfasında `r` de (engel aşma çalışıyorsa `e`) aynı işi
 görür. Arayüz engel aşmayı kendisi çalıştırırken çıkarsanız onu arka plana,
-çalıştırma biçimi "Açılışta da başlasın" ise servise taşımayı önerir.
+çalıştırma biçimi "Açılışta da başlasın" ise servise taşımayı önerir. Arayüz
+servisi kurarken ya da kaldırırken çıkmak bu işin bitmesini bekler: `q`
+"Açılış servisi değiştiriliyor. Lütfen bekleyin: bitince SplitDPI kapanacak."
+yazar ve iş bitince kapanır; iş başarısız olduysa arayüz nedenini göstermek
+için açık kalır.
 
-Komut satırında `enable` çalıştırma biçimini `boot` olarak kaydeder, `disable`
-ve `revert` ise yeniden `window` yapar. `sudo splitdpi config set run_mode`
-yalnızca seçimi kaydeder; servis seçimle uyuşmuyorsa (örneğin `boot` seçildiği
-halde servis kurulu değilse) uyarır. `sudo splitdpi status` SplitDPI'nin
-açılışta başlayıp başlamadığını da yazar. Servis başlarken SplitDPI zaten
-çalışıyorsa servis 4 koduyla çıkar ve yeniden başlatılmaz.
+Komut satırında `enable`, servis çalışmaya başlayınca çalıştırma biçimini
+`boot` olarak kaydeder; `disable` ve `revert` ise yeniden `window` yapar.
+`sudo splitdpi config set run_mode` yalnızca seçimi kaydeder; servis seçimle
+uyuşmuyorsa (örneğin `boot` seçildiği halde servis kurulu değilse) uyarır.
+`sudo splitdpi status` SplitDPI'nin açılışta başlayıp başlamadığını da yazar.
+Servis başlarken SplitDPI zaten çalışıyorsa servis 4 koduyla çıkar ve yeniden
+başlatılmaz.
 
 ## Terminal arayüzü
 
@@ -349,10 +365,12 @@ nfqws2 durursa trafik değiştirilmeden geçer.
 çalışma dosyalarını siler, sonra geride bir şey kalmadığını denetler. Sonunda
 temiz olduğunu yazar ya da kalanları listeler. `--purge` ayarları ve verileri
 de siler. `takeover` başka bir zapret kurulumunu kapattıysa geri alma onun
-servisini yeniden açar. Geri alma yapılandırmayı hiç okumaz; bozuk bir ayar
-dosyası onu engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları
-yerinde kalır ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar
-tüm trafiği geçirir.
+servisini yeniden açar. Geri alma yapılandırmayı tek bir iş için okur: geride
+servis kalmayınca `boot` çalıştırma biçimini yeniden `window` yapmak.
+Okuyamazsa bu adımı atlar; bu yüzden bozuk bir ayar dosyası geri almayı
+engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları yerinde kalır
+ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar tüm trafiği
+geçirir.
 
 ## SplitDPI'yi kaldırma
 

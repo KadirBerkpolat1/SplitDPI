@@ -63,14 +63,23 @@ curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/insta
 ```
 
 The service runs `/usr/local/bin/splitdpi` if that exists, else the binary
-that sets it up, by its real path. Because root runs the service at every boot,
-`enable` refuses a binary under `/tmp`, `/home`, `/var/home`, `/root` or
-`/var/roothome`, or one whose file or directory is not owned by root or can be
-changed by users other than root; the error says where to install it instead.
+that sets it up, by its real path. Because root runs the service at every
+boot, `enable` accepts that binary, `/usr/local/bin/splitdpi` included, only
+if no one but root can change it: the binary and every directory on the way to
+it, from `/` and along symbolic links, must belong to root and must not be
+writable by their group or others, and the binary must not be under `/tmp`,
+`/var/tmp`, `/dev/shm` or a home directory (`/home`, `/var/home`, `/root`,
+`/var/roothome`), nor lead there through a link. The error names the file or
+directory at fault. For `/usr/local/bin/splitdpi` it asks you to fix that; for
+another binary it gives the `sudo install` command that installs it as
+`/usr/local/bin/splitdpi`.
 
 After you upgrade SplitDPI, the zapret2 engine already installed stays in use
 until `sudo splitdpi engine install` installs the one the new version pins;
-`doctor` reports the older engine and asks for a new scan.
+`doctor` reports the older engine and asks for a new scan. Installing an engine
+also removes the older zapret2 engine directories once nothing uses them: at
+once if neither SplitDPI nor a scan is running, else the next time SplitDPI
+starts.
 
 There are three ways to keep the bypass on. In the UI window (`r`, or
 `splitdpi run`) it stops when that window closes. In the background (`b`, or
@@ -80,7 +89,11 @@ and stops at reboot. On systemd it runs as the transient unit
 stops it cleanly, removing its rules. Without systemd or `systemd-run`, or if
 that fails, it runs as a detached process instead. At every boot
 (`sudo splitdpi enable`) it runs as a service; `enable` stops a bypass running
-in the background or in a window, and the service takes its place.
+in the background or in a window, and the service takes its place. If the
+service does not take its place, `enable` removes it again and starts the run
+it stopped again in the background, and the message says so: "The previous run
+was restarted in the background (pid N)." If that fails too, the message gives
+the command to start it: `sudo splitdpi run --background`.
 `sudo splitdpi stop` stops any of them.
 
 Settings → Run mode chooses which of the three `r` on the Status page uses.
@@ -94,14 +107,18 @@ as the init system has it. When the run mode is "Also at boot" but the service
 is not set up, both warn; Enter on that Settings row sets it up, as does `r`
 on Status (`e` while the bypass runs). Quitting the UI while it runs the
 bypass offers to move it to the background, or in run mode "Also at boot" to
-the service.
+the service. While the UI sets up or removes the service, quitting waits for
+it: `q` shows "The boot service is being changed. Please wait: SplitDPI quits
+once that is done." and quits when it is done, unless the change failed; then
+the UI stays open to show why.
 
-On the command line, `enable` saves run mode `boot`, and `disable` and
-`revert` set it back to `window`. `sudo splitdpi config set run_mode` only
-saves the choice, and warns when the service does not match it (for example
-`boot` without the service set up). `sudo splitdpi status` also says whether
-SplitDPI starts at boot. If SplitDPI already runs when the service starts, the
-service exits with code 4 and is not restarted.
+On the command line, `enable` saves run mode `boot` once the service runs, and
+`disable` and `revert` set it back to `window`.
+`sudo splitdpi config set run_mode` only saves the choice, and warns when the
+service does not match it (for example `boot` without the service set up).
+`sudo splitdpi status` also says whether SplitDPI starts at boot. If SplitDPI
+already runs when the service starts, the service exits with code 4 and is not
+restarted.
 
 ## The terminal UI
 
@@ -320,12 +337,14 @@ unmodified.
 ## Revert guarantee
 
 `sudo splitdpi revert` stops SplitDPI, removes its service, deletes its table
-and its runtime files, and then checks that nothing is left. It prints
-`clean`, or lists what remains. `--purge` also removes its settings and data.
-If `takeover` switched off another zapret install, revert turns its service
-back on. Revert never reads the configuration, so a broken config cannot block
-it. If SplitDPI is killed, its queue rules stay in place but let all traffic
-through until you run `revert` or start it again.
+and its runtime files, and then checks that nothing is left. It says the
+system is clean, or lists what remains. `--purge` also removes its settings and
+data. If `takeover` switched off another zapret install, revert turns its
+service back on. Revert reads the configuration only to set run mode `boot`
+back to `window` once no service is left, and skips that when it cannot read
+it, so a broken config cannot block revert. If SplitDPI is killed, its queue
+rules stay in place but let all traffic through until you run `revert` or start
+it again.
 
 ## Removing SplitDPI
 
