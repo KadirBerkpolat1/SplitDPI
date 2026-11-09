@@ -104,9 +104,9 @@ durdurur.
 Durum sayfasındaki `r` tuşunun bunlardan hangisini kullanacağı Ayarlar →
 Çalıştırma biçimi'nden seçilir. "Açılışta da başlasın" seçilirse önce sorulur,
 sonra servis hemen kurulur, etkinleştirilir ve başlatılır; o an çalışan engel
-aşma servise taşınır ve yaklaşık bir saniye engel aşılmaz. Servis kuruluyken
-"Bu pencerede" ya da "Arka planda" seçilirse önce sorulur, sonra servis
-kaldırılır. Servis modu olmayan init sistemlerinde (bkz.
+aşma servise taşınır ve genellikle bir saniyeden kısa bir süre engel aşılmaz.
+Servis kuruluyken "Bu pencerede" ya da "Arka planda" seçilirse önce sorulur,
+sonra servis kaldırılır. Servis modu olmayan init sistemlerinde (bkz.
 [Desteklenen sistemler](#desteklenen-sistemler)) "Açılışta da başlasın"
 sunulmaz. SplitDPI'nin açılışta başlayıp başlamadığını, init sisteminin
 söylediğine göre, Ayarlar'daki "Açılışta başlar" ve Durum sayfasındaki
@@ -420,12 +420,14 @@ gelen bildirimler bu dosyaları besler.
 `sudo splitdpi presets update` ya da Ayarlar'daki "Hazır ayarları güncelle",
 SplitDPI-presets'in son sürümündeki `presets.tar.gz` dosyasını yanında
 yayımlanan `presets.tar.gz.sha256` dosyasıyla birlikte indirir; ikisi
-uyuşmadıkça hiçbir şeyi açmaz. `preset bundle checksum` ile başlayan bir hata,
-sağlama dosyasının olmadığı, indirilemediği ya da tek bir
-`<sha256>  presets.tar.gz` satırından oluşmadığı anlamına gelir;
-`preset bundle SHA-256 mismatch` ise indirilen dosyanın onunla uyuşmadığını,
-yani yolda bozulduğunu ya da değiştirildiğini gösterir. Her iki durumda da
-kullanılan hazır ayarlar olduğu gibi kalır.
+uyuşmadıkça hiçbir şeyi açmaz. Sürümde sağlama dosyası yoksa, dosya tek bir
+`<sha256>  presets.tar.gz` satırı değilse ya da indirilen dosya onunla
+uyuşmuyorsa (yolda bozulmuş ya da değiştirilmişse) mesaj bunu ve hiçbir şeyin
+değiştirilmediğini söyler, örneğin: "İndirilen hazır ayarlar sağlama
+toplamıyla uyuşmadı, bu yüzden hiçbir şey değiştirilmedi. Daha sonra yeniden
+deneyin; sorun sürerse bildirin." Yalnızca sağlama dosyası indirilemezse hata
+`preset bundle checksum` ile başlar. Her durumda kullanılan hazır ayarlar
+olduğu gibi kalır.
 
 ## Strateji bildirme
 

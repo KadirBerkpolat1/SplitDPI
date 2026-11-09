@@ -98,8 +98,8 @@ the command to start it: `sudo splitdpi run --background`.
 
 Settings → Run mode chooses which of the three `r` on the Status page uses.
 Choosing "Also at boot" asks, then installs, enables and starts the service at
-once; a bypass running now moves to it, leaving about a second without the
-bypass. Choosing "In this window" or "In the background" while the service is
+once; a bypass running now moves to it, leaving usually under a second without
+the bypass. Choosing "In this window" or "In the background" while the service is
 set up asks, then removes the service. Init systems without service mode (see
 [Supported systems](#supported-systems)) do not offer "Also at boot". Settings
 ("Starts at boot") and Status ("At boot") show whether SplitDPI starts at boot,
@@ -393,11 +393,13 @@ when its strategies were last seen working on a real connection; the links
 `sudo splitdpi presets update`, or "Update presets" under Settings, downloads
 `presets.tar.gz` from the latest SplitDPI-presets release together with the
 `presets.tar.gz.sha256` file published next to it, and unpacks nothing unless
-the two match. An error that starts with `preset bundle checksum` means the
-checksum file is missing, could not be downloaded, or is not a single
-`<sha256>  presets.tar.gz` line; `preset bundle SHA-256 mismatch` means the
-download does not match it, so it was damaged or changed on the way. Either
-way the presets in use stay as they are.
+the two match. If the release has no checksum file, or it is not a single
+`<sha256>  presets.tar.gz` line, or the download does not match it (damaged or
+changed on the way), the message says so and that nothing was changed, for
+example "The downloaded presets did not match their checksum, so nothing was
+changed. Try again later; if it keeps happening, report it." Only a checksum
+file that could not be downloaded gives an error that starts with
+`preset bundle checksum`. In every case the presets in use stay as they are.
 
 ## Reporting a strategy
 
