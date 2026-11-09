@@ -2,8 +2,6 @@
 package engine
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
 )
 
 const (
@@ -25,9 +24,16 @@ const (
 
 var (
 	ErrChecksum   = errors.New("engine archive SHA-256 mismatch")
-	ErrUnsafePath = errors.New("unsafe path in engine archive")
+	ErrUnsafePath = safetar.ErrUnsafePath
 	ErrArch       = errors.New("unsupported architecture")
 )
+
+// limits caps what the archive may unpack to. zapret2 v1.0.6 holds 306 files,
+// 19.1 MB in total and 3.3 MB at most; keep both limits at least twice that.
+var limits = safetar.Limits{File: 16 << 20, Total: 128 << 20}
+
+// rename is os.Rename, replaced in tests to make the swap fail.
+var rename = os.Rename
 
 var archDirs = map[string]string{"amd64": "linux-x86_64", "arm64": "linux-arm64"}
 
@@ -43,7 +49,8 @@ func (e Engine) Blockcheck2() string { return filepath.Join(e.Dir, "blockcheck2.
 func (e Engine) LuaDir() string      { return filepath.Join(e.Dir, "lua") }
 
 // Install verifies tarball against wantSHA256, unpacks it and swaps it into
-// EngineDir. On any failure the previously installed engine is left as it was.
+// EngineDir. On any failure the previously installed engine is left as it was;
+// if putting it back fails, the error says so.
 func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engine, error) {
 	arch, ok := archDirs[goarch]
 	if !ok {
@@ -74,7 +81,7 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 		return Engine{}, err
 	}
 	defer os.RemoveAll(tmp)
-	if err := untar(f, tmp); err != nil {
+	if err := safetar.Extract(f, tmp, limits); err != nil {
 		return Engine{}, err
 	}
 	name := "zapret2-" + Version
@@ -85,81 +92,28 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 
 	e := Engine{Dir: filepath.Join(p.EngineDir, name), ArchDir: arch}
 	old := filepath.Join(tmp, "old")
-	if err := os.Rename(e.Dir, old); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	hadOld := true
+	if err := rename(e.Dir, old); errors.Is(err, fs.ErrNotExist) {
+		hadOld = false
+	} else if err != nil {
 		return Engine{}, err
 	}
-	if err := os.Rename(staged, e.Dir); err != nil {
-		os.Rename(old, e.Dir)
+	if err := rename(staged, e.Dir); err != nil {
+		if hadOld {
+			if rerr := rename(old, e.Dir); rerr != nil {
+				err = fmt.Errorf("%w; restoring the previous engine failed too: %w", err, rerr)
+			}
+		}
 		return Engine{}, err
 	}
 	cur := filepath.Join(p.EngineDir, "current")
 	if err := os.WriteFile(cur+".new", []byte(name+"\n"+arch+"\n"), 0o644); err != nil {
 		return Engine{}, err
 	}
-	if err := os.Rename(cur+".new", cur); err != nil {
+	if err := rename(cur+".new", cur); err != nil {
 		return Engine{}, err
 	}
 	return e, nil
-}
-
-// untar unpacks a .tar.gz into dir. Entries must be directories, regular files,
-// or symlinks with a relative target that never climbs ("..").
-func untar(r io.Reader, dir string) error {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-	tr := tar.NewReader(gz)
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if !filepath.IsLocal(h.Name) {
-			return fmt.Errorf("%w: %s", ErrUnsafePath, h.Name)
-		}
-		switch h.Typeflag {
-		case tar.TypeDir:
-			err = root.MkdirAll(h.Name, 0o755)
-		case tar.TypeReg:
-			err = writeFile(root, h.Name, tr, fs.FileMode(h.Mode)&0o777)
-		case tar.TypeSymlink:
-			if !filepath.IsLocal(h.Linkname) {
-				return fmt.Errorf("%w: %s -> %s", ErrUnsafePath, h.Name, h.Linkname)
-			}
-			if err = root.MkdirAll(filepath.Dir(h.Name), 0o755); err == nil {
-				err = root.Symlink(h.Linkname, h.Name)
-			}
-		default:
-			return fmt.Errorf("%w: %s (type %c)", ErrUnsafePath, h.Name, h.Typeflag)
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func writeFile(root *os.Root, name string, r io.Reader, mode fs.FileMode) error {
-	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		return err
-	}
-	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, r); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
 }
 
 // Installed returns the engine recorded in EngineDir/current if its nfqws2 exists.

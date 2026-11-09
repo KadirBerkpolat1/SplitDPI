@@ -16,6 +16,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
 )
 
 type ent struct {
@@ -204,6 +205,65 @@ func TestInstallRejectsTraversal(t *testing.T) {
 				}
 				return nil
 			})
+		})
+	}
+}
+
+func TestInstallRejectsOversized(t *testing.T) {
+	// good() holds 26 bytes in files.
+	cases := map[string][]ent{
+		"file": {{name: "zapret2-v1.0.6/big", body: strings.Repeat("x", 65)}},
+		"total": {
+			{name: "zapret2-v1.0.6/a", body: strings.Repeat("x", 60)},
+			{name: "zapret2-v1.0.6/b", body: strings.Repeat("x", 60)},
+		},
+	}
+	for name, extra := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Cleanup(engine.SetLimits(safetar.Limits{File: 64, Total: 100}))
+			p := paths.Under(t.TempDir())
+			seedPrevious(t, p)
+			_, err := install(p, build(t, append(good(), extra...)))
+			if !errors.Is(err, safetar.ErrTooLarge) {
+				t.Fatalf("err = %v", err)
+			}
+			checkPrevious(t, p)
+		})
+	}
+}
+
+func TestInstallSwapFails(t *testing.T) {
+	errSwap, errRestore := errors.New("swap failed"), errors.New("restore failed")
+	cases := map[string]struct{ previous, restoreFails bool }{
+		"no previous engine": {},
+		"previous restored":  {previous: true},
+		"restore fails":      {previous: true, restoreFails: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			p := paths.Under(t.TempDir())
+			if tc.previous {
+				seedPrevious(t, p)
+			}
+			dir := filepath.Join(p.EngineDir, "zapret2-v1.0.6")
+			t.Cleanup(engine.SetRename(func(from, to string) error {
+				switch {
+				case to != dir:
+					return os.Rename(from, to)
+				case filepath.Base(from) != "old":
+					return errSwap
+				case tc.restoreFails:
+					return errRestore
+				}
+				return os.Rename(from, to)
+			}))
+			_, err := install(p, build(t, good()))
+			if !errors.Is(err, errSwap) || errors.Is(err, errRestore) != tc.restoreFails || errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("err = %v", err)
+			}
+			if tc.previous && !tc.restoreFails {
+				checkPrevious(t, p)
+			}
 		})
 	}
 }

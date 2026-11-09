@@ -1,40 +1,54 @@
 package presets
 
 import (
-	"archive/tar"
-	"compress/gzip"
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
 )
 
 const UpdateURL = "https://github.com/KadirBerkpolat1/SplitDPI-presets/releases/latest/download/presets.tar.gz"
 
+// bundleName is the file name the release's checksum line must carry.
+const bundleName = "presets.tar.gz"
+
+// sumLineLen is the length of a sha256sum line for the bundle, newline included.
+const sumLineLen = int64(2*sha256.Size + len("  "+bundleName+"\n"))
+
+// bundleLimits caps the unpacked bundle, and Total also the download. The
+// 2026-10-31 bundle packs 36 files, 11.5 KB in total and 1.1 KB at most, into
+// 5.3 KB.
+var bundleLimits = safetar.Limits{File: 1 << 20, Total: 4 << 20}
+
 var errNoApps = errors.New("preset bundle has no usable apps")
 
-// Update downloads a preset tarball, validates it, and swaps PresetCache.
+// Update downloads a preset tarball and the sha256sum file published next to
+// it (url + ".sha256"), checks one against the other, validates the bundle,
+// and swaps PresetCache. Nothing is written before the checksum matches.
 func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set, error) {
 	if c == nil {
 		c = http.DefaultClient
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	want, err := fetchSum(ctx, c, url+".sha256")
 	if err != nil {
 		return Set{}, err
 	}
-	resp, err := c.Do(req)
+	bundle, err := get(ctx, c, url, bundleLimits.Total)
 	if err != nil {
 		return Set{}, err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return Set{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+	if got := sha256.Sum256(bundle); got != want {
+		return Set{}, fmt.Errorf("preset bundle SHA-256 mismatch: got %x, want %x", got, want)
 	}
 
 	if err := os.MkdirAll(p.StateDir, 0o755); err != nil {
@@ -45,7 +59,7 @@ func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set
 	if err := os.MkdirAll(tmp, 0o755); err != nil {
 		return Set{}, err
 	}
-	if err := untarPresets(resp.Body, tmp); err != nil {
+	if err := safetar.Extract(bytes.NewReader(bundle), tmp, bundleLimits); err != nil {
 		_ = os.RemoveAll(tmp)
 		return Set{}, err
 	}
@@ -62,6 +76,46 @@ func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set
 	return set, nil
 }
 
+// fetchSum reads the bundle's SHA-256 from the sha256sum line at url.
+func fetchSum(ctx context.Context, c *http.Client, url string) ([sha256.Size]byte, error) {
+	var sum [sha256.Size]byte
+	b, err := get(ctx, c, url, sumLineLen)
+	if err != nil {
+		return sum, fmt.Errorf("preset bundle checksum: %w", err)
+	}
+	digest, name, ok := strings.Cut(strings.TrimSuffix(string(b), "\n"), "  ")
+	if ok && name == bundleName && len(digest) == hex.EncodedLen(sha256.Size) {
+		if _, err := hex.Decode(sum[:], []byte(digest)); err == nil {
+			return sum, nil
+		}
+	}
+	return sum, fmt.Errorf("preset bundle checksum: %s is not one %q line", url, "<sha256>  "+bundleName)
+}
+
+// get returns the body of url, which must answer 200 with at most limit bytes.
+func get(ctx context.Context, c *http.Client, url string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: HTTP %d", url, resp.StatusCode)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > limit {
+		return nil, fmt.Errorf("GET %s: more than %d bytes", url, limit)
+	}
+	return b, nil
+}
+
 func swapPresetCache(p paths.Paths, tmp string) error {
 	old := filepath.Join(p.StateDir, ".presets-old")
 	_ = os.RemoveAll(old)
@@ -76,62 +130,4 @@ func swapPresetCache(p paths.Paths, tmp string) error {
 	}
 	_ = os.RemoveAll(old)
 	return nil
-}
-
-func untarPresets(r io.Reader, dir string) error {
-	gz, err := gzip.NewReader(r)
-	if err != nil {
-		return err
-	}
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-	tr := tar.NewReader(gz)
-	for {
-		h, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if !filepath.IsLocal(h.Name) {
-			return fmt.Errorf("unsafe path %q", h.Name)
-		}
-		switch h.Typeflag {
-		case tar.TypeDir:
-			err = root.MkdirAll(h.Name, 0o755)
-		case tar.TypeReg:
-			err = writePresetFile(root, h.Name, tr, fs.FileMode(h.Mode)&0o777)
-		case tar.TypeSymlink:
-			if !filepath.IsLocal(h.Linkname) {
-				return fmt.Errorf("unsafe symlink %q", h.Name)
-			}
-			if err = root.MkdirAll(filepath.Dir(h.Name), 0o755); err == nil {
-				err = root.Symlink(h.Linkname, h.Name)
-			}
-		default:
-			return fmt.Errorf("unsupported tar entry %q", h.Name)
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func writePresetFile(root *os.Root, name string, r io.Reader, mode fs.FileMode) error {
-	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		return err
-	}
-	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, r); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
 }
