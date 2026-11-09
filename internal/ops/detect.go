@@ -35,6 +35,8 @@ func (o *Ops) Detect(ctx context.Context, asn int, country string) (scan.ASNInfo
 		if err != nil {
 			return scan.ASNInfo{}, nil, err
 		}
+		ctx, cancel := context.WithTimeout(ctx, lookupTimeout)
+		defer cancel()
 		info, err = scan.LookupASN(ctx, o.HTTP, c.IPInfoURL)
 		if err != nil {
 			return scan.ASNInfo{}, nil, err
