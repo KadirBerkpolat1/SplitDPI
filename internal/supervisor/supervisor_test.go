@@ -1,9 +1,11 @@
 package supervisor_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/render"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
@@ -55,6 +58,24 @@ func (c *fakeChild) signals() []os.Signal {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return slices.Clone(c.sigs)
+}
+
+// guardedChild is nfqws2 under the guard: its pid is the guard's.
+type guardedChild struct {
+	*fakeChild
+	nfqws2 int
+}
+
+func (c guardedChild) Nfqws2PID() int { return c.nfqws2 }
+
+// nfqws2PID is the PID a spawned child reports for nfqws2 itself.
+func nfqws2PID(t *testing.T, c supervisor.Child) int {
+	t.Helper()
+	n, ok := c.(interface{ Nfqws2PID() int })
+	if !ok {
+		t.Fatalf("%T has no Nfqws2PID", c)
+	}
+	return n.Nfqws2PID()
 }
 
 type call struct{ cmd, stdin string }
@@ -116,7 +137,9 @@ func setup(t *testing.T) paths.Paths {
 	return p
 }
 
-func meta() supervisor.Status { return supervisor.Status{Mode: "foreground", Strategy: "tt", Engine: "v1.0.6"} }
+func meta() supervisor.Status {
+	return supervisor.Status{Mode: "foreground", Strategy: "tt", Engine: "v1.0.6"}
+}
 
 // The redirect in the table must never point at a forwarder that is not listening yet.
 func TestStartsDNSBeforeTable(t *testing.T) {
@@ -299,11 +322,82 @@ func TestRunWithStaleLockAndTable(t *testing.T) {
 	}
 }
 
+// The started line and nfqws2_pid name nfqws2 itself; child_pid stays the
+// guard's. Without a report from the guard there is no started line.
+func TestStartedLineNamesNfqws2(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		nfqws2 int
+		line   string
+	}{
+		{"reported", 5001, "nfqws2 started (pid 5001)\n"},
+		{"not reported", 0, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := setup(t)
+			h := newHarness(t, p, false)
+			var log bytes.Buffer // read only after Run has returned
+			h.s.Log = &log
+			guard := newChild(4000, false)
+			h.s.Spawn = func([]string) (supervisor.Child, error) {
+				h.spawned <- guard
+				return guardedChild{guard, tc.nfqws2}, nil
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan error, 1)
+			go func() { done <- h.s.Run(ctx, out, rules, meta()) }()
+			<-h.spawned
+			var st supervisor.Status
+			for range 100 {
+				if st, _ = supervisor.ReadStatus(p); st.State == "running" {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if st.State != "running" || st.ChildPID != 4000 || st.Nfqws2PID != tc.nfqws2 {
+				t.Errorf("running status %+v", st)
+			}
+			b, _ := os.ReadFile(p.StatusFile)
+			if !bytes.Contains(b, []byte(`"child_pid": 4000`)) || bytes.Contains(b, []byte(`"nfqws2_pid"`)) != (tc.nfqws2 != 0) {
+				t.Errorf("status.json:\n%s", b)
+			}
+
+			cancel()
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			if got := log.String(); got != tc.line {
+				t.Errorf("log %q, want %q", got, tc.line)
+			}
+			if st, _ := supervisor.ReadStatus(p); st.State != "stopped" || st.ChildPID != 0 || st.Nfqws2PID != 0 {
+				t.Errorf("stopped status %+v", st)
+			}
+		})
+	}
+}
+
+// A status.json written before nfqws2_pid existed still reads.
+func TestReadStatusWithoutNfqws2PID(t *testing.T) {
+	p := setup(t)
+	if err := os.MkdirAll(p.RunDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"state":"running","mode":"service","pid":1200,"child_pid":1201,"strategy":"tt","engine":"v1.0.6","apps":["discord"],"since":"2026-10-28T12:00:00Z"}`
+	if err := os.WriteFile(p.StatusFile, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	st, err := supervisor.ReadStatus(p)
+	if err != nil || st.State != "running" || st.PID != 1200 || st.ChildPID != 1201 || st.Nfqws2PID != 0 || !slices.Equal(st.Apps, []string{"discord"}) {
+		t.Errorf("status %+v, %v", st, err)
+	}
+}
+
 // The test binary doubles as the guard, like the real splitdpi binary does.
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == supervisor.GuardArg {
 		os.Exit(supervisor.Guard(os.Args[2:]))
 	}
+	i18n.Init("en")
 	os.Exit(m.Run())
 }
 
@@ -349,6 +443,43 @@ func TestExecSpawnGuardForwardsSIGTERM(t *testing.T) {
 	}
 	if err := syscall.Kill(sleepPID, 0); err == nil {
 		t.Error("guarded child survived the guard")
+	}
+}
+
+// The guard reports the PID of what it runs; Pid stays the guard's, which
+// gets the signals.
+func TestExecSpawnGuardReportsPID(t *testing.T) {
+	c, err := supervisor.ExecSpawn(os.Stderr, os.Args[0])([]string{"sleep", "60"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		c.Signal(syscall.SIGTERM)
+		c.Wait()
+	})
+	pid := nfqws2PID(t, c)
+	b, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil || !strings.HasPrefix(string(b), "Name:\tsleep\n") || !strings.Contains(string(b), fmt.Sprintf("\nPPid:\t%d\n", c.Pid())) {
+		t.Errorf("pid %d is not the sleep under guard %d: %v\n%s", pid, c.Pid(), err, b)
+	}
+}
+
+// A guard that cannot start argv reports no PID, and the spawn does not wait
+// out the report timeout (5 s) for it.
+func TestExecSpawnGuardStartFails(t *testing.T) {
+	start := time.Now()
+	c, err := supervisor.ExecSpawn(io.Discard, os.Args[0])([]string{filepath.Join(t.TempDir(), "nfqws2")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 4*time.Second {
+		t.Errorf("spawn took %s", d)
+	}
+	if pid := nfqws2PID(t, c); pid != 0 {
+		t.Errorf("nfqws2 pid %d, want 0", pid)
+	}
+	if err := c.Wait(); err == nil {
+		t.Error("guard exited 0 without its child")
 	}
 }
 
@@ -406,6 +537,9 @@ func TestExecSpawn(t *testing.T) {
 	}
 	if c.Pid() <= 0 {
 		t.Errorf("pid %d", c.Pid())
+	}
+	if pid := nfqws2PID(t, c); pid != c.Pid() { // without a guard, argv is nfqws2
+		t.Errorf("nfqws2 pid %d, child %d", pid, c.Pid())
 	}
 	if err := c.Wait(); err == nil {
 		t.Error("exit 3 reported as success")

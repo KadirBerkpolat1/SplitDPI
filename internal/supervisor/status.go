@@ -14,10 +14,11 @@ import (
 
 // Status is written to StatusFile on every state change.
 type Status struct {
-	State      string    `json:"state"` // running|stopped|failed
-	Mode       string    `json:"mode"`  // foreground|background|service|scan
-	PID        int       `json:"pid"`   // the supervisor
-	ChildPID   int       `json:"child_pid,omitempty"`
+	State      string    `json:"state"`                // running|stopped|failed
+	Mode       string    `json:"mode"`                 // foreground|background|service|scan
+	PID        int       `json:"pid"`                  // the supervisor
+	ChildPID   int       `json:"child_pid,omitempty"`  // the guard, nfqws2's parent
+	Nfqws2PID  int       `json:"nfqws2_pid,omitempty"` // nfqws2 itself, once the guard reports it
 	Strategy   string    `json:"strategy"`
 	Engine     string    `json:"engine"`
 	Apps       []string  `json:"apps"`
