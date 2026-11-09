@@ -76,16 +76,27 @@ func (o *Ops) run(ctx context.Context, mode string) error {
 			log = io.MultiWriter(log, f)
 		}
 	}
+	// Until the supervisor holds the run lock, only the engine lock keeps the
+	// engine prepare picks from removal.
+	release, err := engine.LockShared(o.P)
+	if err != nil {
+		return err
+	}
+	defer release()
 	j, err := o.prepare(cfg, mode, log, nil)
 	if err != nil {
 		return err
 	}
 	// The supervisor spawns only while it holds the run lock: no other run can
-	// be using an engine then.
+	// be using an engine then. The engine lock goes first, or RemoveOld could
+	// not take it.
 	spawn := j.sup.Spawn
 	var once sync.Once
 	j.sup.Spawn = func(argv []string) (supervisor.Child, error) {
-		once.Do(func() { o.removeOldEngines(log, j.eng) })
+		once.Do(func() {
+			release()
+			o.removeOldEngines(log, nil, j.eng)
+		})
 		return spawn(argv)
 	}
 	return j.sup.Run(ctx, j.out, j.ruleset, j.meta)

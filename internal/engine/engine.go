@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/safetar"
@@ -59,7 +60,8 @@ func (e Engine) LuaDir() string      { return filepath.Join(e.Dir, "lua") }
 // before the move leaves both as they were. If the move fails, the engine that
 // was there is moved back; if that fails too, it is kept in a directory under
 // EngineDir that the error names. If recording fails, the new engine stays and
-// current is left as it was.
+// current is left as it was. The engine lock is held shared from the move to
+// the record, so RemoveOld never finds the new engine before current names it.
 func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engine, error) {
 	arch, ok := archDirs[goarch]
 	if !ok {
@@ -109,6 +111,11 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	}
 
 	e := Engine{Dir: filepath.Join(p.EngineDir, name), ArchDir: arch}
+	lf, err := lock(p, syscall.LOCK_SH)
+	if err != nil {
+		return Engine{}, err
+	}
+	defer lf.Close()
 	old := filepath.Join(tmp, "old")
 	hadOld := true
 	if err := rename(e.Dir, old); errors.Is(err, fs.ErrNotExist) {
@@ -153,16 +160,60 @@ func Installed(p paths.Paths) (Engine, bool) {
 	return e, true
 }
 
+// LockShared takes the engine lock shared, waiting while RemoveOld holds it.
+// Until release, RemoveOld deletes nothing, so an engine read from current
+// in the meantime stays. A missing EngineDir is made first: an engine
+// installed after LockShared is covered too. release may be called more than
+// once.
+func LockShared(p paths.Paths) (release func(), err error) {
+	if err := os.MkdirAll(p.EngineDir, 0o755); err != nil {
+		return nil, err
+	}
+	lf, err := lock(p, syscall.LOCK_SH)
+	if err != nil {
+		return nil, err
+	}
+	return func() { lf.Close() }, nil
+}
+
+// lock flocks EngineDir itself, the engine lock, with how. The lock lasts
+// until the returned file is closed.
+func lock(p paths.Paths, how int) (*os.File, error) {
+	f, err := os.Open(p.EngineDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), how); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
 // RemoveOld deletes the zapret2-* directories in EngineDir other than the
 // engine recorded in current and those in keep. It deletes nothing while
-// current records no installed engine. The caller makes sure that nothing
-// runs from the directories it deletes.
-func RemoveOld(p paths.Paths, keep ...Engine) error {
+// current records no installed engine, while anyone holds the engine lock
+// (LockShared, Install), or if running reports an instance that may run an
+// engine current no longer names. running is asked under the lock: a run
+// holds that shared until it holds the run lock, so running cannot miss it.
+// The next call retries what RemoveOld skips.
+func RemoveOld(p paths.Paths, running func() bool, keep ...Engine) error {
+	lf, err := lock(p, syscall.LOCK_EX|syscall.LOCK_NB)
+	if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EWOULDBLOCK) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer lf.Close()
+	if running != nil && running() {
+		return nil
+	}
 	cur, ok := Installed(p)
 	if !ok {
 		return nil
 	}
-	ents, err := os.ReadDir(p.EngineDir)
+	ents, err := lf.ReadDir(-1)
 	if err != nil {
 		return err
 	}

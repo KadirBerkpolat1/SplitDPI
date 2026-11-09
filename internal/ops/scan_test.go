@@ -1,17 +1,21 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"syscall"
 	"testing"
 	"testing/fstest"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
@@ -53,10 +57,16 @@ const siteTLS = "--payload=tls_client_hello --lua-desync=multisplit:pos=1"
 // siteScanOps is trialOps with a fake blockcheck2.sh that reports siteTLS working.
 func siteScanOps(t *testing.T) *Ops {
 	t.Helper()
-	o, _, _ := trialOps(t, fstest.MapFS{"proc/net/netfilter/nfnetlink_queue": {Data: []byte(queueBound)}})
+	return siteScanEngineOps(t, "zapret2-v1.0.7")
+}
+
+// siteScanEngineOps is siteScanOps with the engine EngineDir/eng installed.
+func siteScanEngineOps(t *testing.T, eng string) *Ops {
+	t.Helper()
+	o, _, _ := engineOps(t, fstest.MapFS{"proc/net/netfilter/nfnetlink_queue": {Data: []byte(queueBound)}}, eng)
 	script := "#!/bin/sh\necho \"env DOMAINS=$DOMAINS IPVS=$IPVS\"\necho\necho '* SUMMARY'\n" +
 		"echo \"curl_test_https_tls12 ipv4 $DOMAINS : nfqws2 " + siteTLS + "\"\n"
-	if err := os.WriteFile(filepath.Join(o.P.EngineDir, "zapret2-v1.0.7", "blockcheck2.sh"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(o.P.EngineDir, eng, "blockcheck2.sh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return o
@@ -87,6 +97,38 @@ func TestScanSite(t *testing.T) {
 	}
 	if sites, _ := o.SitesList(); !slices.Equal(sites, []string{"pastebin.com"}) {
 		t.Errorf("sites %q", sites)
+	}
+}
+
+// blockcheck2 runs without the run lock and starts nfqws2 from the engine the
+// scan picked: an engine install meanwhile must leave that engine in place.
+func TestScanKeepsEngineDuringInstall(t *testing.T) {
+	o := siteScanEngineOps(t, "zapret2-v1.0.6")
+	o.HTTP = &http.Client{Transport: &fakeHTTP{}}
+	old := filepath.Join(o.P.EngineDir, "zapret2-v1.0.6")
+	b, sum := pinnedRelease(t)
+	var once sync.Once
+	var installErr, oldErr error
+	progress := func(string) {
+		once.Do(func() {
+			_, installErr = o.installEngine(bytes.NewReader(b), sum)
+			_, oldErr = os.Stat(filepath.Join(old, "blockcheck2.sh"))
+		})
+	}
+	if _, err := o.Scan(context.Background(), scan.Options{ASN: 9121, Site: "pastebin.com"}, progress); err != nil {
+		t.Fatal(err)
+	}
+	if installErr != nil || oldErr != nil {
+		t.Fatalf("install during blockcheck2: %v; scan's engine: %v", installErr, oldErr)
+	}
+	if e, ok := engine.Installed(o.P); !ok || filepath.Base(e.Dir) != "zapret2-"+engine.Version {
+		t.Errorf("installed %+v, %v; want the pinned engine", e, ok)
+	}
+	if err := engine.RemoveOld(o.P, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(old); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("after the scan, cleanup left the scan's engine: %v", err)
 	}
 }
 

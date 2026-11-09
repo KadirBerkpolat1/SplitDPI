@@ -48,23 +48,25 @@ func (o *Ops) EngineInstall(ctx context.Context, from string) (engine.Engine, er
 }
 
 // installEngine installs the engine in tarball, then removes the engines that
-// current no longer names. A running instance may still run one of those, so
-// while one holds the run lock they stay until the next `run` starts.
+// current no longer names. A running instance or a scan may still use one of
+// those, so while one holds the run lock or the engine lock they stay until
+// the next `run` starts.
 func (o *Ops) installEngine(tarball io.Reader, wantSHA256 string) (engine.Engine, error) {
 	e, err := engine.Install(o.P, tarball, wantSHA256, o.GOARCH)
 	if err != nil {
 		return e, err
 	}
-	if _, _, held := supervisor.LockInfo(o.P); !held {
-		o.removeOldEngines(o.log())
-	}
+	o.removeOldEngines(o.log(), func() bool {
+		_, _, held := supervisor.LockInfo(o.P)
+		return held
+	})
 	return e, nil
 }
 
-// removeOldEngines removes the engines that neither current nor keep names. A
-// failure only leaves disk space taken, so it is logged, not returned.
-func (o *Ops) removeOldEngines(log io.Writer, keep ...engine.Engine) {
-	if err := engine.RemoveOld(o.P, keep...); err != nil {
+// removeOldEngines runs engine.RemoveOld. A failure only leaves disk space
+// taken, so it is logged, not returned.
+func (o *Ops) removeOldEngines(log io.Writer, running func() bool, keep ...engine.Engine) {
+	if err := engine.RemoveOld(o.P, running, keep...); err != nil {
 		fmt.Fprintln(log, i18n.T("engine.remove_old_failed", err))
 	}
 }

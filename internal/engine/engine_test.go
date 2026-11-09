@@ -357,7 +357,7 @@ func TestRemoveOld(t *testing.T) {
 		unpacked(t, p, name)
 	}
 	kept := engine.Engine{Dir: filepath.Join(p.EngineDir, "zapret2-v1.0.5"), ArchDir: "linux-x86_64"}
-	if err := engine.RemoveOld(p, kept); err != nil {
+	if err := engine.RemoveOld(p, nil, kept); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := entries(t, p.EngineDir), []string{".tmp-1", "current", "zapret2-v1.0.5", "zapret2-v1.0.7"}; !slices.Equal(got, want) {
@@ -380,7 +380,7 @@ func TestRemoveOldWithoutCurrent(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := engine.RemoveOld(p); err != nil {
+			if err := engine.RemoveOld(p, nil); err != nil {
 				t.Fatal(err)
 			}
 			for _, n := range []string{"zapret2-v1.0.6", "zapret2-v1.0.7"} {
@@ -389,5 +389,59 @@ func TestRemoveOldWithoutCurrent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A run's cleanup between the move of the new engine and its record in
+// current still reads the old engine from current, and would take the new one
+// for an old one.
+func TestRemoveOldDuringInstall(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	unpacked(t, p, "zapret2-v1.0.6")
+	cur := filepath.Join(p.EngineDir, "current")
+	if err := os.WriteFile(cur, []byte("zapret2-v1.0.6\nlinux-x86_64\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	picked := engine.Engine{Dir: filepath.Join(p.EngineDir, "zapret2-v1.0.6"), ArchDir: "linux-x86_64"}
+	cleanupErr := errors.New("no cleanup between the renames")
+	t.Cleanup(engine.SetRename(func(from, to string) error {
+		if to == cur {
+			cleanupErr = engine.RemoveOld(p, nil, picked)
+		}
+		return os.Rename(from, to)
+	}))
+	e, err := install(p, build(t, good()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cleanupErr != nil {
+		t.Fatal(cleanupErr)
+	}
+	if got, ok := engine.Installed(p); !ok || got != e {
+		t.Errorf("Installed = %+v, %v; want %+v", got, ok, e)
+	}
+	if got, want := entries(t, p.EngineDir), []string{"current", "zapret2-v1.0.6", "zapret2-v1.0.7"}; !slices.Equal(got, want) {
+		t.Errorf("engine dir entries = %v, want %v", got, want)
+	}
+}
+
+// running must be asked under the lock, or a run could take the run lock and
+// let go of the engine lock between the answer and the cleanup.
+func TestRemoveOldAsksRunningUnderLock(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	if _, err := install(p, build(t, good())); err != nil {
+		t.Fatal(err)
+	}
+	unpacked(t, p, "zapret2-v1.0.6")
+	var innerErr error
+	err := engine.RemoveOld(p, func() bool {
+		innerErr = engine.RemoveOld(p, nil)
+		return true
+	})
+	if err != nil || innerErr != nil {
+		t.Fatal(err, innerErr)
+	}
+	if _, err := os.Stat(filepath.Join(p.EngineDir, "zapret2-v1.0.6")); err != nil {
+		t.Errorf("a cleanup ran while running was asked: %v", err)
 	}
 }
