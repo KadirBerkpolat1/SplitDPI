@@ -1,7 +1,9 @@
 name: ci
 
 on:
+  # Branches only: a v* tag runs CI once, through release.yml.
   push:
+    branches: ['**']
   pull_request:
   workflow_call:
 
@@ -44,12 +46,12 @@ jobs:
       - run: sudo modprobe -a nfnetlink_queue nft_queue
       - uses: actions/cache@v6
         with:
-          path: /tmp/z2/zapret2-v1.0.6.tar.gz
-          key: zapret2-v1.0.6
+          path: /tmp/z2/zapret2-v1.0.7.tar.gz
+          key: zapret2-v1.0.7
       - run: |
-          if [ ! -f /tmp/z2/zapret2-v1.0.6.tar.gz ]; then
+          if [ ! -f /tmp/z2/zapret2-v1.0.7.tar.gz ]; then
             mkdir -p /tmp/z2
-            curl -fsSL -o /tmp/z2/zapret2-v1.0.6.tar.gz https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz
+            curl -fsSL -o /tmp/z2/zapret2-v1.0.7.tar.gz https://github.com/bol-van/zapret2/releases/download/v1.0.7/zapret2-v1.0.7.tar.gz
           fi
       - run: go build -o /tmp/splitdpi ./cmd/splitdpi
       - run: sudo -E env "PATH=$PATH" SPLITDPI_BIN=/tmp/splitdpi go test -count=1 -tags integration -v ./test/integration/...

@@ -56,7 +56,7 @@ func siteScanOps(t *testing.T) *Ops {
 	o, _, _ := trialOps(t, fstest.MapFS{"proc/net/netfilter/nfnetlink_queue": {Data: []byte(queueBound)}})
 	script := "#!/bin/sh\necho \"env DOMAINS=$DOMAINS IPVS=$IPVS\"\necho\necho '* SUMMARY'\n" +
 		"echo \"curl_test_https_tls12 ipv4 $DOMAINS : nfqws2 " + siteTLS + "\"\n"
-	if err := os.WriteFile(filepath.Join(o.P.EngineDir, "zapret2-v1.0.6", "blockcheck2.sh"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(o.P.EngineDir, "zapret2-v1.0.7", "blockcheck2.sh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return o

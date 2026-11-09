@@ -28,7 +28,7 @@ func TestShareURL(t *testing.T) {
 			QUIC:   "--lua-desync=fake:repeats=6",
 			ASN:    9121,
 			Date:   "2026-10-29",
-			Engine: "v1.0.6",
+			Engine: "v1.0.7",
 		},
 	}
 	raw := ShareURL(rep, "v0.2.0")
@@ -48,7 +48,7 @@ func TestShareURL(t *testing.T) {
 		"ASN: AS9121\n", "ISP: Turk Telekom\n", "Country: TR\n",
 		"Strategy: tt-1\n", "Source: isp/tr/as9121-turk-telekom.toml\n",
 		"tcp_tls: --lua-desync=multisplit:pos=1\n", "quic: --lua-desync=fake:repeats=6\n",
-		"zapret2: v1.0.6\n", "SplitDPI: v0.2.0\n", "Date: 2026-10-29\n",
+		"zapret2: v1.0.7\n", "SplitDPI: v0.2.0\n", "Date: 2026-10-29\n",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body lacks %q:\n%s", want, body)

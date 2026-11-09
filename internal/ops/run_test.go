@@ -76,15 +76,37 @@ func (n *nftState) exists() bool {
 
 const queueBound = "  200  12345     0 2 65531     0     0        0  1\n"
 
-func trialOps(t *testing.T, root fstest.MapFS) (*Ops, *nftState, *[]*child) {
+// installedEngine makes EngineDir/name, holding an empty nfqws2, the engine recorded in current.
+func installedEngine(t *testing.T, p paths.Paths, name string) {
 	t.Helper()
-	p := paths.Under(t.TempDir())
-	bin := filepath.Join(p.EngineDir, "zapret2-v1.0.6", "binaries", "linux-x86_64")
+	bin := filepath.Join(p.EngineDir, name, "binaries", "linux-x86_64")
 	if err := os.MkdirAll(bin, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(bin, "nfqws2"), nil, 0o755)
-	os.WriteFile(filepath.Join(p.EngineDir, "current"), []byte("zapret2-v1.0.6\nlinux-x86_64\n"), 0o644)
+	os.WriteFile(filepath.Join(p.EngineDir, "current"), []byte(name+"\nlinux-x86_64\n"), 0o644)
+}
+
+// dirNames lists the entries of dir.
+func dirNames(dir string) []string {
+	des, _ := os.ReadDir(dir)
+	var out []string
+	for _, de := range des {
+		out = append(out, de.Name())
+	}
+	return out
+}
+
+func trialOps(t *testing.T, root fstest.MapFS) (*Ops, *nftState, *[]*child) {
+	t.Helper()
+	return engineOps(t, root, "zapret2-v1.0.7")
+}
+
+// engineOps is trialOps with the engine EngineDir/eng installed.
+func engineOps(t *testing.T, root fstest.MapFS, eng string) (*Ops, *nftState, *[]*child) {
+	t.Helper()
+	p := paths.Under(t.TempDir())
+	installedEngine(t, p, eng)
 	n := &nftState{}
 	var children []*child
 	var mu sync.Mutex
@@ -196,6 +218,58 @@ func TestGuardOptions(t *testing.T) {
 	cfg.DNSProvider = "auto"
 	if opts := guardOptions(cfg, p); !slices.Equal(opts, []string{supervisor.DropChainOpt("splitdpi", "dns")}) {
 		t.Errorf("dns on: %q", opts)
+	}
+}
+
+// After an upgrade of the binary, `run` keeps the engine current records, and
+// the strategy saved under it, until `engine install`. Before nfqws2 starts,
+// it removes the engines that nothing uses any more.
+func TestRunKeepsInstalledEngine(t *testing.T) {
+	o, _, _ := engineOps(t, fstest.MapFS{}, "zapret2-v1.0.6")
+	if err := os.MkdirAll(filepath.Join(o.P.EngineDir, "zapret2-v1.0.5"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := trialConfig()
+	cfg.Strategy = &config.Strategy{ID: "tt", TCPTLS: candidate.TCPTLS, Engine: "v1.0.6"}
+	if err := config.Save(o.P, cfg); err != nil {
+		t.Fatal(err)
+	}
+	type start struct{ argv, engines []string }
+	started := make(chan start, 1)
+	spawn := o.Spawn
+	o.Spawn = func(argv []string) (supervisor.Child, error) {
+		select {
+		case started <- start{argv, dirNames(o.P.EngineDir)}:
+		default:
+		}
+		return spawn(argv)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- o.Run(ctx, false) }()
+	var s start
+	select {
+	case s = <-started:
+	case err := <-done:
+		t.Fatalf("run ended before nfqws2 started: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("nfqws2 not started within 10 s")
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(o.P.EngineDir, "zapret2-v1.0.6")
+	if s.argv[0] != filepath.Join(dir, "binaries", "linux-x86_64", "nfqws2") ||
+		!slices.Contains(s.argv, "--lua-init=@"+filepath.Join(dir, "lua", "zapret-antidpi.lua")) {
+		t.Errorf("argv %q, want the engine in %s", s.argv, dir)
+	}
+	if want := []string{"current", "zapret2-v1.0.6"}; !slices.Equal(s.engines, want) {
+		t.Errorf("engine dir holds %q when nfqws2 starts, want %q", s.engines, want)
+	}
+	if st, err := supervisor.ReadStatus(o.P); err != nil || st.Engine != "v1.0.6" {
+		t.Errorf("status engine %q, %v; want v1.0.6", st.Engine, err)
 	}
 }
 

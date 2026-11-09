@@ -80,11 +80,20 @@ func (o *Ops) run(ctx context.Context, mode string) error {
 	if err != nil {
 		return err
 	}
+	// The supervisor spawns only while it holds the run lock: no other run can
+	// be using an engine then.
+	spawn := j.sup.Spawn
+	var once sync.Once
+	j.sup.Spawn = func(argv []string) (supervisor.Child, error) {
+		once.Do(func() { o.removeOldEngines(log, j.eng) })
+		return spawn(argv)
+	}
 	return j.sup.Run(ctx, j.out, j.ruleset, j.meta)
 }
 
 type job struct {
 	sup     *supervisor.Supervisor
+	eng     engine.Engine
 	out     render.Output
 	ruleset string
 	meta    supervisor.Status
@@ -151,6 +160,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 			P: o.P, Exec: o.Exec, Spawn: spawn, Now: now, Sleep: time.Sleep, Log: log, UID: uid, GID: gid,
 			StartDNS: startDNS,
 		},
+		eng:     eng,
 		out:     out,
 		ruleset: ruleset,
 		meta: supervisor.Status{

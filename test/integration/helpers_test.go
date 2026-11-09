@@ -317,7 +317,7 @@ func makeRoot(extra string) (string, error) {
 	}
 	tarball := os.Getenv("SPLITDPI_ENGINE_TARBALL")
 	if tarball == "" {
-		tarball = "/tmp/z2/zapret2-v1.0.6.tar.gz"
+		tarball = "/tmp/z2/zapret2-v1.0.7.tar.gz"
 	}
 	if _, err := sh("env", "SPLITDPI_ROOT="+dir, bin, "engine", "install", "--from", tarball); err != nil {
 		return "", err

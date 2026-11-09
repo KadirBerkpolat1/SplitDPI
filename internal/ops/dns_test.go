@@ -115,7 +115,7 @@ func dnsScanOps(t *testing.T) (*Ops, *dohHTTP) {
 	t.Helper()
 	o, _, _ := trialOps(t, fstest.MapFS{})
 	script := "#!/bin/sh\necho \"dns SECURE_DNS=$SECURE_DNS DOH_SERVERS=$DOH_SERVERS\"\necho\necho '* SUMMARY'\n"
-	if err := os.WriteFile(filepath.Join(o.P.EngineDir, "zapret2-v1.0.6", "blockcheck2.sh"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(o.P.EngineDir, "zapret2-v1.0.7", "blockcheck2.sh"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	h := &dohHTTP{}

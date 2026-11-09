@@ -103,7 +103,7 @@ func TestDetectForeignNone(t *testing.T) {
 // During a scan blockcheck2 runs splitdpi's own nfqws2; that is not a zapret2.
 func TestDetectForeignSkipsEngineNfqws2(t *testing.T) {
 	o, _ := takeoverOps(t, nil, nil)
-	exe := filepath.Join(o.P.EngineDir, "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2")
+	exe := filepath.Join(o.P.EngineDir, "zapret2-v1.0.7/binaries/linux-x86_64/nfqws2")
 	o.Root = fstest.MapFS{
 		"run/systemd/system": {Mode: os.ModeDir},
 		"proc/700/stat":      proc("700", "nfqws2"),

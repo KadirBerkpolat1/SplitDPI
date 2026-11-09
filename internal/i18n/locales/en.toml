@@ -24,6 +24,7 @@ status = "Engine: zapret2 %s\nDirectory: %s"
 pin_ok = "Matches the pinned version."
 pin_mismatch = "Differs from the pinned version %s. Run: sudo splitdpi engine install"
 download_hint = "If the download is blocked, get %s another way and run: sudo splitdpi engine install --from FILE"
+remove_old_failed = "Could not remove an old engine version: %v"
 
 [cmd.presets]
 help = "Show, refresh or validate preset data (list | update | check DIR)."

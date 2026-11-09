@@ -24,6 +24,7 @@ status = "Motor: zapret2 %s\nDizin: %s"
 pin_ok = "Sabitlenmiş sürümle aynı."
 pin_mismatch = "Sabitlenmiş sürümden (%s) farklı. Şunu çalıştırın: sudo splitdpi engine install"
 download_hint = "İndirme engellenirse %s dosyasını başka bir yoldan edinip şunu çalıştırın: sudo splitdpi engine install --from DOSYA"
+remove_old_failed = "Eski motor sürümü silinemedi: %v"
 
 [engine.err]
 install = "Motor kurulamadı: %v"

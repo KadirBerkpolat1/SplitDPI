@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
@@ -17,9 +18,9 @@ import (
 )
 
 const (
-	Version = "v1.0.6"
-	URL     = "https://github.com/bol-van/zapret2/releases/download/v1.0.6/zapret2-v1.0.6.tar.gz"
-	SHA256  = "eb412aebc82cdef1f09b6aa9df45c8ff60fb88683b6663e6c4a9275d87ea2db4"
+	Version = "v1.0.7"
+	URL     = "https://github.com/bol-van/zapret2/releases/download/v1.0.7/zapret2-v1.0.7.tar.gz"
+	SHA256  = "547a5dce3f4820721a425680ea3f7f3971b7e9c772b8c795dd2d623148da0928"
 )
 
 var (
@@ -28,12 +29,12 @@ var (
 	ErrArch       = errors.New("unsupported architecture")
 )
 
-// limits caps what the archive may unpack to. zapret2 v1.0.6 holds 306 files,
+// limits caps what the archive may unpack to. zapret2 v1.0.7 holds 306 files,
 // 19.1 MB in total and 3.3 MB at most; keep both limits at least twice that.
 var limits = safetar.Limits{File: 16 << 20, Total: 128 << 20}
 
 // maxTarball caps the bytes Install reads from tarball and stores in StateDir
-// before it can check their SHA-256. The zapret2 v1.0.6 tarball is 9.6 MB;
+// before it can check their SHA-256. The zapret2 v1.0.7 tarball is 9.6 MB;
 // keep the cap at least twice that.
 var maxTarball int64 = 64 << 20
 
@@ -150,4 +151,31 @@ func Installed(p paths.Paths) (Engine, bool) {
 		return Engine{}, false
 	}
 	return e, true
+}
+
+// RemoveOld deletes the zapret2-* directories in EngineDir other than the
+// engine recorded in current and those in keep. It deletes nothing while
+// current records no installed engine. The caller makes sure that nothing
+// runs from the directories it deletes.
+func RemoveOld(p paths.Paths, keep ...Engine) error {
+	cur, ok := Installed(p)
+	if !ok {
+		return nil
+	}
+	ents, err := os.ReadDir(p.EngineDir)
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, ent := range ents {
+		dir := filepath.Join(p.EngineDir, ent.Name())
+		if !ent.IsDir() || !strings.HasPrefix(ent.Name(), "zapret2-") || dir == cur.Dir ||
+			slices.ContainsFunc(keep, func(e Engine) bool { return e.Dir == dir }) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }

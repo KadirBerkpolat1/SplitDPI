@@ -37,7 +37,7 @@ type Ops struct {
 	LookPath func(string) (string, error)
 	// Spawn starts nfqws2; nil means supervisor.ExecSpawn under this binary as guard.
 	Spawn func(argv []string) (supervisor.Child, error)
-	// Log receives nfqws2 output and supervisor messages; nil discards them.
+	// Log receives nfqws2 output, supervisor messages and warnings; nil discards them.
 	Log io.Writer
 	// Detach starts the process of `run --background` and reports when it
 	// exits; nil means c.Start.

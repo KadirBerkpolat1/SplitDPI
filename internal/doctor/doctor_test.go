@@ -50,7 +50,7 @@ func newFake(t *testing.T) *fake {
 		fail: map[string]string{},
 	}
 	p := paths.Under(t.TempDir())
-	installEngine(t, p, "zapret2-v1.0.6")
+	installEngine(t, p, "zapret2-v1.0.7")
 	f.env = doctor.Env{
 		Root:     f.root,
 		P:        p,
@@ -298,7 +298,7 @@ func TestOwnChildNotConflict(t *testing.T) {
 // lock; started from the engine dir, it is still ours.
 func TestEngineNfqws2NotConflict(t *testing.T) {
 	f := newFake(t)
-	ours := filepath.Join(f.env.P.EngineDir, "zapret2-v1.0.6/binaries/linux-x86_64/nfqws2")
+	ours := filepath.Join(f.env.P.EngineDir, "zapret2-v1.0.7/binaries/linux-x86_64/nfqws2")
 	f.env.Procs = func() ([]doctor.Proc, error) {
 		return []doctor.Proc{{PID: 700, PPID: 690, Comm: "nfqws2", Exe: ours}}, nil
 	}

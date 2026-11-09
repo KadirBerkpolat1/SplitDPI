@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 // errStalled ends a download that receives no data for engineIdleTimeout.
@@ -42,7 +44,29 @@ func (o *Ops) EngineInstall(ctx context.Context, from string) (engine.Engine, er
 		}
 		r = newStallReader(ctx, cancel, resp.Body, engineIdleTimeout)
 	}
-	return engine.Install(o.P, r, engine.SHA256, o.GOARCH)
+	return o.installEngine(r, engine.SHA256)
+}
+
+// installEngine installs the engine in tarball, then removes the engines that
+// current no longer names. A running instance may still run one of those, so
+// while one holds the run lock they stay until the next `run` starts.
+func (o *Ops) installEngine(tarball io.Reader, wantSHA256 string) (engine.Engine, error) {
+	e, err := engine.Install(o.P, tarball, wantSHA256, o.GOARCH)
+	if err != nil {
+		return e, err
+	}
+	if _, _, held := supervisor.LockInfo(o.P); !held {
+		o.removeOldEngines(o.log())
+	}
+	return e, nil
+}
+
+// removeOldEngines removes the engines that neither current nor keep names. A
+// failure only leaves disk space taken, so it is logged, not returned.
+func (o *Ops) removeOldEngines(log io.Writer, keep ...engine.Engine) {
+	if err := engine.RemoveOld(o.P, keep...); err != nil {
+		fmt.Fprintln(log, i18n.T("engine.remove_old_failed", err))
+	}
 }
 
 func (o *Ops) EngineStatus() (engine.Engine, bool) {
