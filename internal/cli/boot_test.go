@@ -1,19 +1,25 @@
 package cli
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
+	"testing/fstest"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 // Fake runners, a temp root and a replaced ops.TerminateRun: no real service,
-// table or process is touched.
+// table, process or signal is touched.
 
 func systemctlCalls(f *fakeNft) []string {
 	f.mu.Lock()
@@ -49,7 +55,7 @@ func enableUnit(t *testing.T, p paths.Paths) {
 func TestConfigSetRunModeBootOnlyWarns(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	out, code := runOps(t, o, "config", "set", "run_mode", "boot")
 	eq(t, code, 0)
 	has(t, out, "run_mode is now boot.")
@@ -69,24 +75,42 @@ func TestConfigSetRunModeBootOnlyWarns(t *testing.T) {
 	}
 }
 
-// enable stops a background run, waits until it has exited, then sets the
-// service up in its place and saves run mode boot.
+// terminateWith replaces ops.TerminateRun: it records the signal among f's
+// calls, then does what to the run.
+func terminateWith(t *testing.T, f *fakeNft, what func() error) {
+	t.Helper()
+	old := ops.TerminateRun
+	ops.TerminateRun = func(pid int) error {
+		f.record(fmt.Sprintf("SIGTERM %d", pid))
+		return what()
+	}
+	t.Cleanup(func() { ops.TerminateRun = old })
+}
+
+// steps is what enable did to the service and the run, in order.
+func steps(f *fakeNft) []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.DeleteFunc(slices.Clone(f.calls), func(c string) bool {
+		return !strings.HasPrefix(c, "systemctl ") && !strings.HasPrefix(c, "SIGTERM ")
+	})
+}
+
+// enable sets the service up first, with the background run still on; then
+// it stops that run and waits until it has exited, starts the service in its
+// place and saves run mode boot.
 func TestEnableTakesOverBackgroundRun(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	release := holdLock(t, o.P, "background")
-	var signalled []int
-	old := ops.TerminateRun
-	ops.TerminateRun = func(pid int) error {
-		if len(systemctlCalls(f)) > 0 {
-			t.Error("service touched before the run was stopped")
+	terminateWith(t, f, func() error {
+		if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi"}; !slices.Equal(systemctlCalls(f), want) {
+			t.Errorf("at the stop: calls %q, want %q", systemctlCalls(f), want)
 		}
-		signalled = append(signalled, pid)
 		release()
 		return nil
-	}
-	t.Cleanup(func() { ops.TerminateRun = old })
+	})
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	out, code := runOps(t, o, "enable")
 	if code != 0 {
@@ -94,28 +118,139 @@ func TestEnableTakesOverBackgroundRun(t *testing.T) {
 	}
 	has(t, out, "Stopped the background run (pid 999999999): the service runs the bypass instead.")
 	has(t, out, "Service enabled and running.")
-	if !slices.Equal(signalled, []int{999999999}) {
-		t.Errorf("signalled %v", signalled)
-	}
-	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "systemctl start splitdpi"}; !slices.Equal(systemctlCalls(f), want) {
-		t.Errorf("calls %q, want %q", systemctlCalls(f), want)
+	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl start splitdpi"}; !slices.Equal(steps(f), want) {
+		t.Errorf("steps %q, want %q", steps(f), want)
 	}
 	if got := savedRunMode(t, o.P); got != config.RunBoot {
 		t.Errorf("run mode %q, want boot", got)
 	}
 }
 
-// A run that cannot be stopped is reported, and the service is left alone.
+// A run that cannot be stopped keeps running: the service is removed again
+// and the run mode stays.
 func TestEnableRunWontStop(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	holdLock(t, o.P, "background")
-	out, code := runOps(t, o, "enable") // the real TerminateRun: pid 999999999 does not exist
+	terminateWith(t, f, func() error { return syscall.ESRCH })
+	out, code := runOps(t, o, "enable")
 	eq(t, code, 1)
 	has(t, out, "Could not stop the background run (pid 999999999)")
-	if len(systemctlCalls(f)) > 0 {
-		t.Errorf("service touched: %q", f.calls)
+	has(t, out, "The bypass still runs (background).")
+	if strings.Contains(out, "Stopped the") {
+		t.Errorf("reports a takeover:\n%s", out)
+	}
+	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl disable splitdpi"}; !slices.Equal(steps(f), want) {
+		t.Errorf("steps %q, want %q", steps(f), want)
+	}
+	if _, err := os.Stat(o.P.SystemdUnit); !os.IsNotExist(err) {
+		t.Errorf("unit left: %v", err)
+	}
+	if got := savedRunMode(t, o.P); got != config.RunWindow {
+		t.Errorf("run mode %q, want window", got)
+	}
+}
+
+// A check that fails stops nothing: the background run stays and the
+// service is not touched.
+func TestEnableCheckFailsStopsNothing(t *testing.T) {
+	o, f := runOpsFor(t, systemdRoot())
+	writeConfig(t, o.P, withStrategy)
+	installBinary(t, o)
+	o.Root.(fstest.MapFS)["usr/local"].Sys = &syscall.Stat_t{Uid: 1000}
+	holdLock(t, o.P, "background")
+	terminateWith(t, f, func() error { return nil })
+	out, code := runOps(t, o, "enable")
+	eq(t, code, 1)
+	has(t, out, "The service cannot run "+o.P.BinPath+": /usr/local does not belong to root.")
+	if len(steps(f)) > 0 || strings.Contains(out, "Stopped the") {
+		t.Errorf("steps %q, output:\n%s", steps(f), out)
+	}
+	if _, mode, held := supervisor.LockInfo(o.P); !held || mode != "background" {
+		t.Errorf("the background run is gone: %q %v", mode, held)
+	}
+	if got := savedRunMode(t, o.P); got != config.RunWindow {
+		t.Errorf("run mode %q, want window", got)
+	}
+}
+
+// startFailsOps can enable the service, but the service does not start
+// after the background run there was stopped; a background run started
+// again comes up with pid 4545, or exits at once with fails.
+func startFailsOps(t *testing.T, fails bool) (*ops.Ops, *fakeNft) {
+	t.Helper()
+	o, f := runOpsFor(t, systemdRoot())
+	writeConfig(t, o.P, withStrategy)
+	installBinary(t, o)
+	installEngine(t, o.P)
+	release := holdLock(t, o.P, "background")
+	terminateWith(t, f, func() error { release(); return nil })
+	f.errs = map[string]error{"systemctl start splitdpi": errors.New("systemctl: exit status 1")}
+	// No systemd-run: the run starts again through Detach.
+	o.LookPath = func(name string) (string, error) {
+		if name == "systemd-run" {
+			return "", exec.ErrNotFound
+		}
+		return "/usr/bin/" + name, nil
+	}
+	o.Detach = func(*exec.Cmd) (<-chan error, error) {
+		exited := make(chan error, 1)
+		if fails {
+			exited <- errors.New("exit status 1")
+		} else {
+			holdLockAs(t, o.P, "background", 4545)
+		}
+		return exited, nil
+	}
+	return o, f
+}
+
+// A service that does not start after the run was stopped is removed again,
+// the run starts again in the background, and enable says so.
+func TestEnableStartFailsRestartsBackground(t *testing.T) {
+	o, f := startFailsOps(t, false)
+	out, code := runOps(t, o, "enable")
+	eq(t, code, 1)
+	has(t, out, "Could not start the service: systemctl: exit status 1.\nThe previous run was restarted in the background (pid 4545).")
+	if strings.Contains(out, "Stopped the") || strings.Contains(out, "Service enabled") {
+		t.Errorf("reports a takeover:\n%s", out)
+	}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl start splitdpi", "systemctl stop splitdpi", "systemctl disable splitdpi"}
+	if !slices.Equal(steps(f), want) {
+		t.Errorf("steps %q, want %q", steps(f), want)
+	}
+	if _, err := os.Stat(o.P.SystemdUnit); !os.IsNotExist(err) {
+		t.Errorf("unit left: %v", err)
+	}
+	if got := savedRunMode(t, o.P); got != config.RunWindow {
+		t.Errorf("run mode %q, want window", got)
+	}
+}
+
+// When the run cannot start again either, enable says that the bypass is
+// off and how to start it.
+func TestEnableStartFailsBypassDown(t *testing.T) {
+	o, _ := startFailsOps(t, true)
+	out, code := runOps(t, o, "enable")
+	eq(t, code, 1)
+	has(t, out, "Could not start the service: systemctl: exit status 1.")
+	has(t, out, "did not start in the background")
+	has(t, out, "The bypass is not running now. Start it with: sudo splitdpi run --background")
+}
+
+// A config that cannot be read has no run mode: status says so instead of
+// telling a user with the service enabled to disable it.
+func TestStatusUnreadableConfig(t *testing.T) {
+	o, _ := runOpsFor(t, systemdRoot())
+	writeConfig(t, o.P, "lang = \n")
+	enableUnit(t, o.P)
+	out, code := runOps(t, o, "status")
+	eq(t, code, 1)
+	has(t, out, "Starts at boot: yes.")
+	has(t, out, "The run mode cannot be read: config.toml: line 1")
+	if strings.Contains(out, "sudo splitdpi disable") || strings.Contains(out, "sudo splitdpi enable") {
+		t.Errorf("run mode advice without a run mode:\n%s", out)
 	}
 }
 
@@ -124,7 +259,7 @@ func TestEnableRunWontStop(t *testing.T) {
 func TestEnableWritesUnit(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	if out, code := runOps(t, o, "enable"); code != 0 {
 		t.Fatalf("enable exit %d:\n%s", code, out)

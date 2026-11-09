@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -32,22 +34,23 @@ type BinaryMissingError struct{ Path string }
 func (e BinaryMissingError) Error() string { return "no splitdpi binary at " + e.Path }
 
 // UnsafeBinaryError means the service, which root runs at every boot, would
-// run a binary at Path that someone other than root could replace; Install
-// is where to install it instead. Reason is one of UnsafeOwner,
-// UnsafeWritable and UnsafeLocation.
+// run a binary at Path that someone other than root could replace, because
+// of At: the binary itself or a directory on the way to it. Install is where
+// to install it instead; when Path is Install already, At needs fixing.
+// Reason is one of UnsafeOwner, UnsafeWritable and UnsafeLocation.
 type UnsafeBinaryError struct {
-	Path, Reason, Install string
+	Path, At, Reason, Install string
 }
 
 // Why a binary is not safe for the service.
 const (
-	UnsafeOwner    = "owner"    // it or its directory is not root's
-	UnsafeWritable = "writable" // a group or others may write to it or its directory
-	UnsafeLocation = "location" // it is in /tmp or a home directory
+	UnsafeOwner    = "owner"    // At is not root's
+	UnsafeWritable = "writable" // a group or others may write to At
+	UnsafeLocation = "location" // At is in a temporary or home directory
 )
 
 func (e UnsafeBinaryError) Error() string {
-	return fmt.Sprintf("%s is not safe to run as the service (%s)", e.Path, e.Reason)
+	return fmt.Sprintf("%s is not safe to run as the service (%s: %s)", e.Path, e.At, e.Reason)
 }
 
 // StopRunError means Enable could not stop the run the service was to replace.
@@ -63,17 +66,73 @@ func (e StopRunError) Error() string {
 
 func (e StopRunError) Unwrap() error { return e.Err }
 
-// EnableReport is what Enable did besides the service: Stopped is the mode of
-// the run it stopped so that the service could take its place, "" if none
-// ran, and PID that run's supervisor.
+// EnableReport is the run whose place the service took: Stopped is its mode,
+// "" if none ran or the service did not take over, and PID its supervisor.
+// The bypass this process ran is "foreground", with this process's PID.
 type EnableReport struct {
 	Stopped string
 	PID     int
 }
 
+// TakeoverError means the service Enable set up did not start in place of
+// the bypass running before it, for Err, so Enable removed it again; Undo is
+// why that failed, if it did. When Enable had stopped a run for the service
+// (Stopped, PID), the bypass runs again if a live run holds the lock
+// (Running is its mode: the run did not stop), else as the background run
+// Restarted that Enable started in its place; failing that, RestartErr says
+// why, and no bypass runs.
+type TakeoverError struct {
+	Stopped    string
+	PID        int
+	Err        error
+	Undo       error
+	Running    string
+	Restarted  int
+	RestartErr error
+}
+
+func (e TakeoverError) Error() string {
+	msg := e.Err.Error()
+	if e.Undo != nil {
+		msg += "; removing the service failed: " + e.Undo.Error()
+	}
+	switch {
+	case e.Stopped == "":
+	case e.Running != "":
+		msg += "; the " + e.Running + " run still runs"
+	case e.RestartErr != nil:
+		msg += "; the " + e.Stopped + " run could not be restarted: " + e.RestartErr.Error()
+	default:
+		msg += fmt.Sprintf("; the %s run was restarted in the background (pid %d)", e.Stopped, e.Restarted)
+	}
+	return msg
+}
+
+func (e TakeoverError) Unwrap() error { return e.Err }
+
 // TerminateRun sends SIGTERM to the supervisor of a run, which then stops and
 // removes its rules. Tests replace it so that no real process is signalled.
 var TerminateRun = func(pid int) error { return syscall.Kill(pid, syscall.SIGTERM) }
+
+// holdSignals keeps SIGHUP (the terminal closing), SIGINT (Ctrl+C) and
+// SIGTERM from ending this process until the returned func restores them.
+// They are caught, not ignored: signal.Ignore cannot be undone (signal.Reset
+// leaves SIGHUP and SIGINT ignored), and it would drop the TUI's own
+// handlers. A SIGHUP caught meanwhile ends the process once restored, as it
+// would have: its terminal is gone. Tests replace it.
+var holdSignals = func() (restore func()) {
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	dropped := make(chan os.Signal, 1)
+	signal.Notify(dropped, syscall.SIGINT, syscall.SIGTERM)
+	return func() {
+		signal.Stop(dropped)
+		signal.Stop(hup)
+		if len(hup) > 0 {
+			_ = syscall.Kill(os.Getpid(), syscall.SIGHUP)
+		}
+	}
+}
 
 var enableWait = 10 * time.Second
 
@@ -85,82 +144,212 @@ func (o *Ops) managerFor(bin string) (initsys.Manager, error) {
 	return initsys.For(sysinfo.DetectInit(o.Root), o.Exec, bin, o.P)
 }
 
-// Enable installs, enables and starts the service, waits for it to run and
-// saves run mode boot. Once nothing else stands in the way, a background or
-// foreground run is stopped first and the service takes its place.
-func (o *Ops) Enable(ctx context.Context) (EnableReport, error) {
-	var r EnableReport
+// Enable installs the service, makes the init start it at boot and starts it
+// in place of the bypass running now, then saves run mode boot. stopHere, if
+// not nil, stops the bypass this process runs (the TUI's window) and returns
+// once it has exited; another process's background or foreground run gets
+// SIGTERM. Enable goes in four steps, so that the bypass is down only
+// between the third and the fourth, with the signals that would end this
+// process held there:
+//
+//  1. Every check, with nothing changed yet.
+//  2. The service is installed and registered for boot, not started.
+//  3. The bypass running now stops and lets go of the lock.
+//  4. The service starts and runs.
+//
+// A failure in step 1 changes nothing. A later one removes the service
+// again and keeps the run mode: a TakeoverError says so, and how the bypass
+// stopped in step 3 was started again in the background.
+func (o *Ops) Enable(ctx context.Context, stopHere func()) (EnableReport, error) {
 	cfg, err := config.Load(o.P)
 	if err != nil {
-		return r, err
+		return EnableReport{}, err
 	}
 	if cfg.Strategy == nil {
-		return r, render.ErrNoStrategy
+		return EnableReport{}, render.ErrNoStrategy
 	}
 	// Without a service on this init, the binary does not matter.
 	if _, err := o.manager(); err != nil {
-		return r, err
+		return EnableReport{}, err
 	}
 	bin, err := o.serviceBinary()
 	if err != nil {
-		return r, err
+		return EnableReport{}, err
 	}
 	m, err := o.managerFor(bin)
 	if err != nil {
-		return r, err
+		return EnableReport{}, err
 	}
 	if err := o.refuseConflicts(ctx); err != nil {
-		return r, err
+		return EnableReport{}, err
 	}
-	if pid, mode, held := supervisor.LockInfo(o.P); held && mode != "service" {
-		if err := o.stopForService(pid, mode); err != nil {
-			return r, err
+	r, err := o.runToReplace(stopHere)
+	if err != nil {
+		return EnableReport{}, err
+	}
+
+	// What changes from here on is finished or undone, even once ctx is done.
+	ctx = context.WithoutCancel(ctx)
+	s := o.newSetup(m)
+	if err := s.register(ctx); err != nil {
+		return EnableReport{}, err
+	}
+	if r.Stopped == "" {
+		if err := o.startService(ctx, s); err != nil {
+			return EnableReport{}, TakeoverError{Err: err, Undo: s.undo(ctx)}
 		}
-		r.Stopped, r.PID = mode, pid
+		return r, o.SetRunMode(config.RunBoot)
 	}
-	if err := m.Install(); err != nil {
-		return r, err
+	restore := holdSignals()
+	defer restore()
+	err = o.stopForService(r, stopHere)
+	if err == nil {
+		err = o.startService(ctx, s)
 	}
-	if err := m.Enable(ctx); err != nil {
-		return r, err
-	}
-	if err := m.Start(ctx); err != nil {
-		return r, err
-	}
-	if _, ok := o.waitRunning("service", nil); !ok {
-		return r, ErrServiceNotStarted
+	if err != nil {
+		return EnableReport{}, o.takeBack(ctx, s, r, err)
 	}
 	return r, o.SetRunMode(config.RunBoot)
 }
 
-// stopForService stops the run in mode whose supervisor is pid, so that the
-// service can take its place, and waits until it has exited: SIGTERM, then
-// until no live process holds the lock. It stops only a background or
-// foreground run, and never one of this process (the TUI's own run), which
-// only its owner can stop.
-func (o *Ops) stopForService(pid int, mode string) error {
-	if mode != "background" && mode != "foreground" || pid == os.Getpid() {
-		return supervisor.ErrAlreadyRunning{Mode: mode}
+// runToReplace is the bypass running now that the service is to take the
+// place of: the one stopHere stops, or another process's background or
+// foreground run. A scan, and a run of this process that stopHere does not
+// stop, must not be stopped: ErrAlreadyRunning.
+func (o *Ops) runToReplace(stopHere func()) (EnableReport, error) {
+	pid, mode, held := supervisor.LockInfo(o.P)
+	here := pid == os.Getpid()
+	switch {
+	case stopHere != nil && (!held || here && mode == "foreground"):
+		return EnableReport{Stopped: "foreground", PID: os.Getpid()}, nil
+	case !held || mode == "service":
+		return EnableReport{}, nil
+	case !here && (mode == "background" || mode == "foreground"):
+		return EnableReport{Stopped: mode, PID: pid}, nil
 	}
-	if err := TerminateRun(pid); err != nil {
-		return StopRunError{Mode: mode, PID: pid, Err: err}
+	return EnableReport{}, supervisor.ErrAlreadyRunning{Mode: mode}
+}
+
+// stopForService stops the run r so that the service can take its place:
+// through stopHere, and with SIGTERM to another process's supervisor, if
+// that still holds the lock: it may have ended since, and its PID gone to
+// another process. Then it waits until no live process holds the lock.
+func (o *Ops) stopForService(r EnableReport, stopHere func()) error {
+	if stopHere != nil {
+		stopHere()
 	}
+	if pid, _, held := supervisor.LockInfo(o.P); held && pid == r.PID && pid != os.Getpid() {
+		if err := TerminateRun(pid); err != nil {
+			return StopRunError{Mode: r.Stopped, PID: pid, Err: err}
+		}
+	}
+	if !o.waitReleased() {
+		return StopRunError{Mode: r.Stopped, PID: r.PID, Err: ErrStopTimeout}
+	}
+	return nil
+}
+
+// startService starts the service and waits until it runs.
+func (o *Ops) startService(ctx context.Context, s *serviceSetup) error {
+	s.started = true
+	if err := s.m.Start(ctx); err != nil {
+		return err
+	}
+	if _, ok := o.waitRunning("service", nil); !ok {
+		return ErrServiceNotStarted
+	}
+	return nil
+}
+
+// takeBack removes the service that did not take the place of the run r,
+// for cause, and starts that run again in the background, unless a live run
+// holds the lock: r, when it did not stop.
+func (o *Ops) takeBack(ctx context.Context, s *serviceSetup, r EnableReport, cause error) error {
+	e := TakeoverError{Stopped: r.Stopped, PID: r.PID, Err: cause, Undo: s.undo(ctx)}
+	if s.started {
+		o.waitReleased() // the service may still be on its way down
+	}
+	if _, mode, held := supervisor.LockInfo(o.P); held {
+		e.Running = mode
+		return e
+	}
+	e.Restarted, e.RestartErr = o.Background(ctx)
+	return e
+}
+
+// serviceSetup is the service as Enable changes it, so that a failure can
+// put back what was there before: a service Enable installed is removed,
+// one it registered for boot is unregistered, one it started is stopped.
+type serviceSetup struct {
+	m          initsys.Manager
+	was        ServiceState // before Enable
+	wasRunning bool
+	registered bool // the init starts it at boot because of Enable
+	started    bool // Enable asked the init to start it
+}
+
+func (o *Ops) newSetup(m initsys.Manager) *serviceSetup {
+	_, mode, held := supervisor.LockInfo(o.P)
+	return &serviceSetup{
+		m:          m,
+		was:        ServiceState{Supported: true, Installed: m.Installed(), Enabled: m.Enabled()},
+		wasRunning: held && mode == "service",
+	}
+}
+
+// register installs the service and registers it for boot without starting
+// it. A failure undoes both.
+func (s *serviceSetup) register(ctx context.Context) error {
+	err := s.m.Install()
+	if err == nil {
+		err = s.m.Enable(ctx)
+	}
+	if err != nil {
+		if uerr := s.undo(ctx); uerr != nil {
+			err = errors.Join(err, uerr)
+		}
+		return err
+	}
+	s.registered = true
+	return nil
+}
+
+// undo puts the service back as Enable found it.
+func (s *serviceSetup) undo(ctx context.Context) error {
+	if s.started && !s.wasRunning {
+		_ = s.m.Stop(ctx) // it may never have come up; the rest still matters
+	}
+	var errs []error
+	if s.registered && !s.was.Enabled {
+		errs = append(errs, s.m.Disable(ctx))
+	}
+	if !s.was.Installed {
+		if err := s.m.Remove(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// waitReleased waits up to 10 s until no live process holds the lock.
+func (o *Ops) waitReleased() bool {
 	for range 100 {
 		if _, _, held := supervisor.LockInfo(o.P); !held {
-			return nil
+			return true
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return StopRunError{Mode: mode, PID: pid, Err: ErrStopTimeout}
+	return false
 }
 
-// serviceBinary is the splitdpi the service runs: BinPath, where install.sh
-// puts it by default, as always; else this binary, if only root can change
-// it. /proc/self/exe is what os.Executable reads on Linux, the path with
-// every symlink resolved; like the rest of the host it is read through Root.
+// serviceBinary is the splitdpi the service runs, provided only root can
+// change it: BinPath, where install.sh puts it by default, as always; else
+// this binary. /proc/self/exe is what os.Executable reads on Linux, the path
+// with every symlink resolved; like the rest of the host it is read through
+// Root.
 func (o *Ops) serviceBinary() (string, error) {
 	if _, err := os.Stat(o.P.BinPath); err == nil {
-		return o.P.BinPath, nil
+		return o.P.BinPath, o.checkBinary(o.P.BinPath, o.onHost(o.P.BinPath))
 	}
 	self, err := fs.ReadLink(o.Root, "proc/self/exe")
 	if err != nil {
@@ -168,46 +357,113 @@ func (o *Ops) serviceBinary() (string, error) {
 	}
 	// A binary replaced while it runs reads as "PATH (deleted)": PATH is the new one.
 	self = filepath.Clean(strings.TrimSuffix(self, " (deleted)"))
-	reason, err := unsafeReason(o.Root, self)
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
+	if err := o.checkBinary(self, self); errors.Is(err, fs.ErrNotExist) {
 		return "", BinaryMissingError{Path: o.P.BinPath}
-	case err != nil:
+	} else if err != nil {
 		return "", err
-	case reason != "":
-		return "", UnsafeBinaryError{Path: self, Reason: reason, Install: o.P.BinPath}
 	}
 	return self, nil
 }
 
+// checkBinary refuses bin as the service's binary unless only root can
+// change it; host is bin as the host has it.
+func (o *Ops) checkBinary(bin, host string) error {
+	at, reason, err := unsafeReason(o.Root, host)
+	switch {
+	case err != nil:
+		return err
+	case reason != "":
+		return UnsafeBinaryError{Path: bin, At: at, Reason: reason, Install: o.P.BinPath}
+	}
+	return nil
+}
+
+// onHost is path, one of P's, as the host has it: P.Root is the host's "/"
+// unless SPLITDPI_ROOT moves splitdpi's files elsewhere, as tests do.
+func (o *Ops) onHost(path string) string {
+	rel, err := filepath.Rel(o.P.Root, path)
+	if err != nil {
+		return path
+	}
+	return filepath.Join("/", rel)
+}
+
 // unsafeDirs keep temporary files or a user's files: home directories,
 // including where Fedora's atomic desktops keep them.
-var unsafeDirs = []string{"/tmp", "/home", "/var/home", "/root", "/var/roothome"}
+var unsafeDirs = []string{"/tmp", "/var/tmp", "/dev/shm", "/home", "/var/home", "/root", "/var/roothome"}
+
+func inUnsafeDir(path string) bool {
+	return slices.ContainsFunc(unsafeDirs, func(d string) bool { return strings.HasPrefix(path, d+"/") })
+}
 
 // unsafeReason says why root must not run bin, a host path read through
-// root, at every boot; "" when only root can change it: it and its directory
-// are root's, no group or others may write to them, and it is not in a
-// temporary or home directory.
-func unsafeReason(root fs.FS, bin string) (string, error) {
-	for _, d := range unsafeDirs {
-		if strings.HasPrefix(bin, d+"/") {
-			return UnsafeLocation, nil
-		}
+// root, at every boot, and what at: bin or a directory on the way to it. It
+// is "" when only root can change bin: bin and every directory the kernel
+// passes through to reach it, from "/" and along symbolic links, are root's
+// and not writable by a group or others, and neither bin nor where it leads
+// is in a temporary or home directory.
+func unsafeReason(root fs.FS, bin string) (at, reason string, err error) {
+	if inUnsafeDir(bin) {
+		return bin, UnsafeLocation, nil
 	}
-	for _, p := range []string{bin, filepath.Dir(bin)} {
-		// Joined to ".", the host path is a path in root; "/" becomes ".".
-		fi, err := fs.Stat(root, filepath.Join(".", p))
+	fi, err := fs.Stat(root, ".")
+	if err != nil {
+		return "", "", err
+	}
+	if reason := modeReason(fi); reason != "" {
+		return "/", reason, nil
+	}
+	dir, rest := "/", strings.Split(bin, "/")
+	for links := 0; len(rest) > 0; {
+		name := rest[0]
+		rest = rest[1:]
+		switch name {
+		case "", ".":
+			continue
+		case "..":
+			dir = filepath.Dir(dir)
+			continue
+		}
+		p := filepath.Join(dir, name)
+		// Joined to ".", a host path is a path in root.
+		fi, err := fs.Lstat(root, filepath.Join(".", p))
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
-		if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 {
-			return UnsafeOwner, nil
+		if fi.Mode()&fs.ModeSymlink != 0 {
+			if links++; links > 40 {
+				return "", "", &fs.PathError{Op: "stat", Path: bin, Err: syscall.ELOOP}
+			}
+			target, err := fs.ReadLink(root, filepath.Join(".", p))
+			if err != nil {
+				return "", "", err
+			}
+			if filepath.IsAbs(target) {
+				dir = "/"
+			}
+			rest = append(strings.Split(target, "/"), rest...)
+			continue
 		}
-		if fi.Mode().Perm()&0o022 != 0 {
-			return UnsafeWritable, nil
+		if reason := modeReason(fi); reason != "" {
+			return p, reason, nil
 		}
+		dir = p
 	}
-	return "", nil
+	if inUnsafeDir(dir) {
+		return dir, UnsafeLocation, nil
+	}
+	return "", "", nil
+}
+
+// modeReason is why someone other than root could change fi, "" if no one can.
+func modeReason(fi fs.FileInfo) string {
+	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || st.Uid != 0 {
+		return UnsafeOwner
+	}
+	if fi.Mode().Perm()&0o022 != 0 {
+		return UnsafeWritable
+	}
+	return ""
 }
 
 // waitRunning waits up to enableWait for a supervisor in mode to hold the

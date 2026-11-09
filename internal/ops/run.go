@@ -322,13 +322,10 @@ func (o *Ops) Stop() error {
 	} else if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return err
 	}
-	for range 100 {
-		if _, _, held := supervisor.LockInfo(o.P); !held {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
+	if !o.waitReleased() {
+		return ErrStopTimeout
 	}
-	return ErrStopTimeout
+	return nil
 }
 
 // Status returns the last recorded status, corrected to "stopped" when no

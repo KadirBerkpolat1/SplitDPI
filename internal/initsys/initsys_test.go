@@ -131,7 +131,11 @@ func TestOpenRCEnableDisable(t *testing.T) {
 	}
 }
 
-func TestRunitEnableRemove(t *testing.T) {
+// runit's link starts the service at once, so Enable leaves it to Start:
+// Enable must not start anything before the run the service replaces has
+// stopped. A new link needs no sv up, runsvdir starts it; a linked service
+// may have been told to stay down.
+func TestRunitStartLinks(t *testing.T) {
 	rec := &recorder{}
 	m, p := manager(t, sysinfo.Runit, rec.run)
 	if err := m.Install(); err != nil {
@@ -140,8 +144,14 @@ func TestRunitEnableRemove(t *testing.T) {
 	if err := m.Enable(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(p.RunitLink); err != nil {
+	if _, err := os.Lstat(p.RunitLink); !os.IsNotExist(err) || len(rec.calls) > 0 {
+		t.Fatalf("Enable started it: link %v, calls %q", err, rec.calls)
+	}
+	if err := m.Start(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := os.Stat(p.RunitLink); err != nil || len(rec.calls) > 0 {
+		t.Fatalf("after Start: link %v, calls %q", err, rec.calls)
 	}
 	if err := m.Start(context.Background()); err != nil {
 		t.Fatal(err)
@@ -173,7 +183,7 @@ func TestRunitFreshManagerDisables(t *testing.T) {
 	if err := installer.Install(); err != nil {
 		t.Fatal(err)
 	}
-	if err := installer.Enable(context.Background()); err != nil {
+	if err := installer.Start(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	fresh, _ := initsys.For(sysinfo.Runit, (&recorder{}).run, bin, p)
@@ -218,14 +228,14 @@ func TestEnabled(t *testing.T) {
 	}
 }
 
-// runit's Enable and Disable are the link itself.
-func TestRunitEnabledFollowsEnable(t *testing.T) {
+// runit's Start and Disable are the link itself.
+func TestRunitEnabledFollowsStart(t *testing.T) {
 	m, _ := manager(t, sysinfo.Runit, (&recorder{}).run)
 	if err := m.Install(); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.Enable(context.Background()); err != nil || !m.Enabled() {
-		t.Fatalf("after Enable: %v, enabled %v", err, m.Enabled())
+	if err := m.Start(context.Background()); err != nil || !m.Enabled() {
+		t.Fatalf("after Start: %v, enabled %v", err, m.Enabled())
 	}
 	if err := m.Disable(context.Background()); err != nil || m.Enabled() {
 		t.Fatalf("after Disable: %v, enabled %v", err, m.Enabled())

@@ -228,6 +228,7 @@ dns = "Encrypted DNS is on; VPN DNS and local network names still use your norma
 boot_yes = "Starts at boot: yes."
 boot_no = "Starts at boot: no."
 boot_unsupported = "Starts at boot: no (this init system has no splitdpi service)."
+run_mode_unknown = "The run mode cannot be read: %v"
 
 [cmd.dns]
 help = "Encrypt DNS (port 53) while splitdpi runs: off | auto | cloudflare | google | quad9 | adguard, over DoH or with --dot DoT. Without an argument, show the current choice."
@@ -267,10 +268,16 @@ not_started = "The service did not start within 10 s. See `sudo splitdpi logs` a
 no_logs = "No service log yet."
 took_over = "Stopped the %s run (pid %d): the service runs the bypass instead."
 stop_failed = "Could not stop the %s run (pid %d): %v. Stop it with `sudo splitdpi stop`, then run `sudo splitdpi enable` again."
+start_failed = "Could not start the service: %v."
+undo_failed = "Could not remove the service again: %v. To remove it: sudo splitdpi disable"
+takeover_kept = "The bypass still runs (%s)."
+takeover_restarted = "The previous run was restarted in the background (pid %d)."
+takeover_down = "The bypass is not running now. Start it with: sudo splitdpi run --background"
 unsafe = "The service cannot run %s: %s. Install splitdpi where only root can change it, for example: sudo install -m 755 %s %s"
-unsafe_owner = "it or its directory does not belong to root"
-unsafe_writable = "users other than root can change it or its directory"
-unsafe_location = "it is in /tmp or in a home directory"
+unsafe_default = "The service cannot run %s: %s. Only root may be able to change it and every directory above it; fix that, then run `sudo splitdpi enable` again."
+unsafe_owner = "%s does not belong to root"
+unsafe_writable = "users other than root can change %s"
+unsafe_location = "%s is in a temporary or home directory"
 
 [state]
 running = "running"
@@ -298,6 +305,8 @@ none = "none"
 running_here = "running in this window"
 probing = "Checking the apps' sites..."
 logs_empty = "Nothing logged yet."
+service_wait = "The boot service is being changed. Please wait: SplitDPI quits once that is done."
+service_busy = "The boot service is being changed; try again once that is done."
 
 [tui.act]
 run = "Run"

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
@@ -55,18 +57,25 @@ func holdLockAs(t *testing.T, p paths.Paths, mode string, pid int) func() {
 	return release
 }
 
-func installBinary(t *testing.T, p paths.Paths) {
+// installBinary puts splitdpi at BinPath as install.sh run with sudo does:
+// on the host, the file and every directory above it are root's, mode 0755.
+func installBinary(t *testing.T, o *ops.Ops) {
 	t.Helper()
-	os.MkdirAll(filepath.Dir(p.BinPath), 0o755)
-	if err := os.WriteFile(p.BinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	os.MkdirAll(filepath.Dir(o.P.BinPath), 0o755)
+	if err := os.WriteFile(o.P.BinPath, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	host := o.Root.(fstest.MapFS)
+	host["usr/local/bin/splitdpi"] = &fstest.MapFile{Mode: 0o755, Sys: &syscall.Stat_t{Uid: 0}}
+	for _, d := range []string{"usr/local/bin", "usr/local", "usr", "."} {
+		host[d] = &fstest.MapFile{Mode: fs.ModeDir | 0o755, Sys: &syscall.Stat_t{Uid: 0}}
 	}
 }
 
 func TestEnableUnsupportedInit(t *testing.T) {
 	o, f := runOpsFor(t, fstest.MapFS{})
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	out, code := runOps(t, o, "enable")
 	eq(t, code, 1)
 	has(t, out, "splitdpi run")
@@ -77,7 +86,7 @@ func TestEnableUnsupportedInit(t *testing.T) {
 
 func TestEnableNoStrategy(t *testing.T) {
 	o, _ := runOpsFor(t, systemdRoot())
-	installBinary(t, o.P)
+	installBinary(t, o)
 	out, code := runOps(t, o, "enable")
 	eq(t, code, 1)
 	has(t, out, "splitdpi scan")
@@ -94,7 +103,7 @@ func TestEnableNeedsInstalledBinary(t *testing.T) {
 func TestEnableSystemd(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
-	installBinary(t, o.P)
+	installBinary(t, o)
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	out, code := runOps(t, o, "enable")
 	if code != 0 {

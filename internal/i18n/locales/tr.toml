@@ -233,6 +233,7 @@ dns = "Şifreli DNS açık; VPN'in DNS'i ve yerel ağ adları yine her zamanki D
 boot_yes = "Açılışta başlar: evet."
 boot_no = "Açılışta başlar: hayır."
 boot_unsupported = "Açılışta başlar: hayır (bu init sisteminde splitdpi servisi yok)."
+run_mode_unknown = "Çalıştırma biçimi okunamıyor: %v"
 
 [cmd.dns]
 help = "splitdpi çalışırken DNS'i (53. port) şifreler: off | auto | cloudflare | google | quad9 | adguard; DoH ile ya da --dot ile DoT üzerinden. Argüman verilmezse geçerli seçimi gösterir."
@@ -272,10 +273,16 @@ not_started = "Servis 10 saniyede başlamadı. `sudo splitdpi logs` ve `sudo spl
 no_logs = "Henüz servis günlüğü yok."
 took_over = "Çalışan engel aşma (%s, pid %d) durduruldu; onu artık servis çalıştırıyor."
 stop_failed = "Çalışan engel aşma (%s, pid %d) durdurulamadı: %v. `sudo splitdpi stop` ile durdurun, sonra `sudo splitdpi enable` komutunu yeniden çalıştırın."
+start_failed = "Servis başlatılamadı: %v."
+undo_failed = "Servis geri kaldırılamadı: %v. Kaldırmak için: sudo splitdpi disable"
+takeover_kept = "Engel aşma hâlâ çalışıyor (%s)."
+takeover_restarted = "Önceki engel aşma arka planda yeniden başlatıldı (pid %d)."
+takeover_down = "Engel aşma şu anda çalışmıyor. Başlatmak için: sudo splitdpi run --background"
 unsafe = "Servis %s programını çalıştıramaz: %s. splitdpi'yi yalnızca root'un değiştirebileceği bir yere kurun, örneğin: sudo install -m 755 %s %s"
-unsafe_owner = "program ya da bulunduğu dizin root'a ait değil"
-unsafe_writable = "root dışındaki kullanıcılar programı ya da bulunduğu dizini değiştirebilir"
-unsafe_location = "program /tmp'de ya da bir ev dizininde"
+unsafe_default = "Servis %s programını çalıştıramaz: %s. Programı ve üstündeki her dizini yalnızca root değiştirebilmeli; bunu düzeltip `sudo splitdpi enable` komutunu yeniden çalıştırın."
+unsafe_owner = "%s root'a ait değil"
+unsafe_writable = "%s, root dışındaki kullanıcılar tarafından değiştirilebilir"
+unsafe_location = "%s geçici bir dizinde ya da bir ev dizininde"
 
 [state]
 running = "çalışıyor"
@@ -303,6 +310,8 @@ none = "yok"
 running_here = "bu pencerede çalışıyor"
 probing = "Uygulamaların sitelerine erişim deneniyor..."
 logs_empty = "Henüz kayıt yok."
+service_wait = "Açılış servisi değiştiriliyor. Lütfen bekleyin: bitince SplitDPI kapanacak."
+service_busy = "Açılış servisi değiştiriliyor; bitince yeniden deneyin."
 
 [tui.act]
 run = "Çalıştır"

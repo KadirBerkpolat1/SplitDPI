@@ -16,6 +16,8 @@ var ErrUnsupportedInit = errors.New("unsupported init system")
 
 type Manager interface {
 	Install() error
+	// Enable makes the init start the service at boot without starting it
+	// now. runit's link does both at once, so there Start makes it.
 	Enable(ctx context.Context) error
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
@@ -205,21 +207,26 @@ func (m *runit) Install() error {
 	return writeFile(filepath.Join(m.p.RunitDir, "finish"), RunitFinishContent(m.bin), 0o755)
 }
 
-func (m *runit) Enable(context.Context) error {
+// Enable does nothing: the link that makes runit start the service at boot
+// also starts it at once, so Start makes it.
+func (m *runit) Enable(context.Context) error { return nil }
+
+// Start links the service into runit's service directory: runsvdir starts
+// it within 5 s, and at every boot. A service runit supervises already may
+// have been told to stay down, so that one is told to come up.
+func (m *runit) Start(ctx context.Context) error {
+	if linked(m.p.RunitLink) {
+		_, err := m.run(ctx, "", "sv", "up", "splitdpi")
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(m.p.RunitLink), 0o755); err != nil {
 		return err
 	}
-	_ = os.Remove(m.p.RunitLink)
 	target, err := filepath.Abs(m.p.RunitDir)
 	if err != nil {
 		return err
 	}
 	return os.Symlink(target, m.p.RunitLink)
-}
-
-func (m *runit) Start(ctx context.Context) error {
-	_, err := m.run(ctx, "", "sv", "up", "splitdpi")
-	return err
 }
 
 func (m *runit) Stop(ctx context.Context) error {

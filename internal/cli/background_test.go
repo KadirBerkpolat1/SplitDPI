@@ -141,7 +141,7 @@ func TestRunBackgroundRefuses(t *testing.T) {
 // it is. enable takes its place instead (TestEnableTakesOverBackgroundRun).
 func TestBackgroundBlocksRun(t *testing.T) {
 	o := backgroundOps(t, systemdRoot())
-	installBinary(t, o.P)
+	installBinary(t, o)
 	holdLock(t, o.P, "background")
 	out, code := runOps(t, o, "run")
 	eq(t, code, 1)

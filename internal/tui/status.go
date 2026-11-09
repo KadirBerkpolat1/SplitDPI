@@ -94,16 +94,12 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		if msg.err != nil {
 			m.note = errText(msg.err)
 		}
-		move := m.moveTo
-		m.moveTo = ""
-		switch {
-		case m.quitting && move == config.RunBackground:
+		if m.quitting && m.toBackground {
+			m.toBackground = false
 			cmd := m.runBackground()
 			return m, cmd, true
-		case m.quitting && move == config.RunBoot:
-			cmd := m.enable()
-			return m, cmd, true
-		case m.quitting:
+		}
+		if m.quitting {
 			return m, tea.Quit, true
 		}
 		return m, m.refresh(), true

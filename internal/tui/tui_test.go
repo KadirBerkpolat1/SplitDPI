@@ -84,8 +84,11 @@ type fake struct {
 	takenOver  []string
 	revertRep  ops.RevertReport
 
-	svc       ops.ServiceState
-	enableErr error
+	svc        ops.ServiceState
+	enableErr  error         // a check of Enable fails, so nothing is stopped
+	startErr   error         // the service does not start once the run there stopped
+	restartErr error         // and that run does not start again either
+	gate       chan struct{} // Enable and Disable wait for it, if set
 }
 
 func newFake() *fake {
@@ -204,24 +207,54 @@ func (f *fake) Scan(ctx context.Context, opt scan.Options, progress func(string)
 }
 func (f *fake) HasIPv6(ctx context.Context) bool { return f.ipv6 }
 
-// Enable fails with enableErr, else runs the service and saves run mode
-// boot, as the real one does.
-func (f *fake) Enable(ctx context.Context) (ops.EnableReport, error) {
+// Enable goes the way the real one does. Its checks fail with enableErr, and
+// then nothing is stopped. Else the service is set up, the bypass running
+// now stops (the run here through stopHere), and the service runs and run
+// mode boot is saved; with startErr the service goes again instead, and the
+// stopped run starts again in the background unless restartErr.
+func (f *fake) Enable(ctx context.Context, stopHere func()) (ops.EnableReport, error) {
 	f.record("enable")
+	if f.gate != nil {
+		<-f.gate
+	}
+	f.mu.Lock()
+	checkErr, startErr, restartErr, st := f.enableErr, f.startErr, f.restartErr, f.st
+	f.mu.Unlock()
+	if checkErr != nil {
+		return ops.EnableReport{}, checkErr
+	}
+	f.record("service installed")
+	var r ops.EnableReport
+	switch {
+	case stopHere != nil:
+		stopHere()
+		r = ops.EnableReport{Stopped: "foreground", PID: os.Getpid()}
+	case st.State == "running" && (st.Mode == "background" || st.Mode == "foreground"):
+		f.record("stop " + st.Mode)
+		r = ops.EnableReport{Stopped: st.Mode, PID: st.PID}
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.enableErr != nil {
-		return ops.EnableReport{}, f.enableErr
+	if startErr != nil {
+		e := ops.TakeoverError{Stopped: r.Stopped, PID: r.PID, Err: startErr, RestartErr: restartErr}
+		f.st = supervisor.Status{State: "stopped"}
+		if r.Stopped != "" && restartErr == nil {
+			f.st, e.Restarted = supervisor.Status{State: "running", Mode: "background", PID: 4343}, 4343
+		}
+		return r, e
 	}
 	f.svc = ops.ServiceState{Supported: true, Installed: true, Enabled: true}
 	f.st = supervisor.Status{State: "running", Mode: "service", PID: 77}
 	f.cfg.RunMode = config.RunBoot
-	return ops.EnableReport{}, nil
+	return r, nil
 }
 
 // Disable removes the service and leaves run mode boot, as the real one does.
 func (f *fake) Disable(ctx context.Context) error {
 	f.record("disable")
+	if f.gate != nil {
+		<-f.gate
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.svc = ops.ServiceState{Supported: f.svc.Supported}

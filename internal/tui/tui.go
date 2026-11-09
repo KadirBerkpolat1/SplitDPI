@@ -53,7 +53,7 @@ type Backend interface {
 	StrategySet(id string) (ops.StrategyChoice, bool, error)
 	Scan(ctx context.Context, opt scan.Options, progress func(string)) (scan.Report, error)
 	HasIPv6(ctx context.Context) bool
-	Enable(ctx context.Context) (ops.EnableReport, error)
+	Enable(ctx context.Context, stopHere func()) (ops.EnableReport, error)
 	Disable(ctx context.Context) error
 	ServiceState() ops.ServiceState
 	AcceptDisclaimer() error
@@ -148,12 +148,14 @@ type Model struct {
 	quitting    bool
 
 	// The bypass this TUI starts in the background (run --background).
-	bgStarting bool
-	// Where quitting moves the bypass run here: the background, the service
-	// (boot) or nowhere ("").
-	moveTo    config.RunMode
-	bgPID     int  // the background run quitting left behind
-	toService bool // quitting left the bypass to the service
+	bgStarting   bool
+	toBackground bool // quitting moves the bypass run here to the background
+	bgPID        int  // the background run quitting left behind
+
+	// The service change under way, if any, and the quit that waits for it.
+	svcOp     *serviceOp
+	quitAfter bool
+	quitNote  string // what that change did, printed once the screen is back
 }
 
 func New(ctx context.Context, b Backend, version string) Model {
@@ -163,19 +165,22 @@ func New(ctx context.Context, b Backend, version string) Model {
 	return m
 }
 
-// Run opens the TUI on the terminal. The bypass it may run is stopped (and
-// its rules removed) before Run returns; then the share link of a strategy
-// saved in this session, and the background run quitting left, are printed
-// where the scrollback keeps them.
+// Run opens the TUI on the terminal. A service change the program ended in
+// the middle of is waited for, and the bypass it may run is stopped (and its
+// rules removed), before Run returns; then the share link of a strategy
+// saved in this session, the background run quitting left and what the
+// service change quitting waited for did are printed where the scrollback
+// keeps them.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx), tea.WithOutput(m.out)).Run()
 	if fm, ok := final.(Model); ok {
+		fm.waitService(m.out)
 		fm.stopRun()
 		fm.printShare(m.out)
 		fm.printBackground(m.out)
-		fm.printService(m.out)
+		fm.printQuitNote(m.out)
 	}
 	return err
 }
@@ -200,6 +205,9 @@ func (m Model) refresh() tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if d, ok := msg.(serviceDoneMsg); ok {
+		return m.serviceDone(d)
+	}
 	for _, p := range pages {
 		if next, cmd, ok := p.Update(m, msg); ok {
 			return next, cmd
@@ -245,11 +253,16 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.confirmQuit:
 		switch s {
 		case "y", "e", "enter", "b":
-			// runDoneMsg quits, or for "b" first moves the bypass on.
-			m.confirmQuit, m.quitting, m.moveTo = false, true, ""
-			if s == "b" {
-				m.moveTo = m.quitMove()
+			m.confirmQuit = false
+			// In run mode boot, "b" sets the service up, which stops the run
+			// here only once nothing stands in the way; quitting follows.
+			if s == "b" && m.quitMove() == config.RunBoot {
+				m.quitAfter = true
+				cmd := m.enable()
+				return m, cmd
 			}
+			// runDoneMsg quits, or for "b" first starts the background run.
+			m.quitting, m.toBackground = true, s == "b"
 			m.stopAll()
 			m.runCancel()
 		case "n", "h", "esc":
@@ -401,10 +414,16 @@ func keyMsg(k string) tea.KeyMsg {
 }
 
 // quit leaves the TUI, but first asks when it runs the bypass itself. It does
-// not leave while packages install: that would kill the package manager.
+// not leave while packages install: that would kill the package manager. Nor
+// during a service change, which cut short could leave no bypass running:
+// the quit goes on once that is done.
 func (m *Model) quit() tea.Cmd {
 	if m.wiz.pkgsInstalling {
 		m.note = i18n.T("tui.pkgs.wait")
+		return nil
+	}
+	if m.svcOp != nil {
+		m.note, m.quitAfter = i18n.T("tui.service_wait"), true
 		return nil
 	}
 	if m.running {
@@ -429,13 +448,15 @@ func (m *Model) stopAll() {
 
 // errText words an ops error for the note line, as the CLI does.
 func errText(err error) string {
+	var takeover ops.TakeoverError
 	var conflict ops.ConflictError
 	var already supervisor.ErrAlreadyRunning
 	var notStarted ops.BackgroundNotStartedError
 	var nobin ops.BinaryMissingError
 	var unsafe ops.UnsafeBinaryError
-	var stop ops.StopRunError
 	switch {
+	case errors.As(err, &takeover):
+		return takeoverText(takeover)
 	case errors.As(err, &notStarted):
 		return i18n.T("background.not_started", notStarted.Log)
 	case errors.Is(err, initsys.ErrUnsupportedInit):
@@ -443,11 +464,7 @@ func errText(err error) string {
 	case errors.As(err, &nobin):
 		return i18n.T("service.no_binary", nobin.Path, nobin.Path)
 	case errors.As(err, &unsafe):
-		return i18n.T("service.unsafe", unsafe.Path, i18n.T("service.unsafe_"+unsafe.Reason), unsafe.Path, unsafe.Install)
-	case errors.As(err, &stop):
-		return i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, stop.Err)
-	case errors.Is(err, ops.ErrServiceNotStarted):
-		return i18n.T("service.not_started")
+		return unsafeText(unsafe)
 	case errors.Is(err, ops.ErrStopTimeout):
 		return i18n.T("stop.timeout")
 	case errors.As(err, &already):

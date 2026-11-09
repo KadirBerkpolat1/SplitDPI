@@ -116,7 +116,11 @@ func runStatus(_ context.Context, o *ops.Ops, w io.Writer, args []string) error 
 			fmt.Fprintln(w, i18n.T("background.until_reboot"))
 		}
 	}
-	printBoot(w, o.ServiceState(), cfg.RunMode)
+	var cfgErr error
+	if cfg.RunMode == "" { // config.Load sets a run mode unless it fails
+		cfgErr = err
+	}
+	printBoot(w, o.ServiceState(), cfg.RunMode, cfgErr)
 	if cfg.Strategy != nil {
 		fmt.Fprintln(w, i18n.T("status.strategy", cfg.Strategy.ID, cfg.Strategy.Source))
 	} else {
