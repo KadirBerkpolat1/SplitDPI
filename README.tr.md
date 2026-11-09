@@ -8,7 +8,7 @@ komutla geride iz bırakmadan kaldırır.
 
 **Durum:** v0.2.6. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
 Fedora, Alpine sanal makinelerinde denendi. v0.2.0'dan bu yana gelen
-özellikler otomatik testlerle ve altı dağıtımda çalışan CI ile sınanıyor; gerçek
+özellikler otomatik testlerle ve yedi dağıtımda çalışan CI ile sınanıyor; gerçek
 bir bağlantıda ya da sanal makinelerde yeniden denenmedi. Ayrıntılar
 [yayın kontrol listesinde](docs/release-checklist.md).
 
@@ -59,15 +59,58 @@ eksik paketleri sorup kurar, zapret2 motorunu kendisi kurar, sağlayıcınızı
 bulur, hangi uygulamaların çalışması gerektiğini sorar, stratejileri dener ve
 SplitDPI'yi hemen ya da her açılışta çalıştırır.
 
+Başka bir yere kurmak için `SPLITDPI_PREFIX` verin (varsayılanı
+`/usr/local`); şu komut programı `/opt/splitdpi/bin/splitdpi` olarak kurar:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh | sudo SPLITDPI_PREFIX=/opt/splitdpi sh
+```
+
+Servis, `/usr/local/bin/splitdpi` varsa onu, yoksa servisi kuran programı
+gerçek yoluyla çalıştırır. Servisi her açılışta root çalıştırdığı için
+`enable` şu programları reddeder: `/tmp`, `/home`, `/var/home`, `/root` ya da
+`/var/roothome` altındakileri ve dosyası ya da dizini root'a ait olmayan veya
+root dışındaki kullanıcıların değiştirebildiği programları. Hata mesajı
+programı nereye kurmanız gerektiğini de söyler.
+
+SplitDPI'yi güncelledikten sonra kurulu zapret2 motoru,
+`sudo splitdpi engine install` yeni sürümün sabitlediği motoru kurana kadar
+kullanılmaya devam eder; `doctor` eski motoru bildirir ve yeniden tarama
+ister.
+
 Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
-`splitdpi run`) çalışırsa pencere kapanınca durur. Bu oturum için arka planda
-(`b` ya da `sudo splitdpi run --background`) çalışırsa terminal kapansa da
-sürer, bilgisayar yeniden başlayınca kapanır; arayüz engel aşmayı kendisi
-çalıştırırken çıkarsanız onu arka plana almayı önerir. Her açılışta
-(`sudo splitdpi enable`) servis olarak çalışır. Durum sayfasındaki `r`
-tuşunun bunlardan hangisini kullanacağı Ayarlar → Çalıştırma biçimi'nden
-seçilir; seçmek yalnızca tercihi kaydeder, komutlar olduğu gibi kalır.
-Hangisi olursa olsun `sudo splitdpi stop` durdurur.
+`splitdpi run`) çalışırsa pencere kapanınca durur. Arka planda (`b` ya da
+`sudo splitdpi run --background`) çalışırsa terminal kapansa da sürer,
+bilgisayar yeniden başlayınca kapanır. systemd'de geçici
+`splitdpi-background.service` birimi olarak çalışır: oturumu kapatsanız da
+sürer, bilgisayar kapanırken de kurallarını kaldırarak düzgünce durur. systemd
+ya da `systemd-run` yoksa veya `systemd-run` başarısız olursa onun yerine
+ayrık bir süreç olarak çalışır. Her açılışta (`sudo splitdpi enable`) servis
+olarak çalışır; `enable` arka planda ya da bir pencerede çalışan engel aşmayı
+durdurur ve yerine servis geçer. Hangisi olursa olsun `sudo splitdpi stop`
+durdurur.
+
+Durum sayfasındaki `r` tuşunun bunlardan hangisini kullanacağı Ayarlar →
+Çalıştırma biçimi'nden seçilir. "Açılışta da başlasın" seçilirse önce sorulur,
+sonra servis hemen kurulur, etkinleştirilir ve başlatılır; o an çalışan engel
+aşma servise taşınır ve yaklaşık bir saniye engel aşılmaz. Servis kuruluyken
+"Bu pencerede" ya da "Arka planda" seçilirse önce sorulur, sonra servis
+kaldırılır. Servis modu olmayan init sistemlerinde (bkz.
+[Desteklenen sistemler](#desteklenen-sistemler)) "Açılışta da başlasın"
+sunulmaz. SplitDPI'nin açılışta başlayıp başlamadığını, init sisteminin
+söylediğine göre, Ayarlar'daki "Açılışta başlar" ve Durum sayfasındaki
+"Açılışta" satırı gösterir. Çalıştırma biçimi "Açılışta da başlasın" olduğu
+halde servis kurulu değilse ikisi de uyarır; Ayarlar'daki o satırda Enter
+servisi kurar, Durum sayfasında `r` de (engel aşma çalışıyorsa `e`) aynı işi
+görür. Arayüz engel aşmayı kendisi çalıştırırken çıkarsanız onu arka plana,
+çalıştırma biçimi "Açılışta da başlasın" ise servise taşımayı önerir.
+
+Komut satırında `enable` çalıştırma biçimini `boot` olarak kaydeder, `disable`
+ve `revert` ise yeniden `window` yapar. `sudo splitdpi config set run_mode`
+yalnızca seçimi kaydeder; servis seçimle uyuşmuyorsa (örneğin `boot` seçildiği
+halde servis kurulu değilse) uyarır. `sudo splitdpi status` SplitDPI'nin
+açılışta başlayıp başlamadığını da yazar. Servis başlarken SplitDPI zaten
+çalışıyorsa servis 4 koduyla çıkar ve yeniden başlatılmaz.
 
 ## Terminal arayüzü
 
@@ -78,12 +121,12 @@ Hangisi olursa olsun `sudo splitdpi stop` durdurur.
   tuşlarıyla ya da fareyle tıklayarak seçin; Enter veya Tab sayfaya girer, Esc
   menüye döner.
 - **Sağda:** seçilen sayfa. Ayarlar sayfası her ayarı değeriyle birlikte
-  gruplar halinde listeler: Genel (dil, çalıştırma biçimi), Engel aşma
-  (kapsam, hariç tutulan siteler, strateji), DNS, Ağ (dokunulmayacak
-  arayüzler, sağlayıcıyı bulan servis), Bakım (hazır ayarları güncelleme,
-  motoru kurma, sistemi denetleme, zapret'ten geçme ya da ona geri dönme,
-  kaldırma) ve Gelişmiş (kuyruk numarası). `/` listede arar; Esc aramayı
-  temizler.
+  gruplar halinde listeler: Genel (dil, çalıştırma biçimi, açılışta başlayıp
+  başlamadığı), Engel aşma (kapsam, hariç tutulan siteler, strateji), DNS, Ağ
+  (dokunulmayacak arayüzler, sağlayıcıyı bulan servis), Bakım (hazır ayarları
+  güncelleme, motoru kurma, sistemi denetleme, zapret'ten geçme ya da ona geri
+  dönme, kaldırma) ve Gelişmiş (kuyruk numarası). `/` listede arar; Esc
+  aramayı temizler.
 - **Altta:** son işin sonucu; altında sayfanın işleri, tuşlarıyla birlikte
   düğmeler halinde (sağda `?` Yardım ve `q` Çık). Bir düğmeye tıklamak tuşuna
   basmakla aynı işi yapar. En altta seçili işi yapan komut durur; arayüzde
@@ -109,15 +152,15 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 | `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da tarama yapmadan birini seçer. |
 | `splitdpi run` | Bu terminalde çalışır; Ctrl-C durdurur ve kurallarını kaldırır. |
 | `splitdpi run --background` | Terminal kapansa da bilgisayar yeniden başlayana kadar çalışır; çıktısı `/var/log/splitdpi.log` dosyasına yazılır. |
-| `splitdpi enable` / `disable` | Servisi kurup başlatır ya da durdurup kaldırır. |
-| `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ya da günlüğünü gösterir. |
+| `splitdpi enable` / `disable` | Servisi kurup başlatır (arka planda ya da bir pencerede çalışan engel aşmanın yerini alır) ya da durdurup kaldırır. |
+| `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ve açılışta başlayıp başlamadığını ya da günlüğünü gösterir. |
 | `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
 | `splitdpi sites list\|add ALAN\|remove ALAN\|import DOSYA` | Engel aşmanın her zaman uygulandığı kendi engelli sitelerinizi yönetir. |
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi takeover [--yes]` | Kurulu başka bir zapret ya da zapret2'yi bırakıp SplitDPI'ye geçer. |
 | `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Şifreli DNS'i açar ya da kapatır; argüman verilmezse geçerli seçimi gösterir. |
 | `splitdpi config [get ANAHTAR\|set ANAHTAR DEĞER\|reset ANAHTAR]` | Ayarları varsayılanlarıyla listeler ya da birini gösterir, değiştirir veya varsayılana döndürür. |
-| `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da günceller. |
+| `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da SHA-256'sını doğrulayarak günceller; bkz. [Hazır ayarlar nereden geliyor](#hazır-ayarlar-nereden-geliyor). |
 | `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
 | `splitdpi uninstall [--yes]` | SplitDPI'yi, dosyalarını ve programını kaldırır. |
 | `splitdpi version` | Sürümü yazar. |
@@ -317,9 +360,10 @@ tüm trafiği geçirir.
 `sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
 günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
 kalırsa onu listeler, sorunu giderdikten sonra komutu yeniden çalıştırın.
-Terminal arayüzünde Ayarlar sayfası da listeyi gösterdikten sonra aynı işi
-yapar. Bu işlem geri alınamaz: SplitDPI'yi yeniden kullanmak için
-[Hızlı başlangıç](#hızlı-başlangıç) bölümündeki gibi yeniden kurun.
+`SPLITDPI_PREFIX` ile başka bir yere kurulan program yerinde kalır; onu
+kendiniz silin. Terminal arayüzünde Ayarlar sayfası da listeyi gösterdikten
+sonra aynı işi yapar. Bu işlem geri alınamaz: SplitDPI'yi yeniden kullanmak
+için [Hızlı başlangıç](#hızlı-başlangıç) bölümündeki gibi yeniden kurun.
 
 ## Ülkeler
 
@@ -354,6 +398,16 @@ gibi MIT lisanslı başka derlemeler de stratejileri karşılaştırmak için
 kullanılır. Her sağlayıcı dosyası, stratejilerinin gerçek bir bağlantıda en son
 ne zaman çalıştığını `reported` alanında tutar; `scan`'in yazdığı bağlantılarla
 gelen bildirimler bu dosyaları besler.
+
+`sudo splitdpi presets update` ya da Ayarlar'daki "Hazır ayarları güncelle",
+SplitDPI-presets'in son sürümündeki `presets.tar.gz` dosyasını yanında
+yayımlanan `presets.tar.gz.sha256` dosyasıyla birlikte indirir; ikisi
+uyuşmadıkça hiçbir şeyi açmaz. `preset bundle checksum` ile başlayan bir hata,
+sağlama dosyasının olmadığı, indirilemediği ya da tek bir
+`<sha256>  presets.tar.gz` satırından oluşmadığı anlamına gelir;
+`preset bundle SHA-256 mismatch` ise indirilen dosyanın onunla uyuşmadığını,
+yani yolda bozulduğunu ya da değiştirildiğini gösterir. Her iki durumda da
+kullanılan hazır ayarlar olduğu gibi kalır.
 
 ## Strateji bildirme
 

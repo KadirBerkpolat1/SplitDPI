@@ -6,9 +6,9 @@ Linux when your ISP blocks them with deep packet inspection (DPI). It finds a
 runs it on demand or as a service, and removes every trace with one command.
 
 **Status:** v0.2.6. v0.1.0 was tested on a real Türk Telekom connection and in
-Debian, Fedora and Alpine VMs. The features added since v0.2.0 are
-covered by automated tests and by CI on six distros, but were not retested on a
-real connection or in VMs; see [the release checklist](docs/release-checklist.md).
+Debian, Fedora and Alpine VMs. The features added since v0.2.0 are covered by
+automated tests and by CI on seven distros, but were not retested on a real
+connection or in VMs; see [the release checklist](docs/release-checklist.md).
 
 [Türkçe](README.tr.md)
 
@@ -55,14 +55,53 @@ start the setup. The setup checks your system, offers to install missing
 packages, installs the zapret2 engine itself, finds your ISP, asks which apps
 should work, tests strategies, and then runs SplitDPI now or at every boot.
 
+To install it somewhere else, set `SPLITDPI_PREFIX` (default `/usr/local`);
+this installs `/opt/splitdpi/bin/splitdpi`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh | sudo SPLITDPI_PREFIX=/opt/splitdpi sh
+```
+
+The service runs `/usr/local/bin/splitdpi` if that exists, else the binary
+that sets it up, by its real path. Because root runs the service at every boot,
+`enable` refuses a binary under `/tmp`, `/home`, `/var/home`, `/root` or
+`/var/roothome`, or one whose file or directory is not owned by root or can be
+changed by users other than root; the error says where to install it instead.
+
+After you upgrade SplitDPI, the zapret2 engine already installed stays in use
+until `sudo splitdpi engine install` installs the one the new version pins;
+`doctor` reports the older engine and asks for a new scan.
+
 There are three ways to keep the bypass on. In the UI window (`r`, or
-`splitdpi run`) it stops when that window closes. In the background for this
-session (`b`, or `sudo splitdpi run --background`) it keeps running after the
-terminal closes and stops at reboot; quitting the UI while it runs the bypass
-offers to move it there. At every boot (`sudo splitdpi enable`) it runs as a
-service. Settings → Run mode chooses which of the three `r` on the Status page
-uses; it only saves the choice, and the CLI commands stay as they are.
+`splitdpi run`) it stops when that window closes. In the background (`b`, or
+`sudo splitdpi run --background`) it keeps running after the terminal closes
+and stops at reboot. On systemd it runs as the transient unit
+`splitdpi-background.service`: logging out leaves it running, and shutdown
+stops it cleanly, removing its rules. Without systemd or `systemd-run`, or if
+that fails, it runs as a detached process instead. At every boot
+(`sudo splitdpi enable`) it runs as a service; `enable` stops a bypass running
+in the background or in a window, and the service takes its place.
 `sudo splitdpi stop` stops any of them.
+
+Settings → Run mode chooses which of the three `r` on the Status page uses.
+Choosing "Also at boot" asks, then installs, enables and starts the service at
+once; a bypass running now moves to it, leaving about a second without the
+bypass. Choosing "In this window" or "In the background" while the service is
+set up asks, then removes the service. Init systems without service mode (see
+[Supported systems](#supported-systems)) do not offer "Also at boot". Settings
+("Starts at boot") and Status ("At boot") show whether SplitDPI starts at boot,
+as the init system has it. When the run mode is "Also at boot" but the service
+is not set up, both warn; Enter on that Settings row sets it up, as does `r`
+on Status (`e` while the bypass runs). Quitting the UI while it runs the
+bypass offers to move it to the background, or in run mode "Also at boot" to
+the service.
+
+On the command line, `enable` saves run mode `boot`, and `disable` and
+`revert` set it back to `window`. `sudo splitdpi config set run_mode` only
+saves the choice, and warns when the service does not match it (for example
+`boot` without the service set up). `sudo splitdpi status` also says whether
+SplitDPI starts at boot. If SplitDPI already runs when the service starts, the
+service exits with code 4 and is not restarted.
 
 ## The terminal UI
 
@@ -73,11 +112,11 @@ uses; it only saves the choice, and the CLI commands stay as they are.
   arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
   the menu.
 - **Right:** the chosen page. Settings lists every setting with its value,
-  grouped as General (language, run mode), Bypass (scope, excluded sites,
-  strategy), DNS, Network (interfaces to leave alone, provider lookup
-  service), Maintenance (update presets, install the engine, check the
-  system, switch from or back to zapret, uninstall) and Advanced (queue
-  number). `/` searches the list; Esc clears the search.
+  grouped as General (language, run mode, whether it starts at boot), Bypass
+  (scope, excluded sites, strategy), DNS, Network (interfaces to leave alone,
+  provider lookup service), Maintenance (update presets, install the engine,
+  check the system, switch from or back to zapret, uninstall) and Advanced
+  (queue number). `/` searches the list; Esc clears the search.
 - **Bottom:** the result of the last action; under it the page's actions as
   buttons with their keys (`?` Help and `q` Quit on the right), where a click
   does what the key does; and last the command that does the selected action,
@@ -102,15 +141,15 @@ needs a terminal of at least 80x24.
 | `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one without a scan. |
 | `splitdpi run` | Runs in this terminal; Ctrl-C stops it and removes its rules. |
 | `splitdpi run --background` | Runs on after the terminal closes, until reboot; its output goes to `/var/log/splitdpi.log`. |
-| `splitdpi enable` / `disable` | Installs and starts the service, or stops and removes it. |
-| `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state, or shows its log. |
+| `splitdpi enable` / `disable` | Installs and starts the service, which takes over from a background or window run, or stops and removes it. |
+| `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state and whether it starts at boot, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
 | `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install over to SplitDPI. |
 | `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Turns encrypted DNS on or off; without an argument, shows the current choice. |
 | `splitdpi config [get KEY\|set KEY VALUE\|reset KEY]` | Lists the settings with their defaults, or shows, changes or resets one. |
-| `splitdpi presets list\|update` | Shows or refreshes the preset data. |
+| `splitdpi presets list\|update` | Shows the preset data, or refreshes it after checking its SHA-256; see [Where presets come from](#where-presets-come-from). |
 | `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
 | `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
 | `splitdpi version` | Prints the version. |
@@ -293,9 +332,10 @@ through until you run `revert` or start it again.
 `sudo splitdpi uninstall` lists what it would remove and changes nothing.
 `sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
 the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove;
-run it again once that is fixed. Settings in the terminal UI does the same
-after showing the list. It cannot be undone: to use SplitDPI again, install it
-again as in [Quick start](#quick-start).
+run it again once that is fixed. A binary installed elsewhere with
+`SPLITDPI_PREFIX` stays; delete it yourself. Settings in the terminal UI does
+the same after showing the list. It cannot be undone: to use SplitDPI again,
+install it again as in [Quick start](#quick-start).
 
 ## Countries
 
@@ -330,6 +370,15 @@ Taşkın (MIT). Other MIT-licensed collections, such as
 are used to cross-check them. Each ISP file records in its `reported` field
 when its strategies were last seen working on a real connection; the links
 `scan` prints feed these files.
+
+`sudo splitdpi presets update`, or "Update presets" under Settings, downloads
+`presets.tar.gz` from the latest SplitDPI-presets release together with the
+`presets.tar.gz.sha256` file published next to it, and unpacks nothing unless
+the two match. An error that starts with `preset bundle checksum` means the
+checksum file is missing, could not be downloaded, or is not a single
+`<sha256>  presets.tar.gz` line; `preset bundle SHA-256 mismatch` means the
+download does not match it, so it was damaged or changed on the way. Either
+way the presets in use stay as they are.
 
 ## Reporting a strategy
 
