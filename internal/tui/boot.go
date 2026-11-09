@@ -190,6 +190,8 @@ func takeoverText(e ops.TakeoverError) string {
 	var stop ops.StopRunError
 	var parts []string
 	switch {
+	case errors.As(e.Err, &stop) && errors.Is(stop.Err, ops.ErrStopTimeout):
+		parts = append(parts, i18n.T("service.stop_slow", i18n.Enum("mode", stop.Mode), stop.PID))
 	case errors.As(e.Err, &stop):
 		parts = append(parts, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, firstLine(stop.Err)))
 	case errors.Is(e.Err, ops.ErrServiceNotStarted):
@@ -204,6 +206,8 @@ func takeoverText(e ops.TakeoverError) string {
 	case e.Stopped == "":
 	case e.Running != "":
 		parts = append(parts, i18n.T("service.takeover_kept", i18n.Enum("mode", e.Running)))
+	case e.Stopping != "":
+		parts = append(parts, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping)))
 	case e.RestartErr != nil:
 		parts = append(parts, i18n.T("service.takeover_down"))
 	default:

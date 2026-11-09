@@ -77,16 +77,20 @@ type EnableReport struct {
 // TakeoverError means the service Enable set up did not start in place of
 // the bypass running before it, for Err, so Enable removed it again; Undo is
 // why that failed, if it did. When Enable had stopped a run for the service
-// (Stopped, PID), the bypass runs again if a live run holds the lock
-// (Running is its mode: the run did not stop), else as the background run
-// Restarted that Enable started in its place; failing that, RestartErr says
-// why, and no bypass runs.
+// (Stopped, PID), the bypass runs again as the background run Restarted that
+// Enable started in its place once no run held the lock; failing that,
+// RestartErr says why, and no bypass runs. Running is the mode of a run that
+// holds the lock and was never told to stop: it still runs. Stopping is the
+// mode of one told to stop, the run Enable stopped or the service, that
+// still held it after the wait: it is on its way down, and no bypass runs
+// once it is gone.
 type TakeoverError struct {
 	Stopped    string
 	PID        int
 	Err        error
 	Undo       error
 	Running    string
+	Stopping   string
 	Restarted  int
 	RestartErr error
 }
@@ -100,6 +104,8 @@ func (e TakeoverError) Error() string {
 	case e.Stopped == "":
 	case e.Running != "":
 		msg += "; the " + e.Running + " run still runs"
+	case e.Stopping != "":
+		msg += "; the " + e.Stopping + " run is still stopping"
 	case e.RestartErr != nil:
 		msg += "; the " + e.Stopped + " run could not be restarted: " + e.RestartErr.Error()
 	default:
@@ -152,14 +158,15 @@ func (o *Ops) managerFor(bin string) (initsys.Manager, error) {
 // between the third and the fourth, with the signals that would end this
 // process held there:
 //
-//  1. Every check, with nothing changed yet.
+//  1. Every check, with nothing changed yet, the service's own run being
+//     able to start among them.
 //  2. The service is installed and registered for boot, not started.
 //  3. The bypass running now stops and lets go of the lock.
 //  4. The service starts and runs.
 //
 // A failure in step 1 changes nothing. A later one removes the service
-// again and keeps the run mode: a TakeoverError says so, and how the bypass
-// stopped in step 3 was started again in the background.
+// again and keeps the run mode: a TakeoverError says so, and whether the
+// bypass stopped in step 3 was started again in the background.
 func (o *Ops) Enable(ctx context.Context, stopHere func()) (EnableReport, error) {
 	cfg, err := config.Load(o.P)
 	if err != nil {
@@ -183,6 +190,10 @@ func (o *Ops) Enable(ctx context.Context, stopHere func()) (EnableReport, error)
 	if err := o.refuseConflicts(ctx); err != nil {
 		return EnableReport{}, err
 	}
+	// A config no run starts with would stop the bypass for a service that fails.
+	if _, err := o.prepare(cfg, "service", io.Discard, nil); err != nil {
+		return EnableReport{}, err
+	}
 	r, err := o.runToReplace(stopHere)
 	if err != nil {
 		return EnableReport{}, err
@@ -202,12 +213,12 @@ func (o *Ops) Enable(ctx context.Context, stopHere func()) (EnableReport, error)
 	}
 	restore := holdSignals()
 	defer restore()
-	err = o.stopForService(r, stopHere)
+	told, err := o.stopForService(r, stopHere)
 	if err == nil {
 		err = o.startService(ctx, s)
 	}
 	if err != nil {
-		return EnableReport{}, o.takeBack(ctx, s, r, err)
+		return EnableReport{}, o.takeBack(ctx, s, r, told, err)
 	}
 	return r, o.SetRunMode(config.RunBoot)
 }
@@ -234,19 +245,22 @@ func (o *Ops) runToReplace(stopHere func()) (EnableReport, error) {
 // through stopHere, and with SIGTERM to another process's supervisor, if
 // that still holds the lock: it may have ended since, and its PID gone to
 // another process. Then it waits until no live process holds the lock.
-func (o *Ops) stopForService(r EnableReport, stopHere func()) error {
+// told is whether r was told to stop.
+func (o *Ops) stopForService(r EnableReport, stopHere func()) (told bool, err error) {
 	if stopHere != nil {
 		stopHere()
+		told = true
 	}
 	if pid, _, held := supervisor.LockInfo(o.P); held && pid == r.PID && pid != os.Getpid() {
 		if err := TerminateRun(pid); err != nil {
-			return StopRunError{Mode: r.Stopped, PID: pid, Err: err}
+			return false, StopRunError{Mode: r.Stopped, PID: pid, Err: err}
 		}
+		told = true
 	}
 	if !o.waitReleased() {
-		return StopRunError{Mode: r.Stopped, PID: r.PID, Err: ErrStopTimeout}
+		return told, StopRunError{Mode: r.Stopped, PID: r.PID, Err: ErrStopTimeout}
 	}
-	return nil
+	return told, nil
 }
 
 // startService starts the service and waits until it runs.
@@ -262,19 +276,30 @@ func (o *Ops) startService(ctx context.Context, s *serviceSetup) error {
 }
 
 // takeBack removes the service that did not take the place of the run r,
-// for cause, and starts that run again in the background, unless a live run
-// holds the lock: r, when it did not stop.
-func (o *Ops) takeBack(ctx context.Context, s *serviceSetup, r EnableReport, cause error) error {
+// for cause, and starts that run again in the background once no live
+// process holds the lock. A run told to stop, r if told and the service if
+// started, may take a while to exit: takeBack waits up to takeBackWait for
+// it. Any other run holding the lock was never told to stop and still runs:
+// r when its stop failed, or one that took the lock since.
+func (o *Ops) takeBack(ctx context.Context, s *serviceSetup, r EnableReport, told bool, cause error) error {
 	e := TakeoverError{Stopped: r.Stopped, PID: r.PID, Err: cause, Undo: s.undo(ctx)}
-	if s.started {
-		o.waitReleased() // the service may still be on its way down
+	deadline := time.Now().Add(takeBackWait)
+	for {
+		pid, mode, held := supervisor.LockInfo(o.P)
+		stopping := told && pid == r.PID || s.started && mode == "service"
+		switch {
+		case !held:
+			e.Restarted, e.RestartErr = o.Background(ctx)
+			return e
+		case !stopping:
+			e.Running = mode
+			return e
+		case time.Now().After(deadline):
+			e.Stopping = mode
+			return e
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
-	if _, mode, held := supervisor.LockInfo(o.P); held {
-		e.Running = mode
-		return e
-	}
-	e.Restarted, e.RestartErr = o.Background(ctx)
-	return e
 }
 
 // serviceSetup is the service as Enable changes it, so that a failure can
@@ -331,15 +356,23 @@ func (s *serviceSetup) undo(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// waitReleased waits up to 10 s until no live process holds the lock.
+// releaseWait is how long a run told to stop has to let go of the lock;
+// takeBackWait is how much longer Enable waits for one before it gives up
+// starting the bypass again in its place.
+var releaseWait, takeBackWait = 10 * time.Second, 20 * time.Second
+
+// waitReleased waits up to releaseWait until no live process holds the lock.
 func (o *Ops) waitReleased() bool {
-	for range 100 {
+	deadline := time.Now().Add(releaseWait)
+	for {
 		if _, _, held := supervisor.LockInfo(o.P); !held {
 			return true
 		}
+		if time.Now().After(deadline) {
+			return false
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	return false
 }
 
 // serviceBinary is the splitdpi the service runs, provided only root can

@@ -14,8 +14,6 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
-	"github.com/KadirBerkpolat1/SplitDPI/internal/render"
-	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 func init() {
@@ -33,8 +31,6 @@ func runEnable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 		fmt.Fprintln(w, i18n.T("service.took_over", i18n.Enum("mode", r.Stopped), r.PID))
 	}
 	var takeover ops.TakeoverError
-	var conflict ops.ConflictError
-	var already supervisor.ErrAlreadyRunning
 	var nobin ops.BinaryMissingError
 	var unsafe ops.UnsafeBinaryError
 	switch {
@@ -43,21 +39,15 @@ func runEnable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 		return nil
 	case errors.As(err, &takeover):
 		return errors.New(takeoverText(w, takeover))
-	case errors.Is(err, render.ErrNoStrategy):
-		return errors.New(i18n.T("run.no_strategy"))
 	case errors.Is(err, initsys.ErrUnsupportedInit):
 		return errors.New(i18n.T("service.unsupported"))
 	case errors.As(err, &nobin):
 		return errors.New(i18n.T("service.no_binary", nobin.Path, nobin.Path))
 	case errors.As(err, &unsafe):
 		return errors.New(unsafeText(unsafe))
-	case errors.As(err, &conflict):
-		printChecks(w, conflict.Checks)
-		return errors.New(i18n.T("run.conflict"))
-	case errors.As(err, &already):
-		return errors.New(i18n.T("run.already", i18n.Enum("mode", already.Mode)))
 	}
-	return err
+	// The other checks are run's own: the service's run must be able to start.
+	return runError(w, err, false)
 }
 
 // unsafeText words an UnsafeBinaryError: what is wrong, and either where to
@@ -76,6 +66,8 @@ func takeoverText(w io.Writer, e ops.TakeoverError) string {
 	var stop ops.StopRunError
 	var lines []string
 	switch {
+	case errors.As(e.Err, &stop) && errors.Is(stop.Err, ops.ErrStopTimeout):
+		lines = append(lines, i18n.T("service.stop_slow", i18n.Enum("mode", stop.Mode), stop.PID))
 	case errors.As(e.Err, &stop):
 		lines = append(lines, i18n.T("service.stop_failed", i18n.Enum("mode", stop.Mode), stop.PID, stop.Err))
 	case errors.Is(e.Err, ops.ErrServiceNotStarted):
@@ -90,6 +82,8 @@ func takeoverText(w io.Writer, e ops.TakeoverError) string {
 	case e.Stopped == "":
 	case e.Running != "":
 		lines = append(lines, i18n.T("service.takeover_kept", i18n.Enum("mode", e.Running)))
+	case e.Stopping != "":
+		lines = append(lines, i18n.T("service.takeover_stopping", i18n.Enum("mode", e.Stopping)))
 	case e.RestartErr != nil:
 		lines = append(lines, runError(w, e.RestartErr, false).Error(), i18n.T("service.takeover_down"))
 	default:

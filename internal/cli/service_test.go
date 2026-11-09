@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -100,10 +101,60 @@ func TestEnableNeedsInstalledBinary(t *testing.T) {
 	has(t, out, o.P.BinPath)
 }
 
+// A config the service's run could not start with is refused as run refuses it.
+func TestEnableRunCannotStart(t *testing.T) {
+	for _, tc := range []struct {
+		name, config string
+		engine       bool
+		want         string
+	}{
+		{"no engine", withStrategy, false, "The engine is not installed. Run: sudo splitdpi engine install"},
+		{"app the presets dropped", "apps = [\"nosuch\"]\n" + withStrategy, true, `config.toml: unknown app "nosuch"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o, _ := runOpsFor(t, systemdRoot())
+			writeConfig(t, o.P, tc.config)
+			installBinary(t, o)
+			if tc.engine {
+				installEngine(t, o.P)
+			}
+			out, code := runOps(t, o, "enable")
+			eq(t, code, 1)
+			has(t, out, tc.want)
+		})
+	}
+}
+
+// A run that did not stop in time is not said to still run: it was started
+// again once it had stopped, or it is still stopping, and enable says how to
+// start the bypass once it has.
+func TestEnableStopTimeoutText(t *testing.T) {
+	stop := ops.StopRunError{Mode: "background", PID: 4343, Err: ops.ErrStopTimeout}
+	for _, tc := range []struct {
+		name string
+		e    ops.TakeoverError
+		want string
+	}{
+		{"restarted", ops.TakeoverError{Stopped: "background", PID: 4343, Err: stop, Restarted: 5151},
+			"The previous run was restarted in the background (pid 5151)."},
+		{"still stopping", ops.TakeoverError{Stopped: "background", PID: 4343, Err: stop, Stopping: "background"},
+			"The background run is still stopping. Once it has stopped, start the bypass with: sudo splitdpi run --background"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := takeoverText(io.Discard, tc.e)
+			has(t, out, "The background run (pid 4343) did not stop within 10 s, so the service was not started.\n"+tc.want)
+			if strings.Contains(out, "still runs") {
+				t.Errorf("says the bypass still runs:\n%s", out)
+			}
+		})
+	}
+}
+
 func TestEnableSystemd(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
 	installBinary(t, o)
+	installEngine(t, o.P)
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	out, code := runOps(t, o, "enable")
 	if code != 0 {

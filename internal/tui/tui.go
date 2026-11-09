@@ -264,6 +264,9 @@ func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// runDoneMsg quits, or for "b" first starts the background run.
 			m.quitting, m.toBackground = true, s == "b"
 			m.stopAll()
+			if m.runCancel == nil { // the run here ended while the prompt was open
+				return m.Update(runDoneMsg{})
+			}
 			m.runCancel()
 		case "n", "h", "esc":
 			m.confirmQuit = false

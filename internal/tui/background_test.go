@@ -176,3 +176,39 @@ func TestQuitPromptThreeWay(t *testing.T) {
 		})
 	}
 }
+
+// The run here may end by itself, in a crash loop say, while the quit
+// prompt is open: its answer then has no run to stop, and y still just
+// quits, b still starts the background run first.
+func TestQuitPromptAfterRunEnded(t *testing.T) {
+	for _, k := range []string{"y", "b"} {
+		t.Run(k, func(t *testing.T) {
+			f := newFake()
+			m, done := runHere(t, f)
+			m, _ = update(t, m, key("q"))
+			end := m.runCancel
+			end()
+			<-done
+			m, _ = update(t, m, runDoneMsg{supervisor.ErrCrashLoop})
+			m, cmd := update(t, m, key(k))
+			if k == "b" {
+				if cmd == nil {
+					t.Fatal("b started nothing")
+				}
+				m, cmd = update(t, m, cmd())
+				if !f.called("background") || m.bgPID != 4343 {
+					t.Errorf("calls %q, background pid %d", f.calls, m.bgPID)
+				}
+			}
+			if cmd == nil {
+				t.Fatal("did not quit")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("did not quit")
+			}
+			if k == "y" && f.called("background") {
+				t.Errorf("calls %q: y started the background run", f.calls)
+			}
+		})
+	}
+}

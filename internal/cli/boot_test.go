@@ -103,6 +103,7 @@ func TestEnableTakesOverBackgroundRun(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
 	installBinary(t, o)
+	installEngine(t, o.P)
 	release := holdLock(t, o.P, "background")
 	terminateWith(t, f, func() error {
 		if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi"}; !slices.Equal(systemctlCalls(f), want) {
@@ -132,6 +133,7 @@ func TestEnableRunWontStop(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
 	installBinary(t, o)
+	installEngine(t, o.P)
 	holdLock(t, o.P, "background")
 	terminateWith(t, f, func() error { return syscall.ESRCH })
 	out, code := runOps(t, o, "enable")
@@ -260,6 +262,7 @@ func TestEnableWritesUnit(t *testing.T) {
 	o, f := runOpsFor(t, systemdRoot())
 	writeConfig(t, o.P, withStrategy)
 	installBinary(t, o)
+	installEngine(t, o.P)
 	f.hooks = map[string]func(){"systemctl start splitdpi": func() { holdLock(t, o.P, "service") }}
 	if out, code := runOps(t, o, "enable"); code != 0 {
 		t.Fatalf("enable exit %d:\n%s", code, out)

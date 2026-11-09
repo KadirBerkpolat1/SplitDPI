@@ -81,6 +81,26 @@ func TestBootChosenEnableFails(t *testing.T) {
 	has(t, flat(m.View()), i18n.T("service.not_started"))
 }
 
+// A run told to stop that is still on its way down runs no bypass: the note
+// says so and, whole on an 80x24 screen, how to start it once it has
+// stopped, not that it still runs.
+func TestBootTakeoverRunStillStopping(t *testing.T) {
+	f := newFake()
+	f.st = supervisor.Status{State: "running", Mode: "background", PID: 4343}
+	// Enable's error once the run it stopped held the lock past both waits.
+	f.enableErr = ops.TakeoverError{
+		Stopped: "background", PID: 4343, Stopping: "background",
+		Err: ops.StopRunError{Mode: "background", PID: 4343, Err: ops.ErrStopTimeout},
+	}
+	m := press(t, chooseRunMode(t, f, 2), "y")
+	v := flat(m.View())
+	has(t, v, "The background run (pid 4343) did not stop within 10 s, so the service was not started. "+
+		"The background run is still stopping. Once it has stopped, start the bypass with: sudo splitdpi run --background")
+	if strings.Contains(v, "still runs") {
+		t.Errorf("says the bypass still runs:\n%s", m.View())
+	}
+}
+
 // chooseBootHere picks Also at boot while the bypass runs in this window.
 func chooseBootHere(t *testing.T, m Model) Model {
 	t.Helper()

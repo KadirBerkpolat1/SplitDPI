@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -25,9 +26,9 @@ import (
 // Every command here is faked, and TerminateRun and holdSignals are
 // replaced: no real service, table, process or signal is touched.
 
-// lockRun makes this process look like a supervisor with pid in mode until
-// release, like that supervisor exiting.
-func lockRun(p paths.Paths, mode string, pid int) (release func(), err error) {
+// lockRun makes this process look like a supervisor with pid in mode, in
+// state, until release, like that supervisor exiting.
+func lockRun(p paths.Paths, mode string, pid int, state string) (release func(), err error) {
 	if err := os.MkdirAll(p.RunDir, 0o755); err != nil {
 		return nil, err
 	}
@@ -39,24 +40,27 @@ func lockRun(p paths.Paths, mode string, pid int) (release func(), err error) {
 		f.Close()
 		return nil, err
 	}
+	// The status goes first: the mode in LockFile must not meet the status
+	// of the run before.
+	st := fmt.Sprintf(`{"state":%q,"mode":%q,"pid":%d}`, state, mode, pid)
+	if err := os.WriteFile(p.StatusFile, []byte(st), 0o644); err != nil {
+		f.Close()
+		return nil, err
+	}
 	if err := f.Truncate(0); err != nil {
 		f.Close()
 		return nil, err
 	}
 	fmt.Fprintf(f, `{"pid":%d,"mode":%q}`, pid, mode)
-	st := fmt.Sprintf(`{"state":"running","mode":%q,"pid":%d}`, mode, pid)
-	if err := os.WriteFile(p.StatusFile, []byte(st), 0o644); err != nil {
-		f.Close()
-		return nil, err
-	}
 	var once sync.Once
 	return func() { once.Do(func() { f.Close() }) }, nil
 }
 
-// holdRunLock is lockRun for the test; the lock goes at its end at the latest.
+// holdRunLock is lockRun of a running supervisor for the test; the lock goes
+// at its end at the latest.
 func holdRunLock(t *testing.T, p paths.Paths, mode string, pid int) func() {
 	t.Helper()
-	release, err := lockRun(p, mode, pid)
+	release, err := lockRun(p, mode, pid, "running")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,8 +69,10 @@ func holdRunLock(t *testing.T, p paths.Paths, mode string, pid int) func() {
 }
 
 // serviceRecorder keeps the commands run, the PIDs signalled and the signal
-// holds, in one order. fail makes a command fail, and hooks run once one is
-// recorded; with down, a started service never comes up.
+// holds, in one order. fail makes a command fail, systemd-run by its name
+// alone, and hooks run once one is recorded. With down, a started service
+// never runs: on systemd it does not come up, on runit it holds the lock
+// without running; fakeRunsvdir reads down under mu.
 type serviceRecorder struct {
 	mu    sync.Mutex
 	calls []string
@@ -109,8 +115,9 @@ var initHosts = map[sysinfo.Init]fstest.MapFS{
 const backgroundPID = 5151
 
 // serviceOps can enable the service of init in with host as the host: it has
-// a strategy, and starting the service makes it hold the lock and run. A
-// background run started through systemd-run comes up too.
+// a strategy and an engine, and starting the service makes it hold the lock
+// and run. A background run started through systemd-run comes up too; one
+// started detached fails the test.
 func serviceOps(t *testing.T, in sysinfo.Init, host fstest.MapFS) (*Ops, *serviceRecorder) {
 	t.Helper()
 	for name, f := range initHosts[in] {
@@ -122,6 +129,7 @@ func serviceOps(t *testing.T, in sysinfo.Init, host fstest.MapFS) (*Ops, *servic
 	if err := config.Save(p, c); err != nil {
 		t.Fatal(err)
 	}
+	installedEngine(t, p, "zapret2-v1.0.7")
 	rec := &serviceRecorder{}
 	o := &Ops{
 		P: p, Root: host, Euid: func() int { return 0 }, GOARCH: "amd64",
@@ -141,13 +149,20 @@ func serviceOps(t *testing.T, in sysinfo.Init, host fstest.MapFS) (*Ops, *servic
 					holdRunLock(t, p, "service", 4242)
 				}
 			case name == "systemd-run":
+				if err := rec.fail[name]; err != nil {
+					return nil, err
+				}
 				holdRunLock(t, p, "background", backgroundPID)
 			}
 			return nil, nil
 		},
+		Detach: func(*exec.Cmd) (<-chan error, error) {
+			t.Error("detached process started")
+			return nil, errors.New("unexpected")
+		},
 	}
 	if in == sysinfo.Runit {
-		fakeRunsvdir(t, p)
+		fakeRunsvdir(t, p, rec)
 	}
 	old := holdSignals
 	holdSignals = func() func() {
@@ -159,32 +174,53 @@ func serviceOps(t *testing.T, in sysinfo.Init, host fstest.MapFS) (*Ops, *servic
 }
 
 // fakeRunsvdir stands in for runit's runsvdir: once the service is linked,
-// its run comes up and holds the lock until the test ends.
-func fakeRunsvdir(t *testing.T, p paths.Paths) {
+// its run comes up and holds the lock until the test ends. With rec.down it
+// never reports running, and it exits 300 ms after its link is gone: sv
+// down and the unlink only ask runsv to stop it.
+func fakeRunsvdir(t *testing.T, p paths.Paths, rec *serviceRecorder) {
 	t.Helper()
 	stop, done := make(chan struct{}), make(chan struct{})
-	go func() {
-		defer close(done)
+	// linkedIs waits until the link is there, or gone; false if the test ended first.
+	linkedIs := func(want bool) bool {
 		tick := time.NewTicker(5 * time.Millisecond)
 		defer tick.Stop()
 		for {
+			if _, err := os.Lstat(p.RunitLink); (err == nil) == want {
+				return true
+			}
 			select {
 			case <-stop:
-				return
+				return false
 			case <-tick.C:
 			}
-			if _, err := os.Lstat(p.RunitLink); err != nil {
-				continue
-			}
-			release, err := lockRun(p, "service", 4242)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			<-stop
-			release()
+		}
+	}
+	go func() {
+		defer close(done)
+		if !linkedIs(true) {
 			return
 		}
+		rec.mu.Lock()
+		down := rec.down
+		rec.mu.Unlock()
+		state := "running"
+		if down {
+			state = "starting"
+		}
+		release, err := lockRun(p, "service", 4242, state)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer release()
+		if down && linkedIs(false) {
+			select {
+			case <-stop:
+			case <-time.After(300 * time.Millisecond):
+			}
+			return
+		}
+		<-stop
 	}()
 	t.Cleanup(func() { close(stop); <-done })
 }
@@ -206,6 +242,14 @@ func shortWait(t *testing.T) {
 	old := enableWait
 	enableWait = 300 * time.Millisecond
 	t.Cleanup(func() { enableWait = old })
+}
+
+// shortStopWait makes waiting for a run told to stop give up after 100 ms,
+// and waiting for it once more after more.
+func shortStopWait(t *testing.T, more time.Duration) {
+	oldRelease, oldMore := releaseWait, takeBackWait
+	releaseWait, takeBackWait = 100*time.Millisecond, more
+	t.Cleanup(func() { releaseWait, takeBackWait = oldRelease, oldMore })
 }
 
 func installAt(t *testing.T, path string) {
@@ -391,6 +435,25 @@ func TestEnableCheckFailsStopsNothing(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, func(err error) bool { return errors.Is(err, render.ErrNoStrategy) }},
+		// The service's run could not start: neither could the run stopped for it.
+		{"app the presets dropped", fstest.MapFS{}, func(o *Ops) {
+			c, err := config.Load(o.P)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Apps = []string{"nosuch"}
+			if err := config.Save(o.P, c); err != nil {
+				t.Fatal(err)
+			}
+		}, func(err error) bool {
+			var unknown render.ErrUnknownApp
+			return errors.As(err, &unknown) && unknown.ID == "nosuch"
+		}},
+		{"no engine", fstest.MapFS{}, func(o *Ops) {
+			if err := os.Remove(filepath.Join(o.P.EngineDir, "current")); err != nil {
+				t.Fatal(err)
+			}
+		}, func(err error) bool { return errors.Is(err, ErrEngineMissing) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			o, rec := serviceOps(t, sysinfo.Systemd, tc.host)
@@ -453,7 +516,6 @@ func TestEnableStartFailsRestartsRun(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o, rec := serviceOps(t, sysinfo.Systemd, fstest.MapFS{})
 			installBinPath(t, o)
-			installedEngine(t, o.P, "zapret2-v1.0.7")
 			shortWait(t)
 			tc.setup(rec)
 			release := holdRunLock(t, o.P, "background", 4343)
@@ -483,20 +545,126 @@ func TestEnableStartFailsRestartsRun(t *testing.T) {
 	}
 }
 
-// When the run cannot start again either, the error says so.
+// When the run cannot start again either, through systemd-run or detached,
+// the error says so.
 func TestEnableRestartFails(t *testing.T) {
 	o, rec := serviceOps(t, sysinfo.Systemd, fstest.MapFS{})
-	installBinPath(t, o) // no engine: Background refuses
-	rec.fail = map[string]error{"systemctl start splitdpi": errors.New("systemctl: exit status 1")}
+	installBinPath(t, o)
+	rec.fail = map[string]error{
+		"systemctl start splitdpi": errors.New("systemctl: exit status 1"),
+		"systemd-run":              errors.New("systemd-run: exit status 1"),
+	}
+	detachErr := errors.New("fork/exec: permission denied")
+	o.Detach = func(*exec.Cmd) (<-chan error, error) { return nil, detachErr }
 	release := holdRunLock(t, o.P, "background", 4343)
 	terminateWith(t, rec, func() error { release(); return nil })
 	_, err := o.Enable(context.Background(), nil)
 	e := takeoverError(t, err)
-	if e.Restarted != 0 || !errors.Is(e.RestartErr, ErrEngineMissing) {
-		t.Errorf("error %+v, want the restart refused", e)
+	if e.Restarted != 0 || !errors.Is(e.RestartErr, detachErr) || e.Running != "" || e.Stopping != "" {
+		t.Errorf("error %+v, want the restart failed", e)
 	}
 	if !strings.Contains(err.Error(), "could not be restarted") {
 		t.Errorf("message %q", err)
+	}
+}
+
+// slowStopOps can enable the service in place of a background run (pid
+// 4343) that holds the lock past the wait for it; waiting once more gives up
+// after more. It returns that run's release.
+func slowStopOps(t *testing.T, more time.Duration) (*Ops, *serviceRecorder, func()) {
+	t.Helper()
+	o, rec := serviceOps(t, sysinfo.Systemd, fstest.MapFS{})
+	installBinPath(t, o)
+	shortStopWait(t, more)
+	return o, rec, holdRunLock(t, o.P, "background", 4343)
+}
+
+// The bug of the second round: a run that got SIGTERM but held the lock
+// past the wait was said to still run, and nothing ran once it had exited.
+// It is waited for once more, and started again in the background once it
+// is gone.
+func TestEnableRunExitsLate(t *testing.T) {
+	o, rec, release := slowStopOps(t, 10*time.Second)
+	terminateWith(t, rec, func() error { return nil })
+	rec.hooks = map[string]func(){"systemctl disable splitdpi": func() { time.AfterFunc(300*time.Millisecond, release) }}
+	_, err := o.Enable(context.Background(), nil)
+	e := takeoverError(t, err)
+	if !errors.Is(err, ErrStopTimeout) || e.Restarted != backgroundPID || e.RestartErr != nil || e.Running != "" || e.Stopping != "" {
+		t.Errorf("error %+v, want the background run restarted", e)
+	}
+	if !strings.Contains(err.Error(), "the background run was restarted in the background (pid 5151)") {
+		t.Errorf("message %q", err)
+	}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "systemd-run", "restore signals"}
+	if !slices.Equal(rec.service(), want) {
+		t.Errorf("calls %q, want %q", rec.service(), want)
+	}
+}
+
+// A run that got SIGTERM and holds the lock after the second wait too is
+// still stopping: it does not run the bypass once it is gone, and nothing
+// is started in its place.
+func TestEnableRunStillStopping(t *testing.T) {
+	o, rec, _ := slowStopOps(t, 300*time.Millisecond)
+	terminateWith(t, rec, func() error { return nil })
+	_, err := o.Enable(context.Background(), nil)
+	e := takeoverError(t, err)
+	if e.Stopping != "background" || e.Running != "" || e.Restarted != 0 || e.RestartErr != nil {
+		t.Errorf("error %+v, want the background run still stopping", e)
+	}
+	if !strings.Contains(err.Error(), "the background run is still stopping") {
+		t.Errorf("message %q", err)
+	}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "restore signals"}
+	if !slices.Equal(rec.service(), want) {
+		t.Errorf("calls %q, want %q", rec.service(), want)
+	}
+}
+
+// A run that took the lock once the stopped one had exited was never told
+// to stop: it still runs.
+func TestEnableAnotherRunTookLock(t *testing.T) {
+	o, rec, release := slowStopOps(t, 300*time.Millisecond)
+	terminateWith(t, rec, func() error {
+		release()
+		holdRunLock(t, o.P, "foreground", 4545)
+		return nil
+	})
+	_, err := o.Enable(context.Background(), nil)
+	e := takeoverError(t, err)
+	if e.Running != "foreground" || e.Stopping != "" || e.Restarted != 0 || e.RestartErr != nil {
+		t.Errorf("error %+v, want the foreground run still running", e)
+	}
+}
+
+// runit's sv down, like removing the link, only asks runsv to stop the
+// service: one that did not run in time may hold the lock a while after
+// Enable removed it. It is waited for, not said to still run, and the run it
+// was to replace starts again in the background once it is gone.
+func TestEnableRunitServiceStopsLate(t *testing.T) {
+	o, rec := serviceOps(t, sysinfo.Runit, fstest.MapFS{})
+	installBinPath(t, o)
+	shortWait(t)
+	shortStopWait(t, 10*time.Second)
+	rec.mu.Lock()
+	rec.down = true
+	rec.mu.Unlock()
+	o.Detach = func(*exec.Cmd) (<-chan error, error) {
+		holdRunLock(t, o.P, "background", backgroundPID)
+		return make(chan error), nil
+	}
+	release := holdRunLock(t, o.P, "background", 4343)
+	terminateWith(t, rec, func() error { release(); return nil })
+	_, err := o.Enable(context.Background(), nil)
+	e := takeoverError(t, err)
+	if !errors.Is(err, ErrServiceNotStarted) || e.Restarted != backgroundPID || e.RestartErr != nil || e.Running != "" || e.Stopping != "" {
+		t.Errorf("error %+v, want the background run restarted", e)
+	}
+	if want := []string{"hold signals", "SIGTERM 4343", "sv down splitdpi", "restore signals"}; !slices.Equal(rec.service(), want) {
+		t.Errorf("calls %q, want %q", rec.service(), want)
+	}
+	if _, err := os.Lstat(o.P.RunitLink); !os.IsNotExist(err) {
+		t.Errorf("still linked: %v", err)
 	}
 }
 
