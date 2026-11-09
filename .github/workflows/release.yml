@@ -5,18 +5,22 @@ on:
     tags:
       - v*
 
-permissions:
-  contents: write
-
 jobs:
+  ci:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go test ./...
       - name: Build linux amd64
         env:
           TAG: ${{ github.ref_name }}
@@ -38,7 +42,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -eu
-          args=(gh release create "$TAG" splitdpi-linux-amd64 splitdpi-linux-arm64 sha256sums.txt)
+          args=(gh release create "$TAG" splitdpi-linux-amd64 splitdpi-linux-arm64 sha256sums.txt --generate-notes)
           case "$TAG" in
             *-*) args+=(--prerelease) ;;
           esac

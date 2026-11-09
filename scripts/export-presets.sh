@@ -66,7 +66,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download splitdpi
         run: |
           base=https://github.com/KadirBerkpolat1/SplitDPI/releases/latest/download
@@ -91,7 +91,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tag must equal VERSION
         run: test "$(cat VERSION)" = "$GITHUB_REF_NAME"
       - name: Download splitdpi
@@ -104,7 +104,9 @@ jobs:
       - run: splitdpi presets check .
       # splitdpi reads the tree from the archive root, without a top-level folder.
       - run: tar -czf presets.tar.gz VERSION generic.toml apps countries exclude isp LICENSE NOTICE
-      - run: gh release create "$GITHUB_REF_NAME" presets.tar.gz --title "Presets $GITHUB_REF_NAME"
+      # splitdpi verifies the tarball against this file, which must name it without a directory.
+      - run: sha256sum presets.tar.gz > presets.tar.gz.sha256
+      - run: gh release create "$GITHUB_REF_NAME" presets.tar.gz presets.tar.gz.sha256 --title "Presets $GITHUB_REF_NAME"
         env:
           GH_TOKEN: ${{ github.token }}
 EOF
