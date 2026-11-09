@@ -9,6 +9,13 @@ func SetLimits(lim safetar.Limits) (restore func()) {
 	return func() { limits = old }
 }
 
+// SetMaxTarball makes Install read at most n bytes of the tarball until the returned func runs.
+func SetMaxTarball(n int64) (restore func()) {
+	old := maxTarball
+	maxTarball = n
+	return func() { maxTarball = old }
+}
+
 // SetRename makes Install rename with f until the returned func runs.
 func SetRename(f func(oldpath, newpath string) error) (restore func()) {
 	old := rename

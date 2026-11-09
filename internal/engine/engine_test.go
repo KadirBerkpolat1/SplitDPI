@@ -232,6 +232,24 @@ func TestInstallRejectsOversized(t *testing.T) {
 	}
 }
 
+func TestInstallCapsTarball(t *testing.T) {
+	b := build(t, good())
+	t.Cleanup(engine.SetMaxTarball(int64(len(b))))
+	if _, err := install(paths.Under(t.TempDir()), b); err != nil {
+		t.Fatalf("tarball at the cap: %v", err)
+	}
+	p := paths.Under(t.TempDir())
+	seedPrevious(t, p)
+	r := bytes.NewReader(append(b, make([]byte, 1<<20)...))
+	if _, err := engine.Install(p, r, sum(b), "amd64"); !errors.Is(err, safetar.ErrTooLarge) {
+		t.Fatalf("err = %v", err)
+	}
+	if read := r.Size() - int64(r.Len()); read > int64(len(b))+1 {
+		t.Errorf("read %d bytes with a cap of %d", read, len(b))
+	}
+	checkPrevious(t, p)
+}
+
 func TestInstallSwapFails(t *testing.T) {
 	errSwap, errRestore := errors.New("swap failed"), errors.New("restore failed")
 	cases := map[string]struct{ previous, restoreFails bool }{
@@ -263,6 +281,18 @@ func TestInstallSwapFails(t *testing.T) {
 			}
 			if tc.previous && !tc.restoreFails {
 				checkPrevious(t, p)
+			}
+			if tc.restoreFails {
+				kept, _ := filepath.Glob(filepath.Join(p.EngineDir, ".tmp-*", "old"))
+				if len(kept) != 1 || !strings.Contains(err.Error(), kept[0]) {
+					t.Fatalf("kept %v; err = %v", kept, err)
+				}
+				if b, err := os.ReadFile(filepath.Join(kept[0], "marker")); err != nil || string(b) != "old" {
+					t.Errorf("previous engine in %s: %q, %v", kept[0], b, err)
+				}
+				if got := entries(t, filepath.Dir(kept[0])); !slices.Equal(got, []string{"old"}) {
+					t.Errorf("%s holds %v", filepath.Dir(kept[0]), got)
+				}
 			}
 		})
 	}

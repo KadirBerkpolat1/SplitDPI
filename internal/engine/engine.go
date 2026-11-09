@@ -32,6 +32,11 @@ var (
 // 19.1 MB in total and 3.3 MB at most; keep both limits at least twice that.
 var limits = safetar.Limits{File: 16 << 20, Total: 128 << 20}
 
+// maxTarball caps the bytes Install reads from tarball and stores in StateDir
+// before it can check their SHA-256. The zapret2 v1.0.6 tarball is 9.6 MB;
+// keep the cap at least twice that.
+var maxTarball int64 = 64 << 20
+
 // rename is os.Rename, replaced in tests to make the swap fail.
 var rename = os.Rename
 
@@ -48,9 +53,12 @@ func (e Engine) Mdig() string        { return filepath.Join(e.Dir, "binaries", e
 func (e Engine) Blockcheck2() string { return filepath.Join(e.Dir, "blockcheck2.sh") }
 func (e Engine) LuaDir() string      { return filepath.Join(e.Dir, "lua") }
 
-// Install verifies tarball against wantSHA256, unpacks it and swaps it into
-// EngineDir. On any failure the previously installed engine is left as it was;
-// if putting it back fails, the error says so.
+// Install verifies tarball against wantSHA256, unpacks it, moves it to
+// EngineDir/zapret2-<Version> and records it in EngineDir/current. A failure
+// before the move leaves both as they were. If the move fails, the engine that
+// was there is moved back; if that fails too, it is kept in a directory under
+// EngineDir that the error names. If recording fails, the new engine stays and
+// current is left as it was.
 func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engine, error) {
 	arch, ok := archDirs[goarch]
 	if !ok {
@@ -66,8 +74,12 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	defer os.Remove(f.Name())
 	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(f, h), tarball); err != nil {
+	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(tarball, maxTarball+1))
+	if err != nil {
 		return Engine{}, err
+	}
+	if n > maxTarball {
+		return Engine{}, fmt.Errorf("%w: the tarball is over %d bytes", safetar.ErrTooLarge, maxTarball)
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != wantSHA256 {
 		return Engine{}, fmt.Errorf("%w: got %s, want %s", ErrChecksum, got, wantSHA256)
@@ -80,7 +92,12 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	if err != nil {
 		return Engine{}, err
 	}
-	defer os.RemoveAll(tmp)
+	keep := false
+	defer func() {
+		if !keep {
+			os.RemoveAll(tmp)
+		}
+	}()
 	if err := safetar.Extract(f, tmp, limits); err != nil {
 		return Engine{}, err
 	}
@@ -101,7 +118,9 @@ func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engin
 	if err := rename(staged, e.Dir); err != nil {
 		if hadOld {
 			if rerr := rename(old, e.Dir); rerr != nil {
-				err = fmt.Errorf("%w; restoring the previous engine failed too: %w", err, rerr)
+				keep = true
+				_ = os.RemoveAll(staged)
+				err = fmt.Errorf("%w; restoring the previous engine failed too, it is kept in %s: %w", err, old, rerr)
 			}
 		}
 		return Engine{}, err
