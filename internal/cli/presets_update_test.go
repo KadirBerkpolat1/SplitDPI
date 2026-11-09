@@ -4,9 +4,12 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -27,7 +30,13 @@ func TestPresetsUpdatePrintsResult(t *testing.T) {
 	}
 	tw.Close()
 	gz.Close()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write(buf.Bytes()) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".sha256") {
+			fmt.Fprintf(w, "%x  presets.tar.gz\n", sha256.Sum256(buf.Bytes()))
+			return
+		}
+		w.Write(buf.Bytes())
+	}))
 	defer srv.Close()
 	target, _ := url.Parse(srv.URL)
 
