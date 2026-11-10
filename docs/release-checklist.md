@@ -54,7 +54,11 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 - [ ] CachyOS (systemd): `enable`, reboot, `revert`. On 2026-11-09 (Türk
       Telekom, `9147ee9`), `enable` moved a running background run to the
       service with the bypass off for 151 ms, and the engine upgrade's
-      service restart took 193 ms. Reboot and `revert` not recorded yet.
+      service restart took 193 ms. On 2026-11-10 (v0.2.7, `4e74d6f`), after a
+      real reboot the service was running from boot: `sudo splitdpi status`
+      printed service mode and "Starts at boot: yes.", and Discord, Roblox
+      and Pastebin answered 200 over HTTPS. `revert` is not recorded yet:
+      this machine's bypass has to stay up.
 
 ## Known gaps
 
@@ -143,7 +147,9 @@ Tick these on the release commit, with the date.
       it and updated to 2026-11-09.
 - [ ] The boot path from the TUI across a real reboot, under
       [On real systems](#on-real-systems). Container and CachyOS results
-      are recorded there; a real-system reboot is not recorded yet.
+      are recorded there. A real-system reboot with the service set up by
+      `enable` is recorded under CachyOS (2026-11-10); the TUI's own path
+      and `revert` are not recorded yet.
 
 (2026-11-09, on `e1c3007`; the release commit changes only `README.md`,
 `README.tr.md` and this file.)
