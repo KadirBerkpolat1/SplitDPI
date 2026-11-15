@@ -1,8 +1,12 @@
 package ops
 
 import (
+	"context"
+	"os"
 	"slices"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
@@ -71,5 +75,46 @@ func TestSites(t *testing.T) {
 	}
 	if list, _ := o.SitesList(); !slices.Equal(list, []string{"example.org"}) {
 		t.Errorf("after remove: %q", list)
+	}
+}
+
+// A site added while SplitDPI runs with encrypted DNS must not wait for an
+// answer cached before; without the redirect, the ISP would answer again.
+func TestSitesAddFlushesDNSWhileRunning(t *testing.T) {
+	var ran []string
+	o := &Ops{
+		P:    paths.Under(t.TempDir()),
+		Root: fstest.MapFS{"proc/42/stat": {Data: []byte("42 (systemd-resolve) S 1 42 42 0 -1")}},
+		Exec: func(_ context.Context, _, name string, args ...string) ([]byte, error) {
+			ran = append(ran, strings.Join(append([]string{name}, args...), " "))
+			return nil, nil
+		},
+	}
+	add := func(d string) {
+		t.Helper()
+		if _, err := o.SitesAdd(d); err != nil {
+			t.Fatal(err)
+		}
+	}
+	add("a.example.com")
+	if len(ran) != 0 {
+		t.Errorf("not running: ran %q", ran)
+	}
+	holdRunLock(t, o.P, "service", os.Getpid())
+	add("b.example.com")
+	if len(ran) != 0 {
+		t.Errorf("running with dns off: ran %q", ran)
+	}
+	c, err := config.Load(o.P)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.DNSProvider = "auto"
+	if err := config.Save(o.P, c); err != nil {
+		t.Fatal(err)
+	}
+	add("c.example.com")
+	if !slices.Equal(ran, []string{"resolvectl flush-caches"}) {
+		t.Errorf("running with dns on: ran %q", ran)
 	}
 }

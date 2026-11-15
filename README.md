@@ -296,6 +296,13 @@ same choices.
 - **System settings stay as they are.** SplitDPI never changes system DNS
   settings: no resolver configuration file or service is edited, and the
   redirect disappears with the `inet splitdpi` table.
+- **Stale answers are cleared.** Each time the redirect loads (every start and
+  restart), and when you add a site while SplitDPI runs with encrypted DNS, it
+  clears the caches of systemd-resolved (`resolvectl flush-caches`) and nscd
+  (`nscd -i hosts`) if they run. Answers cached while DNS went around the
+  forwarder, before the start or in the moment between stopping and starting,
+  can be your ISP's poisoned ones and would keep a site on its block page.
+  Other local resolvers keep their caches.
 - **Local resolvers decide.** Queries to resolvers on this machine
   (`127.0.0.0/8`, `::1`) are never redirected, so programs keep using the
   systemd-resolved stub (127.0.0.53), dnscrypt-proxy or any other local

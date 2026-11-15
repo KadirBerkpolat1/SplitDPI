@@ -316,6 +316,14 @@ geçerli olur; terminal arayüzünde Ayarlar sayfası aynı seçenekleri sunar.
 - **Sistem ayarları olduğu gibi kalır.** SplitDPI sistemin DNS ayarlarını hiç
   değiştirmez: hiçbir çözümleyici yapılandırma dosyasına ya da servisine
   dokunmaz; yönlendirme `inet splitdpi` tablosuyla birlikte kaybolur.
+- **Eski yanıtlar temizlenir.** Yönlendirme her yüklendiğinde (her başlatma ve
+  yeniden başlatmada) ve SplitDPI şifreli DNS ile çalışırken bir site
+  eklendiğinde, çalışıyorlarsa systemd-resolved'ın
+  (`resolvectl flush-caches`) ve nscd'nin (`nscd -i hosts`) önbelleği
+  temizlenir. DNS ileticiye uğramadan giderken, başlatmadan önce ya da
+  durdurmayla başlatma arasındaki kısa anda önbelleğe giren yanıtlar internet
+  sağlayıcınızın zehirli yanıtları olabilir ve siteyi engel sayfasında tutar.
+  Diğer yerel çözümleyicilerin önbelleğine dokunulmaz.
 - **Karar yerel çözümleyicinin.** Bu bilgisayardaki çözümleyicilere
   (`127.0.0.0/8`, `::1`) giden sorgular hiç yönlendirilmez; programlar
   systemd-resolved'ın yerel adresini (127.0.0.53), dnscrypt-proxy'yi ya da

@@ -50,6 +50,9 @@ type Supervisor struct {
 	// StartDNS, if set, starts the DNS forwarder before the table (and its
 	// redirect) loads. Its ctx ends when Run returns, after the table is gone.
 	StartDNS func(ctx context.Context) error
+	// FlushDNS, if set, runs once the table and its DNS redirect have loaded,
+	// to clear what local resolvers cached while DNS went around the forwarder.
+	FlushDNS func(ctx context.Context, log io.Writer)
 }
 
 type ErrAlreadyRunning struct{ Mode string }
@@ -97,6 +100,9 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 	}
 	if err := nft.Apply(ctx, s.Exec, s.P.NftTable, ruleset); err != nil {
 		return s.finish(ctx, st, "failed", err)
+	}
+	if s.FlushDNS != nil {
+		s.FlushDNS(ctx, log)
 	}
 
 	var fails []time.Time

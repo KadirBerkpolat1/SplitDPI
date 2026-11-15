@@ -182,15 +182,15 @@ func TestPrepareDNS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if j.sup.StartDNS != nil || strings.Contains(j.ruleset, "redirect") {
-		t.Error("DNS forwarder or redirect without dns = true")
+	if j.sup.StartDNS != nil || j.sup.FlushDNS != nil || strings.Contains(j.ruleset, "redirect") {
+		t.Error("DNS forwarder, cache flush or redirect without dns = true")
 	}
 	cfg.DNSProvider = "auto"
 	if j, err = o.prepare(cfg, "foreground", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if j.sup.StartDNS == nil || !strings.Contains(j.ruleset, "redirect to :5453") {
-		t.Errorf("dns = true: StartDNS %v, ruleset:\n%s", j.sup.StartDNS != nil, j.ruleset)
+	if j.sup.StartDNS == nil || j.sup.FlushDNS == nil || !strings.Contains(j.ruleset, "redirect to :5453") {
+		t.Errorf("dns = true: StartDNS %v, FlushDNS %v, ruleset:\n%s", j.sup.StartDNS != nil, j.sup.FlushDNS != nil, j.ruleset)
 	}
 }
 

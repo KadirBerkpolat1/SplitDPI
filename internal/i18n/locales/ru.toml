@@ -245,6 +245,8 @@ help = "Шифровать DNS (порт 53), пока работает splitdpi
 usage = "Использование: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "Перенаправление DNS выключено. Изменение вступит в силу при следующем запуске."
 restart = "splitdpi запущен; перезапустите его, чтобы применить: sudo splitdpi stop && sudo splitdpi run"
+cache_flushed = "Кэш DNS %s очищен."
+cache_flush_failed = "Не удалось очистить кэш DNS: %v"
 
 [revert]
 usage = "Использование: splitdpi revert [--rules-only] [--purge]"

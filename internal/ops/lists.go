@@ -111,6 +111,7 @@ func (o *Ops) SitesList() ([]string, error) {
 }
 
 // SitesAdd adds the normalized domain to the user's sites and returns it.
+// While SplitDPI runs with encrypted DNS, it also clears the local DNS caches.
 func (o *Ops) SitesAdd(d string) (string, error) {
 	n, err := domain.Normalize(d)
 	if err != nil {
@@ -119,7 +120,11 @@ func (o *Ops) SitesAdd(d string) (string, error) {
 	if err := os.MkdirAll(o.P.ConfigDir, 0o755); err != nil {
 		return "", err
 	}
-	return n, config.AddToList(o.P.UserHosts, n)
+	if err := config.AddToList(o.P.UserHosts, n); err != nil {
+		return n, err
+	}
+	o.flushRunningDNS()
+	return n, nil
 }
 
 func (o *Ops) SitesRemove(d string) error {
@@ -139,6 +144,7 @@ type ImportSkip struct {
 // SitesImport adds the domains in the text file at path to the user's sites:
 // one per line, "#" starts a comment, and *.example.com or .example.com mean
 // example.com. added holds the domains that were not in the list yet.
+// Like SitesAdd, it clears the local DNS caches when it added a domain.
 func (o *Ops) SitesImport(path string) (added []string, skipped []ImportSkip, err error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -186,5 +192,6 @@ func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, er
 	if err := config.AddToList(o.P.UserHosts, added...); err != nil {
 		return nil, nil, err
 	}
+	o.flushRunningDNS()
 	return added, skipped, nil
 }

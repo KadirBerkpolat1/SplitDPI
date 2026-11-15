@@ -139,10 +139,11 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 		return job{}, ConfigError{File: o.P.ConfigFile, Err: err}
 	}
 	var startDNS func(context.Context) error
+	var flushDNS func(context.Context, io.Writer)
 	dnsPort := 0
 	if cfg.DNSOn() {
 		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Local: &dns.Local{Root: o.Root}, Port: dns.Port}
-		startDNS, dnsPort = f.Start, dns.Port
+		startDNS, flushDNS, dnsPort = f.Start, o.flushDNSCaches, dns.Port
 	}
 	ruleset, err := nft.Ruleset(nft.RulesetInput{
 		Table: o.P.NftTable, QNum: cfg.QNum, TCPPorts: out.TCPPorts, UDPPorts: out.UDPPorts,
@@ -169,7 +170,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 	return job{
 		sup: &supervisor.Supervisor{
 			P: o.P, Exec: o.Exec, Spawn: spawn, Now: now, Sleep: time.Sleep, Log: log, UID: uid, GID: gid,
-			StartDNS: startDNS,
+			StartDNS: startDNS, FlushDNS: flushDNS,
 		},
 		eng:     eng,
 		out:     out,

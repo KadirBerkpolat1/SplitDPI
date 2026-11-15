@@ -245,6 +245,8 @@ help = "splitdpi çalışırken DNS'i (53. port) şifreler: off | auto | cloudfl
 usage = "Kullanım: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS yönlendirmesi kapatıldı. Bir sonraki başlatmada geçerli olur."
 restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
+cache_flushed = "%s DNS önbelleği temizlendi."
+cache_flush_failed = "Bir DNS önbelleği temizlenemedi: %v"
 
 [revert]
 usage = "Kullanım: splitdpi revert [--rules-only] [--purge]"

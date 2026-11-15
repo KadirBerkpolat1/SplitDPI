@@ -194,6 +194,32 @@ func TestDNSStartFailureAborts(t *testing.T) {
 	}
 }
 
+// Caches cleared before the redirect loads would fill again with the ISP's answers.
+func TestFlushesDNSAfterTable(t *testing.T) {
+	p := setup(t)
+	h := newHarness(t, p, false)
+	h.s.FlushDNS = func(context.Context, io.Writer) {
+		h.mu.Lock()
+		h.calls = append(h.calls, call{cmd: "dns flush"})
+		h.mu.Unlock()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- h.s.Run(ctx, out, rules, meta()) }()
+	<-h.spawned
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, c := range h.cmds() {
+		order = append(order, c.cmd)
+	}
+	if load, flush := slices.Index(order, "nft -f -"), slices.Index(order, "dns flush"); load < 0 || flush < load {
+		t.Errorf("order %q: caches must be cleared after the table loads", order)
+	}
+}
+
 func TestCrashLoop(t *testing.T) {
 	p := setup(t)
 	h := newHarness(t, p, true)

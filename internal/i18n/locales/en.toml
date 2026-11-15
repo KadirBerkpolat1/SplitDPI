@@ -240,6 +240,8 @@ help = "Encrypt DNS (port 53) while splitdpi runs: off | auto | cloudflare | goo
 usage = "Usage: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS redirect is off. It applies on the next start."
 restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
+cache_flushed = "Cleared the DNS cache of %s."
+cache_flush_failed = "Could not clear a DNS cache: %v"
 
 [revert]
 usage = "Usage: splitdpi revert [--rules-only] [--purge]"

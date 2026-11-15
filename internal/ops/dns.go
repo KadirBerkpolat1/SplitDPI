@@ -3,9 +3,12 @@ package ops
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"net/url"
+	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
@@ -75,6 +78,46 @@ func (o *Ops) SetDNS(provider string, proto dns.Protocol) (running bool, err err
 // its own encrypted DNS then only serves programs that bypass that resolver.
 func (o *Ops) SystemEncryptedDNS(ctx context.Context) (name string, ok bool) {
 	return doctor.EncryptedDNS(ctx, o.doctorEnv())
+}
+
+// flushDNSCaches clears the local resolver caches (dns.FlushCaches) and
+// writes what it did to log. A failure stops nothing: that cache keeps its
+// answers until they expire.
+func (o *Ops) flushDNSCaches(ctx context.Context, log io.Writer) {
+	procs, err := o.procs()
+	if err != nil {
+		fmt.Fprintln(log, i18n.T("dns.cache_flush_failed", err))
+		return
+	}
+	comms := make([]string, len(procs))
+	for i, p := range procs {
+		comms[i] = p.Comm
+	}
+	flushed, err := dns.FlushCaches(ctx, o.Exec, comms)
+	for _, name := range flushed {
+		fmt.Fprintln(log, i18n.T("dns.cache_flushed", name))
+	}
+	if err != nil {
+		fmt.Fprintln(log, i18n.T("dns.cache_flush_failed", err))
+	}
+}
+
+const flushTimeout = 10 * time.Second
+
+// flushRunningDNS clears the local resolver caches after a site was added
+// while SplitDPI runs with encrypted DNS in its config, so the site does not
+// wait for an answer cached before to expire. Without the redirect a fresh
+// answer would come from the ISP again, so then it does nothing.
+func (o *Ops) flushRunningDNS() {
+	if !o.Running() {
+		return
+	}
+	if c, err := config.Load(o.P); err != nil || !c.DNSOn() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), flushTimeout)
+	defer cancel()
+	o.flushDNSCaches(ctx, o.log())
 }
 
 // dnsClient resolves like the forwarder does with c; with DNS off, like auto
