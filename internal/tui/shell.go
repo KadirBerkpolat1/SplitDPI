@@ -446,7 +446,9 @@ func overlay(base, box string, left, right int) string {
 			break
 		}
 		l := lines[y+i]
-		lines[y+i] = ansi.Truncate(l, x, "") + ansi.ResetStyle + o + ansi.TruncateLeft(l, x+bw, "")
+		left := ansi.Truncate(l, x, "")
+		left += strings.Repeat(" ", x-ansi.StringWidth(left)) // an empty toast line is shorter than x
+		lines[y+i] = left + ansi.ResetStyle + o + ansi.TruncateLeft(l, x+bw, "")
 	}
 	return strings.Join(lines, "\n")
 }
