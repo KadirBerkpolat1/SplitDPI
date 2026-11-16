@@ -205,14 +205,15 @@ and off and adds or removes sites. Restart SplitDPI to apply a change.
 
 ## Editing apps
 
-An app profile is a list of addresses, and for some apps (Discord) a voice and
-stream (UDP) profile that sends decoy packets ahead of calls and screen shares.
-You can change both, or add an app of your own:
+An app profile is a list of addresses, and can carry a voice and stream (UDP)
+profile that sends decoy packets ahead of calls and screen shares. No shipped
+app has one: SplitDPI leaves Discord's voice servers, calls and streams alone.
+You can change an app, or add an app of your own:
 
 ```sh
 sudo splitdpi apps show discord                     # its addresses and voice state
-sudo splitdpi apps remove-host discord discord.media # leave voice servers alone
-sudo splitdpi apps udp discord off                   # leave calls and streams alone
+sudo splitdpi apps remove-host discord klipy.com     # one address fewer
+sudo splitdpi apps udp myapp off                     # leave its calls and streams alone
 sudo splitdpi apps new steam Steam                   # a new app, enabled
 sudo splitdpi apps add-host steam store.steampowered.com
 sudo splitdpi apps reset discord                     # back as shipped
@@ -222,8 +223,8 @@ An edit saves your copy of the app in `/etc/splitdpi/apps/ID.toml`, in the
 same format as the preset apps; it replaces the shipped app of that id, so
 `presets update` no longer changes it until you reset it. `reset` on an app of
 your own deletes it. On the Sites page, `o` opens the app under the cursor and
-`n` adds a new one. Turn voice off when calls and streams work without SplitDPI,
-or break with it. Restart SplitDPI to apply a change.
+`n` adds a new one. `udp ID off` drops a voice profile you wrote into your
+copy; `udp ID on` brings back a shipped one. Restart SplitDPI to apply a change.
 
 ## Switching from zapret or zapret2
 
@@ -364,8 +365,9 @@ unmodified.
   WhatsApp and Signal, Roblox game servers, and the WhatsApp and Viber phone
   apps' own connections carry no TLS hostname, so they are not covered. The
   Sites page notes this next to each app.
-- **Discord voice.** The voice preset is applied but not verified on a real
-  call yet. `scan` says so; report whether it works for you.
+- **Discord voice and streams.** SplitDPI does not touch them: the Discord app
+  has no voice profile and no voice server (`discord.media`) addresses. In
+  Türkiye voice works without SplitDPI.
 
 ## Revert guarantee
 
@@ -454,10 +456,9 @@ warranty.
 - [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) by Çağrı
   Taşkın (MIT): ISP strategies, the exclusion list and Roblox hosts.
 - [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)
-  (MIT): Discord and YouTube hosts, the Discord voice settings and the Russian
-  exclusion list.
+  (MIT): Discord and YouTube hosts and the Russian exclusion list.
 - [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT): the
-  extra Discord voice ports.
+  built-in-blob fallback.
 - [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
   (MIT): hosts for Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn,
   TikTok and Pastebin, and the added Telegram, YouTube and Discord hosts.

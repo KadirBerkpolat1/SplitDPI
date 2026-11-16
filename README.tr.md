@@ -219,15 +219,16 @@ geçerli olması için SplitDPI'yi yeniden başlatın.
 
 ## Uygulamaları düzenleme
 
-Bir uygulama profili bir adres listesidir; bazı uygulamalarda (Discord) buna
-görüşme ve ekran paylaşımlarının önüne sahte paketler gönderen bir ses ve
-yayın (UDP) profili eklenir. İkisini de değiştirebilir ya da kendi
-uygulamanızı ekleyebilirsiniz:
+Bir uygulama profili bir adres listesidir; görüşme ve ekran paylaşımlarının
+önüne sahte paketler gönderen bir ses ve yayın (UDP) profili de taşıyabilir.
+Hazır uygulamaların hiçbirinde yoktur: SplitDPI Discord'un ses sunucularına,
+görüşmelerine ve yayınlarına dokunmaz. Bir uygulamayı değiştirebilir ya da
+kendi uygulamanızı ekleyebilirsiniz:
 
 ```sh
 sudo splitdpi apps show discord                     # adresleri ve ses durumu
-sudo splitdpi apps remove-host discord discord.media # ses sunucularına dokunma
-sudo splitdpi apps udp discord off                   # görüşme ve yayınlara dokunma
+sudo splitdpi apps remove-host discord klipy.com     # bir adres eksik
+sudo splitdpi apps udp uygulamam off                 # görüşme ve yayınlarına dokunma
 sudo splitdpi apps new steam Steam                   # yeni uygulama, açık gelir
 sudo splitdpi apps add-host steam store.steampowered.com
 sudo splitdpi apps reset discord                     # dağıtıldığı haline dön
@@ -237,8 +238,8 @@ Her düzenleme uygulamanın sizin kopyanızı hazır uygulamalarla aynı biçimd
 `/etc/splitdpi/apps/ID.toml` dosyasına kaydeder; bu kopya aynı kimlikli hazır
 uygulamanın yerine geçer, bu yüzden `reset` edene kadar `presets update` onu
 değiştirmez. Kendi uygulamanızda `reset` onu siler. Siteler sayfasında `o`
-imleçteki uygulamayı açar, `n` yeni uygulama ekler. Görüşme ve yayınlar
-SplitDPI olmadan çalışıyorsa ya da onunla bozuluyorsa sesi kapatın.
+imleçteki uygulamayı açar, `n` yeni uygulama ekler. `udp ID off` kopyanıza
+yazdığınız ses profilini kaldırır; `udp ID on` hazır olanı geri getirir.
 Değişikliğin geçerli olması için SplitDPI'yi yeniden başlatın.
 
 ## zapret ya da zapret2'den geçiş
@@ -390,9 +391,9 @@ nfqws2 durursa trafik değiştirilmeden geçer.
   Signal'daki sesli ve görüntülü aramalar, Roblox oyun sunucuları ve WhatsApp
   ile Viber telefon uygulamalarının kendi bağlantıları TLS alan adı taşımaz; bu
   yüzden kapsanmaz. Siteler sayfası bunu her uygulamanın yanında belirtir.
-- **Discord sesli görüşme.** Ses hazır ayarı uygulanır ama henüz gerçek bir
-  görüşmede doğrulanmadı. `scan` bunu belirtir; sizde çalışıp çalışmadığını
-  bildirin.
+- **Discord ses ve yayın.** SplitDPI bunlara dokunmaz: Discord uygulamasında
+  ses profili ve ses sunucusu (`discord.media`) adresi yoktur. Türkiye'de ses
+  SplitDPI olmadan çalışır.
 
 ## Geri alma güvencesi
 
@@ -484,10 +485,9 @@ sorumluluğunuzda kullanırsınız ve hiçbir garanti verilmez.
 - [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey), Çağrı
   Taşkın (MIT): sağlayıcı stratejileri, hariç tutma listesi ve Roblox adresleri.
 - [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)
-  (MIT): Discord ve YouTube adresleri, Discord ses ayarları ve Rusya hariç
-  tutma listesi.
-- [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT): ek
-  Discord ses portları.
+  (MIT): Discord ve YouTube adresleri ve Rusya hariç tutma listesi.
+- [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT):
+  yerleşik blob yedeği.
 - [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
   (MIT): Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn, TikTok ve
   Pastebin adresleri ile Telegram, YouTube ve Discord'a eklenen adresler.

@@ -62,9 +62,9 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 
 ## Known gaps
 
-- **Discord voice** uses a substitute fake blob and has not been tested on a
-  real call. In Türkiye voice currently works without UDP desync, so the UDP
-  profile is not needed there today.
+- **Discord voice and streams** are left alone: the Discord app has no UDP
+  profile and no `discord.media` addresses. In Türkiye voice works without
+  UDP desync; where voice needs it (Russia) nothing covers it today.
 
 ## Before the first public release
 

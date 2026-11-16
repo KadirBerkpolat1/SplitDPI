@@ -23,8 +23,8 @@ func TestEmbeddedSeedClean(t *testing.T) {
 			t.Fatalf("app %q: want ≥1 probe", id)
 		}
 	}
-	if s.Apps["discord"].UDP == nil {
-		t.Fatal("discord: want UDP profile")
+	if d := s.Apps["discord"]; d.UDP != nil || slices.ContainsFunc(d.Hosts, func(h string) bool { return h == "discord.media" || h == "live-video.net" }) {
+		t.Fatalf("discord touches voice and streams: %+v", d)
 	}
 	wantTLS := "--payload=tls_client_hello --lua-desync=multidisorder:pos=2:seqovl=1"
 	cs := s.Candidates(9121, "TR")

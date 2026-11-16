@@ -2,6 +2,8 @@ package ops
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
@@ -10,11 +12,29 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
+const discordWithVoice = `schema = 1
+id = "discord"
+name = "Discord"
+hosts = ["discord.com", "discord.media"]
+
+[udp]
+ports = "50000-50100"
+l7 = ["discord", "stun"]
+desync = "--payload=stun,discord_ip_discovery --lua-desync=fake:blob=fake_default_quic:repeats=6"
+`
+
 func TestAppEditShipped(t *testing.T) {
 	o := &Ops{P: paths.Under(t.TempDir())}
+	apps := filepath.Join(o.P.PresetCache, "apps")
+	if err := os.MkdirAll(apps, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(apps, "discord.toml"), []byte(discordWithVoice), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	shipped, err := o.App("discord")
 	if err != nil || shipped.UDP == nil || !slices.Contains(shipped.Hosts, "discord.media") {
-		t.Fatalf("embedded discord: %+v, %v", shipped, err)
+		t.Fatalf("cached discord: %+v, %v", shipped, err)
 	}
 	if err := o.AppHostRemove("discord", "https://Discord.media/"); err != nil {
 		t.Fatal(err)
