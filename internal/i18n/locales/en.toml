@@ -30,7 +30,7 @@ remove_old_failed = "Could not remove an old engine version: %v"
 help = "Show, refresh or validate preset data (list | update | check DIR)."
 
 [cmd.apps]
-help = "List, enable or disable app profiles (list | enable ID | disable ID)."
+help = "List, enable, disable or edit app profiles (list | enable ID | disable ID | show ID | new ID NAME | add-host ID DOMAIN | remove-host ID DOMAIN | udp ID on|off | reset ID)."
 
 [cmd.exclude]
 help = "Manage domains never touched by the bypass (list | add DOMAIN | remove DOMAIN)."
@@ -100,10 +100,23 @@ generic = "Generic strategies: %d"
 warnings = "Skipped files:"
 
 [apps]
-usage = "Usage: splitdpi apps list | enable ID | disable ID"
+usage = "Usage: splitdpi apps list | enable ID | disable ID | show ID | new ID NAME | add-host ID DOMAIN | remove-host ID DOMAIN | udp ID on|off | reset ID"
 unknown = "Unknown app %q. Known apps: %s"
 enabled = "Enabled %s. Restart splitdpi to apply."
 disabled = "Disabled %s. Restart splitdpi to apply."
+exists = "An app %q already exists."
+created = "Created and enabled %s. Add its addresses, then restart splitdpi to apply."
+host_added = "Added %s to %s. Restart splitdpi to apply."
+host_removed = "Removed %s from %s. Restart splitdpi to apply."
+udp_on = "The bypass handles the voice and streams of %s again. Restart splitdpi to apply."
+udp_off = "The bypass leaves the voice and streams of %s alone. Restart splitdpi to apply."
+no_udp = "This app has no voice and stream profile."
+reset = "Undid your changes to %s. Restart splitdpi to apply."
+deleted = "Deleted %s. Restart splitdpi to apply."
+hosts = "Addresses:"
+udp_state = "Voice and streams (UDP): %s"
+on = "on"
+off = "off"
 
 [exclude]
 usage = "Usage: splitdpi exclude list | add DOMAIN | remove DOMAIN"
@@ -444,6 +457,23 @@ working = "Removing the service..."
 app = "app"
 yours = "added by you"
 excluded = "excluded, never touched"
+app_edited = "app, edited by you"
+app_yours = "app, added by you"
+
+[app_edit]
+open = "Edit"
+new = "New app"
+which_app = "What is the app called? Its addresses come next."
+create = "Create"
+head = "The addresses the bypass handles for this app; each covers its subdomains too."
+empty = "No addresses yet."
+add = "Add an address"
+which_host = "Which address? Paste a domain or a link; its subdomains are covered too."
+voice = "Voice and streams (UDP)"
+voice_hint = "When on, SplitDPI sends decoy packets ahead of calls and screen shares so that a blocked voice server can be reached. Turn it off when calls and streams work without SplitDPI, or break with it; SplitDPI then leaves them alone."
+voice_toggle = "Voice on/off"
+reset = "Undo my changes"
+delete = "Delete app"
 
 [shell.scan]
 intro = "The setup checks this machine, finds your internet provider, then tries ready-made strategies or scans one site with blockcheck2."

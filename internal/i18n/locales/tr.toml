@@ -35,7 +35,7 @@ arch = "Desteklenmeyen mimari: %s (desteklenenler: amd64, arm64)."
 help = "Hazır ayar verisini gösterir, günceller veya doğrular (list | update | check DİZİN)."
 
 [cmd.apps]
-help = "Uygulama profillerini listeler, açar veya kapatır (list | enable ID | disable ID)."
+help = "Uygulama profillerini listeler, açar, kapatır veya düzenler (list | enable ID | disable ID | show ID | new ID AD | add-host ID ALAN | remove-host ID ALAN | udp ID on|off | reset ID)."
 
 [cmd.exclude]
 help = "Engel aşmanın hiç dokunmayacağı alan adlarını yönetir (list | add ALAN | remove ALAN)."
@@ -105,10 +105,23 @@ generic = "Genel stratejiler: %d"
 warnings = "Atlanan dosyalar:"
 
 [apps]
-usage = "Kullanım: splitdpi apps list | enable ID | disable ID"
+usage = "Kullanım: splitdpi apps list | enable ID | disable ID | show ID | new ID AD | add-host ID ALAN | remove-host ID ALAN | udp ID on|off | reset ID"
 unknown = "Bilinmeyen uygulama %q. Bilinen uygulamalar: %s"
 enabled = "%s açıldı. Uygulamak için splitdpi'yi yeniden başlatın."
 disabled = "%s kapatıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+exists = "%q adında bir uygulama zaten var."
+created = "%s oluşturuldu ve açıldı. Adreslerini ekleyin, sonra uygulamak için splitdpi'yi yeniden başlatın."
+host_added = "%s, %s uygulamasına eklendi. Uygulamak için splitdpi'yi yeniden başlatın."
+host_removed = "%s, %s uygulamasından çıkarıldı. Uygulamak için splitdpi'yi yeniden başlatın."
+udp_on = "Engel aşma %s sesli görüşme ve yayınlarına yine uygulanıyor. Uygulamak için splitdpi'yi yeniden başlatın."
+udp_off = "Engel aşma artık %s sesli görüşme ve yayınlarına dokunmuyor. Uygulamak için splitdpi'yi yeniden başlatın."
+no_udp = "Bu uygulamanın ses ve yayın profili yok."
+reset = "%s için yaptığınız değişiklikler geri alındı. Uygulamak için splitdpi'yi yeniden başlatın."
+deleted = "%s silindi. Uygulamak için splitdpi'yi yeniden başlatın."
+hosts = "Adresler:"
+udp_state = "Ses ve yayın (UDP): %s"
+on = "açık"
+off = "kapalı"
 
 [exclude]
 usage = "Kullanım: splitdpi exclude list | add ALAN | remove ALAN"
@@ -449,6 +462,23 @@ working = "Servis kaldırılıyor..."
 app = "uygulama"
 yours = "sizin eklediğiniz"
 excluded = "hariç tutulan, hiç dokunulmaz"
+app_edited = "uygulama, sizin düzenlediğiniz"
+app_yours = "uygulama, sizin eklediğiniz"
+
+[app_edit]
+open = "Düzenle"
+new = "Yeni uygulama"
+which_app = "Uygulamanın adı ne? Ardından adreslerini ekleyeceksiniz."
+create = "Oluştur"
+head = "Engel aşmanın bu uygulama için uyguladığı adresler; her biri alt alanlarını da kapsar."
+empty = "Henüz adres yok."
+add = "Adres ekle"
+which_host = "Hangi adres? Alan adını ya da bağlantıyı yapıştırın; alt alanları da kapsanır."
+voice = "Ses ve yayın (UDP)"
+voice_hint = "Açıkken SplitDPI, engelli bir ses sunucusuna ulaşılabilsin diye görüşme ve ekran paylaşımlarının önüne sahte paketler gönderir. Görüşme ve yayınlar SplitDPI olmadan çalışıyorsa ya da onunla bozuluyorsa kapatın; SplitDPI o zaman onlara dokunmaz."
+voice_toggle = "Ses aç/kapat"
+reset = "Değişikliklerimi geri al"
+delete = "Uygulamayı sil"
 
 [shell.scan]
 intro = "Kurulum bu bilgisayarı denetler, internet sağlayıcınızı bulur, sonra hazır stratejileri dener ya da blockcheck2 ile tek bir siteyi tarar."

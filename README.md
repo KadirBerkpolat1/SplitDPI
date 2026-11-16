@@ -164,6 +164,7 @@ needs a terminal of at least 80x24.
 | `splitdpi enable` / `disable` | Installs and starts the service, which takes over from a background or window run, or stops and removes it. |
 | `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state and whether it starts at boot, or shows its log. |
 | `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
+| `splitdpi apps show ID\|new ID NAME\|add-host ID DOMAIN\|remove-host ID DOMAIN\|udp ID on\|off\|reset ID` | Edits an app's addresses and its voice and stream profile, or adds an app of your own; see [Editing apps](#editing-apps). |
 | `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles. |
 | `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
 | `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install over to SplitDPI. |
@@ -201,6 +202,28 @@ To add many at once, put them in a text file, one per line, and run
 `*.example.com` or `.example.com` mean `example.com`; lines that are not a
 domain are skipped and listed. The Sites page of the terminal UI turns apps on
 and off and adds or removes sites. Restart SplitDPI to apply a change.
+
+## Editing apps
+
+An app profile is a list of addresses, and for some apps (Discord) a voice and
+stream (UDP) profile that sends decoy packets ahead of calls and screen shares.
+You can change both, or add an app of your own:
+
+```sh
+sudo splitdpi apps show discord                     # its addresses and voice state
+sudo splitdpi apps remove-host discord discord.media # leave voice servers alone
+sudo splitdpi apps udp discord off                   # leave calls and streams alone
+sudo splitdpi apps new steam Steam                   # a new app, enabled
+sudo splitdpi apps add-host steam store.steampowered.com
+sudo splitdpi apps reset discord                     # back as shipped
+```
+
+An edit saves your copy of the app in `/etc/splitdpi/apps/ID.toml`, in the
+same format as the preset apps; it replaces the shipped app of that id, so
+`presets update` no longer changes it until you reset it. `reset` on an app of
+your own deletes it. On the Sites page, `o` opens the app under the cursor and
+`n` adds a new one. Turn voice off when calls and streams work without SplitDPI,
+or break with it. Restart SplitDPI to apply a change.
 
 ## Switching from zapret or zapret2
 

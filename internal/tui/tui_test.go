@@ -166,6 +166,52 @@ func (f *fake) AppsDisable(id string) error {
 	f.record("apps disable " + id)
 	return nil
 }
+
+// editApp changes the user's copy of the app, as ops saves it.
+func (f *fake) editApp(id string, change func(a *presets.App)) {
+	a := f.set.Apps[id]
+	if !a.User {
+		orig := a
+		a.User, a.Preset = true, &orig
+	}
+	a.Hosts = slices.Clone(a.Hosts)
+	change(&a)
+	f.set.Apps[id] = a
+}
+func (f *fake) AppNew(id, name string) error {
+	f.record("apps new " + id + " " + name)
+	f.set.Apps[id] = presets.App{ID: id, Name: name, User: true}
+	return nil
+}
+func (f *fake) AppHostAdd(id, d string) (string, error) {
+	f.record("apps add-host " + id + " " + d)
+	f.editApp(id, func(a *presets.App) { a.Hosts = append(a.Hosts, d) })
+	return d, nil
+}
+func (f *fake) AppHostRemove(id, d string) error {
+	f.record("apps remove-host " + id + " " + d)
+	f.editApp(id, func(a *presets.App) { a.Hosts = slices.DeleteFunc(a.Hosts, func(h string) bool { return h == d }) })
+	return nil
+}
+func (f *fake) AppSetUDP(id string, on bool) error {
+	if on {
+		f.record("apps udp " + id + " on")
+		f.editApp(id, func(a *presets.App) { a.UDP = a.Preset.UDP })
+		return nil
+	}
+	f.record("apps udp " + id + " off")
+	f.editApp(id, func(a *presets.App) { a.UDP = nil })
+	return nil
+}
+func (f *fake) AppReset(id string) error {
+	f.record("apps reset " + id)
+	if a := f.set.Apps[id]; a.Preset != nil {
+		f.set.Apps[id] = *a.Preset
+	} else {
+		delete(f.set.Apps, id)
+	}
+	return nil
+}
 func (f *fake) ExcludeList() ([]string, error) { return f.excluded, nil }
 func (f *fake) ExcludeAdd(d string) (string, error) {
 	f.record("exclude add " + d)

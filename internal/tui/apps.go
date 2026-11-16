@@ -36,6 +36,7 @@ type appsScreen struct {
 	typing   bool
 	ask      askKind
 	skipped  []ops.ImportSkip // lines the last import left out
+	edit     *appEditor       // the app whose addresses are open, if any
 }
 
 // askKind is what the text input asks for.
@@ -45,6 +46,8 @@ const (
 	askExclude askKind = iota
 	askSite
 	askFile
+	askApp  // a new app's name
+	askHost // an address for the open app
 )
 
 type (
@@ -127,37 +130,54 @@ func (m Model) appsActions() []action {
 		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.add"), CLI: "sudo splitdpi sites add " + a.input.Value(), Do: (*Model).siteTyped}, cancel}
 	case a.typing && a.ask == askFile:
 		return []action{{Key: "enter", Label: i18n.T("sites_import_tui.import"), CLI: "sudo splitdpi sites import " + a.input.Value(), Do: (*Model).importTyped}, cancel}
+	case a.typing && a.ask == askApp:
+		name := strings.TrimSpace(a.input.Value())
+		return []action{{Key: "enter", Label: i18n.T("app_edit.create"), CLI: "sudo splitdpi apps new " + a.newID(name) + " " + shellArg(name), Do: (*Model).appTyped}, cancel}
+	case a.typing && a.ask == askHost:
+		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.add"), CLI: "sudo splitdpi apps add-host " + a.edit.id + " " + a.input.Value(), Do: (*Model).hostTyped}, cancel}
 	case a.typing:
 		return []action{{Key: "enter", Label: i18n.T("tui.apps_screen.exclude"), CLI: "sudo splitdpi exclude add " + a.input.Value(), Do: (*Model).excludeTyped}, cancel}
+	case a.edit != nil:
+		return m.appEditActions()
 	}
 	// The second action follows the cursor, so focus keeps its place.
 	first := action{Key: "space", Label: i18n.T("tui.act.toggle"), Do: (*Model).toggleApp}
+	var edit []action
 	if d, ok := a.site(); ok {
 		first = action{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi sites remove " + d, Do: (*Model).removeSite}
 	} else if a.cursor < len(a.apps) {
+		id := a.apps[a.cursor].ID
 		verb := "enable"
-		if m.appEnabled(a.apps[a.cursor].ID) {
+		if m.appEnabled(id) {
 			verb = "disable"
 		}
-		first.CLI = "sudo splitdpi apps " + verb + " " + a.apps[a.cursor].ID
+		first.CLI = "sudo splitdpi apps " + verb + " " + id
+		edit = []action{{Key: "o", Label: i18n.T("app_edit.open"), CLI: "sudo splitdpi apps show " + id, Do: (*Model).openAppEditor}}
 	}
-	startTyping := func(k askKind) func(m *Model) tea.Cmd {
-		return func(m *Model) tea.Cmd {
-			a := &m.apps
-			a.typing, a.ask, a.skipped, m.focus, m.inPage = true, k, nil, 0, true
-			a.input.Placeholder, a.input.CharLimit = "example.com", 253
-			if k == askFile {
-				a.input.Placeholder, a.input.CharLimit = i18n.T("sites_import_tui.placeholder"), 4096
-			}
-			a.input.SetValue("")
-			return a.input.Focus()
-		}
-	}
-	return []action{
+	return slices.Concat([]action{
 		{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(askSite)},
 		first,
 		{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(askExclude)},
 		{Key: "i", Label: i18n.T("sites_import_tui.act"), CLI: "sudo splitdpi sites import FILE", Do: startTyping(askFile)},
+	}, edit, []action{
+		{Key: "n", Label: i18n.T("app_edit.new"), CLI: "sudo splitdpi apps new ID NAME", Do: startTyping(askApp)},
+	})
+}
+
+// startTyping opens the text input for k.
+func startTyping(k askKind) func(m *Model) tea.Cmd {
+	return func(m *Model) tea.Cmd {
+		a := &m.apps
+		a.typing, a.ask, a.skipped, m.focus, m.inPage = true, k, nil, 0, true
+		a.input.Placeholder, a.input.CharLimit = "example.com", 253
+		switch k {
+		case askFile:
+			a.input.Placeholder, a.input.CharLimit = i18n.T("sites_import_tui.placeholder"), 4096
+		case askApp:
+			a.input.Placeholder, a.input.CharLimit = "Steam", 64
+		}
+		a.input.SetValue("")
+		return a.input.Focus()
 	}
 }
 
@@ -312,6 +332,8 @@ func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		m.note = strings.Join(note, " ")
 		return m, nil, true
+	case appEditedMsg:
+		return m.appEdited(msg)
 	}
 	return m, nil, false
 }
@@ -331,6 +353,9 @@ func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 		var cmd tea.Cmd
 		a.input, cmd = a.input.Update(k)
 		return m, cmd, true
+	}
+	if a.edit != nil {
+		return m.appEditKey(k)
 	}
 	n := a.rows()
 	switch k.String() {
@@ -354,6 +379,9 @@ func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 // failed, and the lines the last import skipped.
 func (m Model) appsView(w, h int) string {
 	a := m.apps
+	if a.edit != nil {
+		return m.appEditView(w, h)
+	}
 	type entry struct {
 		on         bool
 		name, kind string
@@ -362,7 +390,7 @@ func (m Model) appsView(w, h int) string {
 	}
 	var entries []entry
 	for _, app := range a.apps {
-		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, i18n.T("shell.sites.app"), probe.Overall(m.probe[app.ID]), ops.AppNote(app)})
+		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, appKind(app), probe.Overall(m.probe[app.ID]), ops.AppNote(app)})
 	}
 	for _, d := range a.sites {
 		entries = append(entries, entry{on: true, name: d, kind: i18n.T("shell.sites.yours"), fail: probe.Overall(m.probe[d])})
@@ -416,6 +444,8 @@ func (m Model) appsView(w, h int) string {
 			q = i18n.T("tui.apps_screen.which_add")
 		case askFile:
 			q = i18n.T("sites_import_tui.which")
+		case askApp:
+			q = i18n.T("app_edit.which_app")
 		}
 		tail = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
 		tail = append([]string{""}, tail...)

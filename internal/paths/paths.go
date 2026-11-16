@@ -11,6 +11,7 @@ type Paths struct {
 	ConfigFile   string
 	UserExclude  string
 	UserHosts    string
+	UserApps     string
 	StateDir     string
 	EngineDir    string
 	PresetCache  string
@@ -48,6 +49,7 @@ func Under(root string) Paths {
 		ConfigFile:   filepath.Join(cfg, "config.toml"),
 		UserExclude:  filepath.Join(cfg, "exclude.txt"),
 		UserHosts:    filepath.Join(cfg, "hosts.txt"),
+		UserApps:     filepath.Join(cfg, "apps"),
 		StateDir:     state,
 		EngineDir:    filepath.Join(state, "engine"),
 		PresetCache:  filepath.Join(state, "presets"),

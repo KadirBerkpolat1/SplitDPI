@@ -45,10 +45,14 @@ type App struct {
 	ID     string   `toml:"id"`
 	Name   string   `toml:"name"`
 	Hosts  []string `toml:"hosts"`
-	Probe  []string `toml:"probe"`
-	QUIC   bool     `toml:"quic"`
-	UDP    *UDP     `toml:"udp"`
-	Note   string   `toml:"note"`
+	Probe  []string `toml:"probe,omitempty"`
+	QUIC   bool     `toml:"quic,omitempty"`
+	UDP    *UDP     `toml:"udp,omitempty"`
+	Note   string   `toml:"note,omitempty"`
+	// User marks an app read from the user's apps directory; Preset is the
+	// shipped app of the same id that it replaces, if any.
+	User   bool `toml:"-"`
+	Preset *App `toml:"-"`
 }
 
 type Country struct {
@@ -162,14 +166,15 @@ func Load(fsys fs.FS) Set {
 }
 
 // Current returns the fetched snapshot in PresetCache if it has at least one
-// app, otherwise the embedded seed.
+// app, otherwise the embedded seed, with the user's apps laid over it.
 func Current(p paths.Paths) Set {
-	if s := Load(os.DirFS(p.PresetCache)); len(s.Apps) > 0 {
-		s.Origin = "cache"
-		return s
+	s := Load(os.DirFS(p.PresetCache))
+	s.Origin = "cache"
+	if len(s.Apps) == 0 {
+		s = Load(Embedded())
+		s.Origin = "embedded"
 	}
-	s := Load(Embedded())
-	s.Origin = "embedded"
+	s.addUser(p.UserApps)
 	return s
 }
 

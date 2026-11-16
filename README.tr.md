@@ -173,6 +173,7 @@ UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
 | `splitdpi enable` / `disable` | Servisi kurup başlatır (arka planda ya da bir pencerede çalışan engel aşmanın yerini alır) ya da durdurup kaldırır. |
 | `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ve açılışta başlayıp başlamadığını ya da günlüğünü gösterir. |
 | `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
+| `splitdpi apps show ID\|new ID AD\|add-host ID ALAN\|remove-host ID ALAN\|udp ID on\|off\|reset ID` | Bir uygulamanın adreslerini ve ses ve yayın profilini düzenler ya da kendi uygulamanızı ekler; bkz. [Uygulamaları düzenleme](#uygulamaları-düzenleme). |
 | `splitdpi sites list\|add ALAN\|remove ALAN\|import DOSYA` | Engel aşmanın her zaman uygulandığı kendi engelli sitelerinizi yönetir. |
 | `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
 | `splitdpi takeover [--yes]` | Kurulu başka bir zapret ya da zapret2'yi bırakıp SplitDPI'ye geçer. |
@@ -215,6 +216,30 @@ komutunu çalıştırın. `#` ile başlayan satırlar açıklama sayılır;
 satırlar atlanır ve listelenir. Terminal arayüzünün Siteler sayfasında
 uygulamaları açıp kapatabilir, site ekleyip çıkarabilirsiniz. Değişikliğin
 geçerli olması için SplitDPI'yi yeniden başlatın.
+
+## Uygulamaları düzenleme
+
+Bir uygulama profili bir adres listesidir; bazı uygulamalarda (Discord) buna
+görüşme ve ekran paylaşımlarının önüne sahte paketler gönderen bir ses ve
+yayın (UDP) profili eklenir. İkisini de değiştirebilir ya da kendi
+uygulamanızı ekleyebilirsiniz:
+
+```sh
+sudo splitdpi apps show discord                     # adresleri ve ses durumu
+sudo splitdpi apps remove-host discord discord.media # ses sunucularına dokunma
+sudo splitdpi apps udp discord off                   # görüşme ve yayınlara dokunma
+sudo splitdpi apps new steam Steam                   # yeni uygulama, açık gelir
+sudo splitdpi apps add-host steam store.steampowered.com
+sudo splitdpi apps reset discord                     # dağıtıldığı haline dön
+```
+
+Her düzenleme uygulamanın sizin kopyanızı hazır uygulamalarla aynı biçimde
+`/etc/splitdpi/apps/ID.toml` dosyasına kaydeder; bu kopya aynı kimlikli hazır
+uygulamanın yerine geçer, bu yüzden `reset` edene kadar `presets update` onu
+değiştirmez. Kendi uygulamanızda `reset` onu siler. Siteler sayfasında `o`
+imleçteki uygulamayı açar, `n` yeni uygulama ekler. Görüşme ve yayınlar
+SplitDPI olmadan çalışıyorsa ya da onunla bozuluyorsa sesi kapatın.
+Değişikliğin geçerli olması için SplitDPI'yi yeniden başlatın.
 
 ## zapret ya da zapret2'den geçiş
 

@@ -44,6 +44,11 @@ type Backend interface {
 	PresetsList() presets.Set
 	AppsEnable(id string) error
 	AppsDisable(id string) error
+	AppNew(id, name string) error
+	AppHostAdd(id, d string) (string, error)
+	AppHostRemove(id, d string) error
+	AppSetUDP(id string, on bool) error
+	AppReset(id string) error
 	ExcludeList() ([]string, error)
 	ExcludeAdd(d string) (string, error)
 	SitesList() ([]string, error)

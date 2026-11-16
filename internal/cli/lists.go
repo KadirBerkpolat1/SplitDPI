@@ -12,6 +12,7 @@ import (
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
 func init() {
@@ -68,18 +69,76 @@ func runApps(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 			if slices.Contains(enabled, a.ID) {
 				mark = "*"
 			}
-			fmt.Fprintf(w, "%s %-10s %s\n", mark, a.ID, a.Name)
+			fmt.Fprintf(w, "%s %-10s %s%s\n", mark, a.ID, a.Name, appKind(a))
 			if note := ops.AppNote(a); note != "" {
 				fmt.Fprintln(w, "    "+note)
 			}
 		}
 		return nil
+	case len(args) == 2 && args[0] == "show":
+		a, err := o.App(args[1])
+		if err != nil {
+			return appErr(err)
+		}
+		fmt.Fprintf(w, "%s (%s)%s\n", a.Name, a.ID, appKind(a))
+		fmt.Fprintln(w, i18n.T("apps.hosts"))
+		for _, h := range a.Hosts {
+			fmt.Fprintln(w, "  "+h)
+		}
+		switch {
+		case a.UDP != nil:
+			fmt.Fprintln(w, i18n.T("apps.udp_state", i18n.T("apps.on")))
+		case a.Preset != nil && a.Preset.UDP != nil:
+			fmt.Fprintln(w, i18n.T("apps.udp_state", i18n.T("apps.off")))
+		}
+		return nil
+	case len(args) >= 2 && args[0] == "new":
+		if err := o.AppNew(args[1], strings.Join(args[2:], " ")); err != nil {
+			return appErr(err)
+		}
+		fmt.Fprintln(w, i18n.T("apps.created", args[1]))
+		return nil
+	case len(args) == 3 && args[0] == "add-host":
+		d, err := o.AppHostAdd(args[1], args[2])
+		if err != nil {
+			return appErr(err)
+		}
+		fmt.Fprintln(w, i18n.T("apps.host_added", d, args[1]))
+		return nil
+	case len(args) == 3 && args[0] == "remove-host":
+		if err := o.AppHostRemove(args[1], args[2]); err != nil {
+			return appErr(err)
+		}
+		fmt.Fprintln(w, i18n.T("apps.host_removed", args[2], args[1]))
+		return nil
+	case len(args) == 3 && args[0] == "udp" && (args[2] == "on" || args[2] == "off"):
+		on := args[2] == "on"
+		if err := o.AppSetUDP(args[1], on); err != nil {
+			return appErr(err)
+		}
+		msg := "apps.udp_off"
+		if on {
+			msg = "apps.udp_on"
+		}
+		fmt.Fprintln(w, i18n.T(msg, args[1]))
+		return nil
+	case len(args) == 2 && args[0] == "reset":
+		a, err := o.App(args[1])
+		if err == nil {
+			err = o.AppReset(args[1])
+		}
+		if err != nil {
+			return appErr(err)
+		}
+		msg := "apps.reset"
+		if a.User && a.Preset == nil {
+			msg = "apps.deleted"
+		}
+		fmt.Fprintln(w, i18n.T(msg, args[1]))
+		return nil
 	case len(args) == 2 && args[0] == "enable":
-		var unknown ops.UnknownAppError
-		if err := o.AppsEnable(args[1]); errors.As(err, &unknown) {
-			return errors.New(i18n.T("apps.unknown", unknown.ID, strings.Join(unknown.Valid, ", ")))
-		} else if err != nil {
-			return err
+		if err := o.AppsEnable(args[1]); err != nil {
+			return appErr(err)
 		}
 		fmt.Fprintln(w, i18n.T("apps.enabled", args[1]))
 		return nil
@@ -91,6 +150,33 @@ func runApps(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		return nil
 	}
 	return usageError(i18n.T("apps.usage"))
+}
+
+// appKind says after an app's name whether it is the user's copy of a
+// shipped app or an app of the user's own.
+func appKind(a presets.App) string {
+	switch {
+	case a.User && a.Preset != nil:
+		return ", " + i18n.T("shell.sites.app_edited")
+	case a.User:
+		return ", " + i18n.T("shell.sites.app_yours")
+	}
+	return ""
+}
+
+// appErr words the app errors for the user.
+func appErr(err error) error {
+	var unknown ops.UnknownAppError
+	var exists ops.AppExistsError
+	switch {
+	case errors.As(err, &unknown):
+		return errors.New(i18n.T("apps.unknown", unknown.ID, strings.Join(unknown.Valid, ", ")))
+	case errors.As(err, &exists):
+		return errors.New(i18n.T("apps.exists", exists.ID))
+	case errors.Is(err, ops.ErrNoUDP):
+		return errors.New(i18n.T("apps.no_udp"))
+	}
+	return err
 }
 
 func runExclude(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
