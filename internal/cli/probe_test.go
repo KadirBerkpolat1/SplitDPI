@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"net"
+	"net/netip"
 	"os"
 	"slices"
 	"strings"
@@ -55,6 +57,30 @@ func TestParseProbeArgs(t *testing.T) {
 	for _, args := range [][]string{{"--apps"}, {"--apps", " , "}, {"--bogus"}} {
 		if _, _, err := parseProbeArgs(args); err == nil {
 			t.Errorf("%q accepted", args)
+		}
+	}
+}
+
+// A name the system resolver says does not exist, and a lookup that
+// failed, get the failure mark: only a clean, matching answer is ✓.
+func TestProbeCLIMarksDNSFailure(t *testing.T) {
+	public := []netip.Addr{netip.MustParseAddr("162.159.128.233")}
+	sys := func(_ context.Context, name string) ([]netip.Addr, error) {
+		switch name {
+		case "discord.com":
+			return nil, &net.DNSError{Err: "no such host", Name: name, IsNotFound: true}
+		case "discord.gg":
+			return nil, &net.DNSError{Err: "i/o timeout", Name: name, IsTimeout: true}
+		}
+		return public, nil
+	}
+	doh := func(context.Context, string) ([]netip.Addr, error) { return public, nil }
+	var b bytes.Buffer
+	printDNS(&b, probe.CheckDNS(context.Background(), []string{"discord.com", "discord.gg", "pastebin.com"}, sys, doh))
+	out := b.String()
+	for _, want := range []string{"dns  discord.com  ✗  (", "dns  discord.gg  ✗  (", "dns  pastebin.com  ✓\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("no %q in:\n%s", want, out)
 		}
 	}
 }
