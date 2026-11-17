@@ -24,7 +24,7 @@ download_hint = "If the download is blocked, get %s another way and run: sudo sp
 remove_old_failed = "Could not remove an old engine version: %v"
 
 [cmd.presets]
-help = "Show, refresh or validate preset data (list | update | check DIR)."
+help = "Show or refresh preset data (list | update)."
 
 [cmd.apps]
 help = "List, enable, disable or edit app profiles (list | enable ID | disable ID | show ID | new ID NAME | add-host ID DOMAIN | remove-host ID DOMAIN | udp ID on|off | reset ID)."
@@ -76,7 +76,7 @@ isp = "ISP preset: %s"
 candidates = "Candidate strategies:"
 
 [presets]
-usage = "Usage: splitdpi presets list | update | check DIR"
+usage = "Usage: splitdpi presets list | update"
 update.usage = "Usage: splitdpi presets update"
 check.usage = "Usage: splitdpi presets check DIR"
 check.no_dir = "%s is not a directory."
@@ -216,7 +216,7 @@ help = "Show whether the bypass runs, with strategy, engine, apps and the last e
 help = "Remove every splitdpi firewall rule and run file ([--purge] also config and data)."
 
 [run]
-usage = "Usage: splitdpi run [--background | --service]"
+usage = "Usage: splitdpi run [--background]"
 conflict = "Another DPI-bypass tool is running. Stop it first, then run splitdpi again."
 no_strategy = "No strategy configured yet. Run `splitdpi scan` first."
 already = "splitdpi is already running (%s). Use `splitdpi stop` first."
@@ -255,7 +255,7 @@ cache_flushed = "Cleared the DNS cache of %s."
 cache_flush_failed = "Could not clear a DNS cache: %v"
 
 [revert]
-usage = "Usage: splitdpi revert [--rules-only] [--purge]"
+usage = "Usage: splitdpi revert [--purge]"
 removed = "Removed %s"
 clean = "Revert complete, system is clean: no splitdpi rules or run files are left."
 rules_clean = "No splitdpi firewall rules are left."

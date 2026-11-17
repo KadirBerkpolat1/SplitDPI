@@ -88,11 +88,23 @@ func TestLangFromConfig(t *testing.T) {
 	has(t, out.String(), "needs root")
 }
 
-// --help and the --lang error name every language i18n supports.
+// --help and the --lang error name every language i18n supports. The entry
+// points of the service units, the background run and the presets CI stay
+// out of help and usage: TestInternalFlagsStillParse keeps them working.
 func TestHelpHidesInternalAndListsRu(t *testing.T) {
 	out, code := run(t, 1000, "--help")
 	eq(t, code, 0)
 	has(t, out, "--lang en|tr|ru")
+	for _, args := range [][]string{{"presets"}, {"run", "x"}, {"revert", "--bogus"}} {
+		usage, code := run(t, 0, args...)
+		eq(t, code, 2)
+		out += usage
+	}
+	for _, hidden := range []string{"check DIR", "--service", "--detached", "--rules-only"} {
+		if strings.Contains(out, hidden) {
+			t.Errorf("help or usage shows %s:\n%s", hidden, out)
+		}
+	}
 	out, code = run(t, 1000, "--lang")
 	eq(t, code, 2)
 	has(t, out, "en, tr or ru")

@@ -29,7 +29,7 @@ checksum = "SHA-256 uyuşmuyor: arşiv zapret2 %s değil (bozuk ya da yanlış d
 arch = "Desteklenmeyen mimari: %s (desteklenenler: amd64, arm64)."
 
 [cmd.presets]
-help = "Hazır ayar verisini gösterir, günceller veya doğrular (list | update | check DİZİN)."
+help = "Hazır ayar verisini gösterir veya günceller (list | update)."
 
 [cmd.apps]
 help = "Uygulama profillerini listeler, açar, kapatır veya düzenler (list | enable ID | disable ID | show ID | new ID AD | add-host ID ALAN | remove-host ID ALAN | udp ID on|off | reset ID)."
@@ -81,7 +81,7 @@ isp = "Sağlayıcı hazır ayarı: %s"
 candidates = "Aday stratejiler:"
 
 [presets]
-usage = "Kullanım: splitdpi presets list | update | check DİZİN"
+usage = "Kullanım: splitdpi presets list | update"
 update.usage = "Kullanım: splitdpi presets update"
 check.usage = "Kullanım: splitdpi presets check DİZİN"
 check.no_dir = "%s bir dizin değil."
@@ -221,7 +221,7 @@ help = "Engel aşmanın çalışıp çalışmadığını, stratejiyi, motoru, uy
 help = "splitdpi'nin tüm güvenlik duvarı kurallarını ve çalışma dosyalarını kaldırır ([--purge] ayarları ve verileri de)."
 
 [run]
-usage = "Kullanım: splitdpi run [--background | --service]"
+usage = "Kullanım: splitdpi run [--background]"
 conflict = "Başka bir DPI engel aşma aracı çalışıyor. Önce onu durdurun, sonra splitdpi'yi yeniden çalıştırın."
 no_strategy = "Henüz strateji yok. Önce `splitdpi scan` çalıştırın."
 already = "splitdpi zaten çalışıyor (%s). Önce `splitdpi stop` kullanın."
@@ -260,7 +260,7 @@ cache_flushed = "%s DNS önbelleği temizlendi."
 cache_flush_failed = "Bir DNS önbelleği temizlenemedi: %v"
 
 [revert]
-usage = "Kullanım: splitdpi revert [--rules-only] [--purge]"
+usage = "Kullanım: splitdpi revert [--purge]"
 removed = "Kaldırıldı: %s"
 clean = "Geri alma tamam, sistem temiz: splitdpi kuralı ya da çalışma dosyası kalmadı."
 rules_clean = "Güvenlik duvarında splitdpi kuralı kalmadı."

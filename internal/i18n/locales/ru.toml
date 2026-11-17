@@ -29,7 +29,7 @@ checksum = "SHA-256 не совпадает: архив не является za
 arch = "Архитектура %s не поддерживается (поддерживаются: amd64, arm64)."
 
 [cmd.presets]
-help = "Показать, обновить или проверить данные пресетов (list | update | check КАТАЛОГ)."
+help = "Показать или обновить данные пресетов (list | update)."
 
 [cmd.apps]
 help = "Список приложений, включение, выключение и правка их профилей (list | enable ID | disable ID | show ID | new ID ИМЯ | add-host ID ДОМЕН | remove-host ID ДОМЕН | udp ID on|off | reset ID)."
@@ -81,7 +81,7 @@ isp = "Пресет провайдера: %s"
 candidates = "Стратегии-кандидаты:"
 
 [presets]
-usage = "Использование: splitdpi presets list | update | check КАТАЛОГ"
+usage = "Использование: splitdpi presets list | update"
 update.usage = "Использование: splitdpi presets update"
 check.usage = "Использование: splitdpi presets check КАТАЛОГ"
 check.no_dir = "%s не является каталогом."
@@ -221,7 +221,7 @@ help = "Показать, работает ли обход, а также стр
 help = "Удалить все правила брандмауэра и рабочие файлы splitdpi ([--purge] также настройки и данные)."
 
 [run]
-usage = "Использование: splitdpi run [--background | --service]"
+usage = "Использование: splitdpi run [--background]"
 conflict = "Запущено другое средство обхода DPI. Остановите его и снова запустите splitdpi."
 no_strategy = "Стратегия ещё не выбрана. Сначала выполните `splitdpi scan`."
 already = "splitdpi уже запущен (%s). Сначала выполните `splitdpi stop`."
@@ -260,7 +260,7 @@ cache_flushed = "Кэш DNS %s очищен."
 cache_flush_failed = "Не удалось очистить кэш DNS: %v"
 
 [revert]
-usage = "Использование: splitdpi revert [--rules-only] [--purge]"
+usage = "Использование: splitdpi revert [--purge]"
 removed = "Удалено: %s"
 clean = "Откат завершён, система чиста: правил и рабочих файлов splitdpi не осталось."
 rules_clean = "Правил брандмауэра splitdpi не осталось."

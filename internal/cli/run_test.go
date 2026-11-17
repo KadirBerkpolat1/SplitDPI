@@ -210,3 +210,18 @@ func TestRunCommandsUsage(t *testing.T) {
 		}
 	}
 }
+
+// The service units run `run --service` and `revert --rules-only`, the
+// background run `run --detached`, the presets CI `presets check DIR`: hidden
+// from help, they still parse.
+func TestInternalFlagsStillParse(t *testing.T) {
+	for _, args := range [][]string{{"run", "--service"}, {"run", ops.DetachedArg}, {"revert", "--rules-only"}} {
+		o, _ := runOpsFor(t, fstest.MapFS{})
+		if out, code := runOps(t, o, args...); code == 2 || strings.Contains(out, "Usage") {
+			t.Errorf("%v: code %d, %q", args, code, out)
+		}
+	}
+	if out, code := run(t, 1000, "presets", "check", "../presets/data"); code != 0 {
+		t.Errorf("presets check: code %d, %q", code, out)
+	}
+}
