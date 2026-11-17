@@ -95,3 +95,21 @@ func TestPresetsUpdateChecksumErrors(t *testing.T) {
 		})
 	}
 }
+
+// Like every other command that writes, update refuses a normal user with the
+// root message, before anything is downloaded.
+func TestPresetsUpdateNeedsRoot(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("downloaded %s without root", r.URL)
+	}))
+	defer srv.Close()
+	o := rootOps(t)
+	o.Euid = func() int { return 1000 }
+	o.HTTP = toServer(srv)
+	out, code := runOps(t, o, "presets", "update")
+	eq(t, code, 1)
+	has(t, out, "This command needs root. Run: sudo splitdpi presets update")
+	if strings.Contains(out, "Fetching") {
+		t.Errorf("started the download:\n%s", out)
+	}
+}

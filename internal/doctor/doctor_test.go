@@ -158,7 +158,7 @@ func eq(t *testing.T, got, want string) {
 	}
 }
 
-func TestDNSPoisoned(t *testing.T) {
+func TestDoctorSuggestsDNSAuto(t *testing.T) {
 	f := newFake(t)
 	f.env.DNSCheck = func(context.Context) []probe.DNSResult {
 		return []probe.DNSResult{{
@@ -168,7 +168,7 @@ func TestDNSPoisoned(t *testing.T) {
 		}}
 	}
 	c := one(t, doctor.Run(context.Background(), f.env), "dns", doctor.Warn)
-	eq(t, c.Fix, "sudo splitdpi dns on")
+	eq(t, c.Fix, "sudo splitdpi dns auto")
 }
 
 func TestDNSAlreadyEncrypted(t *testing.T) {

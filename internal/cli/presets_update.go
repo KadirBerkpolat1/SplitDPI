@@ -15,6 +15,10 @@ func runPresetsUpdate(ctx context.Context, o *ops.Ops, w io.Writer, args []strin
 	if len(args) != 0 {
 		return usageError(i18n.T("presets.update.usage"))
 	}
+	// presets list and check run as any user; update writes the preset cache.
+	if o.Euid() != 0 {
+		return errors.New(i18n.T("err.need_root", "sudo splitdpi presets update"))
+	}
 	fmt.Fprintln(w, i18n.T("presets.update.fetching", presets.UpdateURL))
 	version, apps, err := o.PresetsUpdate(ctx)
 	if err != nil {

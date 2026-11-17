@@ -12,7 +12,7 @@ For example: Türk Telekom, AS9121. `sudo splitdpi detect` prints it.
 The preset id or strategy from `sudo splitdpi status`.
 
 **Does it work?**
-Which apps work and which do not. For Discord, say whether voice calls connect.
+Which apps work and which do not.
 
 **`sudo splitdpi doctor` output**
 

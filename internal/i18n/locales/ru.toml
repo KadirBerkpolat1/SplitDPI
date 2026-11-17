@@ -13,16 +13,13 @@ lang_value = "Для --lang нужно значение: en, tr или ru"
 help = "Показать версию."
 
 [cmd.engine]
-help = "Установить закреплённый движок zapret2 (install [--from ФАЙЛ]) или показать его состояние (status)."
+help = "Установить закреплённый движок zapret2 (install [--from ФАЙЛ])."
 
 [engine]
-usage = "Использование: splitdpi engine install [--from ФАЙЛ] | splitdpi engine status"
+usage = "Использование: splitdpi engine install [--from ФАЙЛ]"
 downloading = "Загрузка %s"
 installed = "zapret2 %s установлен в %s"
 not_installed = "Движок не установлен. Выполните: sudo splitdpi engine install"
-status = "Движок: zapret2 %s\nКаталог: %s"
-pin_ok = "Совпадает с закреплённой версией."
-pin_mismatch = "Отличается от закреплённой версии %s. Выполните: sudo splitdpi engine install"
 download_hint = "Если загрузка заблокирована, скачайте %s другим способом и выполните: sudo splitdpi engine install --from ФАЙЛ"
 remove_old_failed = "Не удалось удалить старую версию движка: %v"
 
@@ -32,7 +29,7 @@ checksum = "SHA-256 не совпадает: архив не является za
 arch = "Архитектура %s не поддерживается (поддерживаются: amd64, arm64)."
 
 [cmd.presets]
-help = "Показать, обновить или проверить данные пресетов (list | update | check КАТАЛОГ)."
+help = "Показать или обновить данные пресетов (list | update)."
 
 [cmd.apps]
 help = "Список приложений, включение, выключение и правка их профилей (list | enable ID | disable ID | show ID | new ID ИМЯ | add-host ID ДОМЕН | remove-host ID ДОМЕН | udp ID on|off | reset ID)."
@@ -84,7 +81,7 @@ isp = "Пресет провайдера: %s"
 candidates = "Стратегии-кандидаты:"
 
 [presets]
-usage = "Использование: splitdpi presets list | update | check КАТАЛОГ"
+usage = "Использование: splitdpi presets list | update"
 update.usage = "Использование: splitdpi presets update"
 check.usage = "Использование: splitdpi presets check КАТАЛОГ"
 check.no_dir = "%s не является каталогом."
@@ -142,10 +139,12 @@ removed = "%s удалён из ваших сайтов. Перезапусти�
 usage = "Использование: splitdpi strategy list | set ID"
 unknown = "Неизвестная стратегия %q. Список: splitdpi strategy list"
 set = "Выбрана стратегия %s (%s)."
-restart = "splitdpi запущен; перезапустите его, чтобы применить: sudo splitdpi stop && sudo splitdpi run"
 current = "Текущая стратегия: %s (источник: %s)"
 from_country = "%s, общая для страны"
 from_generic = "общая"
+
+[restart]
+hint = "splitdpi запущен; перезапустите его, чтобы применить: %s"
 
 [cmd.doctor]
 help = "Проверить, есть ли на этом компьютере всё, что нужно splitdpi."
@@ -224,7 +223,7 @@ help = "Показать, работает ли обход, а также стр
 help = "Удалить все правила брандмауэра и рабочие файлы splitdpi ([--purge] также настройки и данные)."
 
 [run]
-usage = "Использование: splitdpi run [--background | --service]"
+usage = "Использование: splitdpi run [--background]"
 conflict = "Запущено другое средство обхода DPI. Остановите его и снова запустите splitdpi."
 no_strategy = "Стратегия ещё не выбрана. Сначала выполните `splitdpi scan`."
 already = "splitdpi уже запущен (%s). Сначала выполните `splitdpi stop`."
@@ -263,7 +262,7 @@ cache_flushed = "Кэш DNS %s очищен."
 cache_flush_failed = "Не удалось очистить кэш DNS: %v"
 
 [revert]
-usage = "Использование: splitdpi revert [--rules-only] [--purge]"
+usage = "Использование: splitdpi revert [--purge]"
 removed = "Удалено: %s"
 clean = "Откат завершён, система чиста: правил и рабочих файлов splitdpi не осталось."
 rules_clean = "Правил брандмауэра splitdpi не осталось."
@@ -780,7 +779,7 @@ lang_system = "язык системы"
 none = "нет"
 saved = "%s теперь %s."
 next_start = "Изменение вступит в силу при следующем запуске SplitDPI."
-apps_empty = "Режиму apps нужно хотя бы одно включённое приложение или один ваш сайт. Сначала включите приложение (sudo splitdpi apps enable ID) или добавьте сайт (sudo splitdpi sites add ДОМЕН)."
+apps_empty = "Режиму apps нужно хотя бы одно включённое приложение с адресом или один ваш сайт. Сначала включите приложение (sudo splitdpi apps enable ID) или добавьте сайт (sudo splitdpi sites add ДОМЕН)."
 qnum_note = "Этот номер NFQUEUE не должна использовать другая программа (другой zapret, файрвол или IPS); если номер общий, обе перестают работать."
 err_lang = "Неизвестный язык %q. Допустимо: %s. Чтобы следовать языку системы: splitdpi config reset lang"
 err_run_mode = "Неизвестный способ запуска %q. Допустимо: window, background, boot."

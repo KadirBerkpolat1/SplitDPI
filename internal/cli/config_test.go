@@ -149,3 +149,19 @@ func TestConfigTurkish(t *testing.T) {
 	out, _ = runOps(t, o, "--lang", "tr", "config", "set", "mode", "apps")
 	has(t, out, "en az bir açık uygulama")
 }
+
+// A change saved while splitdpi runs names the restart that keeps its run
+// mode: stop && run would turn a service or background run into a foreground one.
+func TestRestartHintFollowsRunMode(t *testing.T) {
+	for mode, want := range map[string]string{
+		"service":    "sudo splitdpi stop && sudo splitdpi enable\n",
+		"background": "sudo splitdpi stop && sudo splitdpi run --background\n",
+		"foreground": "sudo splitdpi stop && sudo splitdpi run\n",
+	} {
+		o := rootOps(t)
+		holdLock(t, o.P, mode)
+		out, code := runOps(t, o, "--lang", "en", "config", "set", "qnum", "300")
+		eq(t, code, 0)
+		has(t, out, "restart it to apply: "+want)
+	}
+}

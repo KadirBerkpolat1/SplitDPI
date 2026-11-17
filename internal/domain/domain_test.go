@@ -71,3 +71,18 @@ func TestValidAcceptsLDH(t *testing.T) {
 		}
 	}
 }
+
+// A hostname is at most 253 bytes (RFC 1035), though each label fits.
+func TestValidRejectsOver253(t *testing.T) {
+	label := strings.Repeat("a", 63)
+	longest := strings.Join([]string{label, label, label, strings.Repeat("b", 61)}, ".")
+	if len(longest) != 253 || !domain.Valid(longest) {
+		t.Errorf("Valid(%d bytes) = false, want true", len(longest))
+	}
+	if domain.Valid(longest + "b") {
+		t.Error("Valid(254 bytes) = true, want false")
+	}
+	if _, err := domain.Normalize(longest + "b"); err == nil {
+		t.Error("Normalize(254 bytes): want error")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -308,6 +309,35 @@ func TestErrors(t *testing.T) {
 		var bad render.ErrBadStrategy
 		if _, err := render.Render(in); !errors.As(err, &bad) || bad.Field != field {
 			t.Errorf("%s: %v", field, err)
+		}
+	}
+}
+
+// The lists render gets are read from hosts.txt and exclude.txt, which users
+// edit by hand: what reaches nfqws2 is the bare lowercase domain.
+func TestRenderNormalisesHandEdited(t *testing.T) {
+	dir := t.TempDir()
+	read := func(name, body string) []string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		list, err := config.ReadList(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return list
+	}
+	in := input()
+	in.UserHosts = read("hosts.txt", "\ufeff# mine\nExample.COM. # note\n")
+	in.UserExclude = read("exclude.txt", "\ufeffBank.Example. # breaks\n")
+	out := mustRender(t, in)
+	if !slices.Contains(out.Hostlist, "example.com") || !slices.Contains(out.Exclude, "bank.example") {
+		t.Fatalf("hostlist %q, exclude %q", out.Hostlist, out.Exclude)
+	}
+	for _, d := range slices.Concat(out.Hostlist, out.Exclude) {
+		if d != strings.ToLower(d) || strings.ContainsAny(d, "# \ufeff") || strings.HasSuffix(d, ".") {
+			t.Errorf("raw line %q rendered", d)
 		}
 	}
 }

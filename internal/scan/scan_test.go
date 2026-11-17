@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
@@ -205,6 +206,20 @@ func TestScanWinnerProvenance(t *testing.T) {
 	w := rep.Winner
 	if w.ASN != 1 || w.Date != "2026-10-28" || w.Engine != engine.Version {
 		t.Fatalf("provenance %+v", w)
+	}
+}
+
+// When blockcheck2 cannot start, here because a site is not a hostname, the
+// scan reports why, not that the empty log has no summary.
+func TestScanReturnsBlockcheckEnvError(t *testing.T) {
+	env, _, _ := testEnv(t, testSet(), func(string) []probe.Result { return []probe.Result{{OK: false}} })
+	env.Blockcheck = func(ctx context.Context, p scan.BlockcheckParams, progress func(string)) (string, error) {
+		return scan.RunBlockcheck(ctx, engine.Engine{}, nil, p, progress)
+	}
+	_, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"roblox"}, Sites: []string{"a;b.com"}})
+	var invalid domain.InvalidError
+	if !errors.As(err, &invalid) || invalid.Input != "a;b.com" {
+		t.Fatalf("got %v, want the invalid domain a;b.com", err)
 	}
 }
 

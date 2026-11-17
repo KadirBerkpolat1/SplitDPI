@@ -38,20 +38,18 @@ func runDNS(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if running {
-		fmt.Fprintln(w, i18n.T("dns.restart"))
+		fmt.Fprintln(w, i18n.T("restart.hint", o.RestartCommand()))
 	}
 	return nil
 }
 
-// parseDNSArgs reads `PROVIDER [--dot]`; `on` is auto, as in v0.1.
+// parseDNSArgs reads `PROVIDER [--dot]`.
 func parseDNSArgs(args []string) (string, dns.Protocol, error) {
 	provider, proto := "", dns.DoH
 	for _, a := range args {
 		switch {
 		case a == "--dot":
 			proto = dns.DoT
-		case a == "on" && provider == "":
-			provider = dns.Auto
 		case dns.Valid(a) && provider == "":
 			provider = a
 		default:

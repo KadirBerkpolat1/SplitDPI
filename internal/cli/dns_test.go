@@ -11,13 +11,13 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 )
 
-func TestDNSOnOff(t *testing.T) {
+func TestDNSAutoOff(t *testing.T) {
 	o, _ := runOpsFor(t, fstest.MapFS{})
-	out, code := runOps(t, o, "dns", "on")
+	out, code := runOps(t, o, "dns", "auto")
 	eq(t, code, 0)
 	has(t, out, "next start")
 	if c, err := config.Load(o.P); err != nil || c.DNSProvider != "auto" || c.DNSProtocol != dns.DoH {
-		t.Fatalf("dns on not saved as auto/doh: %+v %v", c, err)
+		t.Fatalf("dns auto not saved as auto/doh: %+v %v", c, err)
 	}
 	if _, code := runOps(t, o, "dns", "off"); code != 0 {
 		t.Fatalf("dns off: code %d", code)
@@ -124,7 +124,18 @@ func TestDNSUsageAndRoot(t *testing.T) {
 			t.Errorf("%v: code %d, want 2", args, code)
 		}
 	}
-	out, code := run(t, 1000, "dns", "on")
+	out, code := run(t, 1000, "dns", "auto")
 	eq(t, code, 1)
-	has(t, out, "sudo splitdpi dns on")
+	has(t, out, "sudo splitdpi dns auto")
+}
+
+// `on`, the v0.1 name of auto, is gone: doctor and the usage name auto.
+func TestDNSOnRejected(t *testing.T) {
+	o, _ := runOpsFor(t, fstest.MapFS{})
+	out, code := runOps(t, o, "dns", "on")
+	eq(t, code, 2)
+	has(t, out, "Usage: splitdpi dns")
+	if c, _ := config.Load(o.P); c.DNSOn() {
+		t.Error("dns on was saved")
+	}
 }

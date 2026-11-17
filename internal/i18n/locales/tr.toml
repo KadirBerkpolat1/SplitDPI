@@ -1,28 +1,25 @@
 # Türkçe. Ürün, uygulama ve sağlayıcı adları, komutlar, bayraklar ve dosya yolları çevrilmez.
 
 [usage]
-header = "Kullanım: splitdpi [--lang en|tr] <komut> [argümanlar]"
+header = "Kullanım: splitdpi [--lang en|tr|ru] <komut> [argümanlar]"
 commands = "Komutlar:"
 
 [err]
 need_root = "Bu komut root yetkisi ister. Şunu çalıştırın: %s"
 unknown_command = "Bilinmeyen komut: %s"
-lang_value = "--lang bir değer ister: en veya tr"
+lang_value = "--lang bir değer ister: en, tr veya ru"
 
 [cmd.version]
 help = "Sürümü gösterir."
 
 [cmd.engine]
-help = "Sabitlenmiş zapret2 motorunu kurar (install [--from DOSYA]) veya durumunu gösterir (status)."
+help = "Sabitlenmiş zapret2 motorunu kurar (install [--from DOSYA])."
 
 [engine]
-usage = "Kullanım: splitdpi engine install [--from DOSYA] | splitdpi engine status"
+usage = "Kullanım: splitdpi engine install [--from DOSYA]"
 downloading = "İndiriliyor: %s"
 installed = "zapret2 %s kuruldu: %s"
 not_installed = "Motor kurulu değil. Şunu çalıştırın: sudo splitdpi engine install"
-status = "Motor: zapret2 %s\nDizin: %s"
-pin_ok = "Sabitlenmiş sürümle aynı."
-pin_mismatch = "Sabitlenmiş sürümden (%s) farklı. Şunu çalıştırın: sudo splitdpi engine install"
 download_hint = "İndirme engellenirse %s dosyasını başka bir yoldan edinip şunu çalıştırın: sudo splitdpi engine install --from DOSYA"
 remove_old_failed = "Eski motor sürümü silinemedi: %v"
 
@@ -32,7 +29,7 @@ checksum = "SHA-256 uyuşmuyor: arşiv zapret2 %s değil (bozuk ya da yanlış d
 arch = "Desteklenmeyen mimari: %s (desteklenenler: amd64, arm64)."
 
 [cmd.presets]
-help = "Hazır ayar verisini gösterir, günceller veya doğrular (list | update | check DİZİN)."
+help = "Hazır ayar verisini gösterir veya günceller (list | update)."
 
 [cmd.apps]
 help = "Uygulama profillerini listeler, açar, kapatır veya düzenler (list | enable ID | disable ID | show ID | new ID AD | add-host ID ALAN | remove-host ID ALAN | udp ID on|off | reset ID)."
@@ -84,7 +81,7 @@ isp = "Sağlayıcı hazır ayarı: %s"
 candidates = "Aday stratejiler:"
 
 [presets]
-usage = "Kullanım: splitdpi presets list | update | check DİZİN"
+usage = "Kullanım: splitdpi presets list | update"
 update.usage = "Kullanım: splitdpi presets update"
 check.usage = "Kullanım: splitdpi presets check DİZİN"
 check.no_dir = "%s bir dizin değil."
@@ -142,10 +139,12 @@ removed = "%s sitelerinizden çıkarıldı. Uygulamak için splitdpi'yi yeniden 
 usage = "Kullanım: splitdpi strategy list | set ID"
 unknown = "Bilinmeyen strateji %q. Listeyi görmek için: splitdpi strategy list"
 set = "Strateji %s olarak ayarlandı (%s)."
-restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
 current = "Geçerli strateji: %s (kaynak: %s)"
 from_country = "%s geneli"
 from_generic = "genel"
+
+[restart]
+hint = "splitdpi çalışıyor; uygulamak için yeniden başlatın: %s"
 
 [cmd.doctor]
 help = "Bu bilgisayarda splitdpi'nin ihtiyaç duyduğu her şeyi denetler."
@@ -224,7 +223,7 @@ help = "Engel aşmanın çalışıp çalışmadığını, stratejiyi, motoru, uy
 help = "splitdpi'nin tüm güvenlik duvarı kurallarını ve çalışma dosyalarını kaldırır ([--purge] ayarları ve verileri de)."
 
 [run]
-usage = "Kullanım: splitdpi run [--background | --service]"
+usage = "Kullanım: splitdpi run [--background]"
 conflict = "Başka bir DPI engel aşma aracı çalışıyor. Önce onu durdurun, sonra splitdpi'yi yeniden çalıştırın."
 no_strategy = "Henüz strateji yok. Önce `splitdpi scan` çalıştırın."
 already = "splitdpi zaten çalışıyor (%s). Önce `splitdpi stop` kullanın."
@@ -263,7 +262,7 @@ cache_flushed = "%s DNS önbelleği temizlendi."
 cache_flush_failed = "Bir DNS önbelleği temizlenemedi: %v"
 
 [revert]
-usage = "Kullanım: splitdpi revert [--rules-only] [--purge]"
+usage = "Kullanım: splitdpi revert [--purge]"
 removed = "Kaldırıldı: %s"
 clean = "Geri alma tamam, sistem temiz: splitdpi kuralı ya da çalışma dosyası kalmadı."
 rules_clean = "Güvenlik duvarında splitdpi kuralı kalmadı."
@@ -780,7 +779,7 @@ lang_system = "sistem dili"
 none = "yok"
 saved = "%s artık %s."
 next_start = "SplitDPI bir sonraki başlatılışında geçerli olur."
-apps_empty = "apps kapsamı için en az bir açık uygulama ya da eklediğiniz bir site gerekir. Önce bir uygulama açın (sudo splitdpi apps enable ID) ya da site ekleyin (sudo splitdpi sites add ALAN)."
+apps_empty = "apps kapsamı için adresi olan en az bir açık uygulama ya da eklediğiniz bir site gerekir. Önce bir uygulama açın (sudo splitdpi apps enable ID) ya da site ekleyin (sudo splitdpi sites add ALAN)."
 qnum_note = "Bu NFQUEUE numarasını başka bir program (başka bir zapret, güvenlik duvarı ya da IPS) kullanmamalı; iki program aynı numarayı kullanırsa ikisi de çalışmaz."
 err_lang = "Bilinmeyen dil %q. Geçerli diller: %s. Sistem dilini kullanmak için: splitdpi config reset lang"
 err_run_mode = "Bilinmeyen çalıştırma biçimi %q. Geçerli değerler: window, background, boot."

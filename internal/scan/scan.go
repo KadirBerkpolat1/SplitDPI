@@ -130,6 +130,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		IPVS:    ipvs,
 		HTTP3:   anyQUIC(env.Set, opt.Apps),
 	}, env.Progress)
+	if bcErr != nil && log == "" {
+		return rep, bcErr
+	}
 	bc, parseErr := ParseBlockcheck(log)
 	if parseErr != nil {
 		return rep, parseErr
