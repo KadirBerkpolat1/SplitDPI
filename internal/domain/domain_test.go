@@ -52,3 +52,22 @@ func TestNormalizeErrorsTranslated(t *testing.T) {
 		t.Errorf("empty: got %v, want %q", err, i18n.T("domain.empty"))
 	}
 }
+
+func TestValidRejectsNonLDH(t *testing.T) {
+	for _, s := range []string{
+		"x.$(reboot).com", "a;b.com", "a b.com", "a'b.com", "a`id`.com", "a\"b.com", "a&b.com",
+		"a_b.com", "Discord.com", "çiçek.com", "-a.com", "a-.com", "a.com-",
+	} {
+		if domain.Valid(s) {
+			t.Errorf("Valid(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestValidAcceptsLDH(t *testing.T) {
+	for _, s := range []string{"discord.com", "xn--bcher-kva.example", "a-b.c0m.tr", "1e100.net"} {
+		if !domain.Valid(s) {
+			t.Errorf("Valid(%q) = false, want true", s)
+		}
+	}
+}

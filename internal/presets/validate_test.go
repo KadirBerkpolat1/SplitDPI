@@ -199,3 +199,17 @@ func TestLoadSkipsInvalid(t *testing.T) {
 		t.Errorf("warnings: %q, want 5", s.Warnings)
 	}
 }
+
+func TestValidateRejectsUnsafeProbeHost(t *testing.T) {
+	for _, probe := range []string{"https://x.$(reboot).com/", "https://a;b.com/", "https://a'b.com/"} {
+		fsys := fixture()
+		fsys["apps/evil.toml"] = file("schema = 1\nid = \"evil\"\nname = \"E\"\nhosts = [\"evil.com\"]\nprobe = [\"" + probe + "\"]\n")
+		s := presets.Load(fsys)
+		if _, ok := s.Apps["evil"]; ok {
+			t.Errorf("app with probe %q was loaded", probe)
+		}
+		if !slices.ContainsFunc(s.Warnings, func(w string) bool { return strings.HasPrefix(w, "apps/evil.toml: ") }) {
+			t.Errorf("no warning for probe %q: %q", probe, s.Warnings)
+		}
+	}
+}

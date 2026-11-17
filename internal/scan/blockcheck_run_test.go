@@ -2,6 +2,7 @@ package scan_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -11,17 +12,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
 )
 
 func TestBlockcheckEnv(t *testing.T) {
-	env := scan.BlockcheckEnv(scan.BlockcheckParams{
+	env, err := scan.BlockcheckEnv(scan.BlockcheckParams{
 		Domains: []string{"discord.com", "www.roblox.com"},
 		IPVS:    "4",
 		HTTP3:   false,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string]string{
 		"BATCH":              "1",
 		"SCANLEVEL":          "quick",
@@ -44,11 +49,40 @@ func TestBlockcheckEnv(t *testing.T) {
 }
 
 func TestBlockcheckEnvDoH(t *testing.T) {
-	got := envMap(t, scan.BlockcheckEnv(scan.BlockcheckParams{
+	env, err := scan.BlockcheckEnv(scan.BlockcheckParams{
 		DoH: []string{"https://1.1.1.1/dns-query", "https://1.0.0.1/dns-query"},
-	}))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := envMap(t, env)
 	if got["SECURE_DNS"] != "1" || got["DOH_SERVERS"] != "https://1.1.1.1/dns-query https://1.0.0.1/dns-query" {
 		t.Errorf("env %v", got)
+	}
+}
+
+func TestBlockcheckEnvRejectsUnsafeDomain(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "started")
+	if err := os.WriteFile(filepath.Join(dir, "blockcheck2.sh"), []byte("touch \""+marker+"\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []string{"x.$(reboot).com", "a;b.com", "a'b.com", "a b.com", "localhost"} {
+		p := scan.BlockcheckParams{Domains: []string{"discord.com", bad}, IPVS: "4"}
+		env, err := scan.BlockcheckEnv(p)
+		var inv domain.InvalidError
+		if !errors.As(err, &inv) || inv.Input != bad {
+			t.Errorf("BlockcheckEnv(%q): err %v, want InvalidError naming it", bad, err)
+		}
+		if env != nil {
+			t.Errorf("BlockcheckEnv(%q): env %q, want none", bad, env)
+		}
+		if _, err := scan.RunBlockcheck(context.Background(), engine.Engine{Dir: dir, ArchDir: "linux-x86_64"}, (&nftRecorder{}).run, p, nil); !errors.As(err, &inv) {
+			t.Errorf("RunBlockcheck(%q): err %v, want InvalidError", bad, err)
+		}
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("RunBlockcheck(%q) started blockcheck2", bad)
+		}
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
 )
@@ -44,8 +45,14 @@ func BlockcheckNFTables(pid int) []string {
 }
 
 // BlockcheckEnv returns blockcheck2 batch environment entries (eight vars,
-// ten with DoH).
-func BlockcheckEnv(p BlockcheckParams) []string {
+// ten with DoH). blockcheck2 evals each domain as root, so any domain that is
+// not a valid hostname is an error.
+func BlockcheckEnv(p BlockcheckParams) ([]string, error) {
+	for _, d := range p.Domains {
+		if !domain.Valid(d) {
+			return nil, domain.InvalidError{Input: d}
+		}
+	}
 	http3 := "0"
 	if p.HTTP3 {
 		http3 = "1"
@@ -64,10 +71,14 @@ func BlockcheckEnv(p BlockcheckParams) []string {
 		// blockcheck2 then picks the first of DOH_SERVERS that resolves.
 		env = append(env, "SECURE_DNS=1", "DOH_SERVERS="+strings.Join(p.DoH, " "))
 	}
-	return env
+	return env, nil
 }
 
-func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) []string {
+func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) ([]string, error) {
+	bc, err := BlockcheckEnv(p)
+	if err != nil {
+		return nil, err
+	}
 	path := os.Getenv("PATH")
 	if path == "" {
 		path = "/usr/sbin:/usr/bin:/sbin:/bin"
@@ -78,24 +89,28 @@ func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) []string {
 		"NFQWS2=" + e.Nfqws2(),
 		"MDIG=" + e.Mdig(),
 	}
-	env = append(env, BlockcheckEnv(p)...)
+	env = append(env, bc...)
 	if p.MarkFile != "" {
 		env = append(env, "MARK_FILE="+p.MarkFile)
 	}
 	if os.Getenv("SPLITDPI_BLOCKCHECK_SIMULATE") == "1" && os.Getenv("SPLITDPI_ROOT") != "" {
 		env = append(env, "SIMULATE=1")
 	}
-	return env
+	return env, nil
 }
 
 // RunBlockcheck runs blockcheck2.sh under the engine dir, streaming lines to progress.
 // On ctx cancel it sends SIGINT to the process group, waits up to 15s, then SIGKILL,
 // and deletes blockcheck2 nft tables for that PID.
 func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p BlockcheckParams, progress func(line string)) (string, error) {
+	env, err := blockcheckCmdEnv(e, p)
+	if err != nil {
+		return "", err
+	}
 	script := e.Blockcheck2()
 	cmd := exec.Command("sh", script)
 	cmd.Dir = e.Dir
-	cmd.Env = blockcheckCmdEnv(e, p)
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
