@@ -63,6 +63,9 @@ func (o *Ops) AppsDisable(id string) error {
 		return nil
 	}
 	c.Apps = slices.DeleteFunc(c.Apps, func(a string) bool { return a == id })
+	if err := o.checkAppsMode(c, presets.App{}, ""); err != nil {
+		return err
+	}
 	return config.Save(o.P, c)
 }
 
@@ -129,6 +132,13 @@ func (o *Ops) SitesAdd(d string) (string, error) {
 func (o *Ops) SitesRemove(d string) error {
 	n, err := domain.Normalize(d)
 	if err != nil {
+		return err
+	}
+	c, err := config.Load(o.P)
+	if err != nil {
+		return err
+	}
+	if err := o.checkAppsMode(c, presets.App{}, n); err != nil {
 		return err
 	}
 	return config.RemoveFromList(o.P.UserHosts, n)

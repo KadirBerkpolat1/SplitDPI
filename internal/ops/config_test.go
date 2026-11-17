@@ -87,6 +87,58 @@ func TestSetModeAppsWithAnApp(t *testing.T) {
 	}
 }
 
+// Apps mode handles only the enabled apps' addresses and the user's sites; a
+// run without any cannot start, so no change may leave it with none.
+func TestAppsModeKeepsOneTarget(t *testing.T) {
+	o := &Ops{P: paths.Under(t.TempDir())}
+	empty := func(what string, err error) {
+		t.Helper()
+		if !errors.Is(err, ErrAppsModeEmpty) {
+			t.Errorf("%s: %v, want ErrAppsModeEmpty", what, err)
+		}
+	}
+	if err := o.AppNew("mine", "Mine"); err != nil {
+		t.Fatal(err)
+	}
+	empty("apps mode with an app without addresses", o.SetMode(config.ModeApps))
+	if loadConfig(t, o).Mode == config.ModeApps {
+		t.Fatal("refused mode saved")
+	}
+
+	if _, err := o.AppHostAdd("mine", "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.SetMode(config.ModeApps); err != nil {
+		t.Fatal(err)
+	}
+	empty("remove-host of the last address", o.AppHostRemove("mine", "example.com"))
+	empty("disable of the last app", o.AppsDisable("mine"))
+	empty("reset of the last app", o.AppReset("mine"))
+	if a, err := o.App("mine"); err != nil || !slices.Equal(a.Hosts, []string{"example.com"}) {
+		t.Errorf("refused changes still changed the app: %+v, %v", a, err)
+	}
+	if !slices.Contains(loadConfig(t, o).Apps, "mine") {
+		t.Error("refused disable still disabled the app")
+	}
+
+	if _, err := o.SitesAdd("site.example"); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.AppsDisable("mine"); err != nil {
+		t.Fatalf("disable with a site left: %v", err)
+	}
+	empty("sites remove of the last site", o.SitesRemove("site.example"))
+	if sites, _ := o.SitesList(); !slices.Equal(sites, []string{"site.example"}) {
+		t.Errorf("refused remove still removed: %q", sites)
+	}
+	if err := o.SetMode(config.ModeBroad); err != nil {
+		t.Fatal(err)
+	}
+	if err := o.SitesRemove("site.example"); err != nil {
+		t.Errorf("broad mode: %v", err)
+	}
+}
+
 func TestSetSkipIfaces(t *testing.T) {
 	o := &Ops{P: paths.Under(t.TempDir())}
 	if err := o.SetSkipIfaces([]string{"wg0", "tun*", "eth0:1", "wg0", "br-lan.10"}); err != nil {

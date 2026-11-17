@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
@@ -85,6 +86,13 @@ func (o *Ops) AppHostRemove(id, d string) error {
 		return nil
 	}
 	a.Hosts = slices.DeleteFunc(slices.Clone(a.Hosts), func(h string) bool { return h == n })
+	c, err := config.Load(o.P)
+	if err != nil {
+		return err
+	}
+	if err := o.checkAppsMode(c, a, ""); err != nil {
+		return err
+	}
 	return presets.SaveUser(o.P.UserApps, a)
 }
 
@@ -113,6 +121,19 @@ func (o *Ops) AppSetUDP(id string, on bool) error {
 func (o *Ops) AppReset(id string) error {
 	a, err := o.App(id)
 	if err != nil || !a.User {
+		return err
+	}
+	c, err := config.Load(o.P)
+	if err != nil {
+		return err
+	}
+	after := presets.App{}
+	if a.Preset != nil {
+		after = *a.Preset
+	} else {
+		c.Apps = slices.DeleteFunc(c.Apps, func(x string) bool { return x == id })
+	}
+	if err := o.checkAppsMode(c, after, ""); err != nil {
 		return err
 	}
 	if err := presets.RemoveUser(o.P.UserApps, id); err != nil {

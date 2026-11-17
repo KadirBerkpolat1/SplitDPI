@@ -14,8 +14,41 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
-// ErrAppsModeEmpty refuses the apps mode when it would handle no traffic.
-var ErrAppsModeEmpty = errors.New("apps mode needs at least one enabled app or site")
+// ErrAppsModeEmpty refuses a change that leaves apps mode with no domain to
+// handle: no enabled app with an address and no site of the user's. No run
+// could start then (render.ErrNoApps).
+var ErrAppsModeEmpty error = appsModeEmptyError{}
+
+type appsModeEmptyError struct{}
+
+func (appsModeEmptyError) Error() string { return i18n.T("config.apps_empty") }
+
+// checkAppsMode returns ErrAppsModeEmpty when c, in apps mode, would handle
+// no domain. changed, when its ID is set, is that app as it will be;
+// removing is a site about to be removed.
+func (o *Ops) checkAppsMode(c config.Config, changed presets.App, removing string) error {
+	if c.Mode != config.ModeApps {
+		return nil
+	}
+	set := o.PresetsList()
+	for _, id := range c.Apps {
+		a := set.Apps[id]
+		if id == changed.ID {
+			a = changed
+		}
+		if len(a.Hosts) > 0 {
+			return nil
+		}
+	}
+	sites, err := config.ReadList(o.P.UserHosts)
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(sites, func(d string) bool { return d != removing }) {
+		return nil
+	}
+	return ErrAppsModeEmpty
+}
 
 // SetMode saves the bypass scope: broad handles every site the autohostlist
 // learns plus the user's sites, apps only the enabled apps and the user's
@@ -25,17 +58,8 @@ func (o *Ops) SetMode(m config.Mode) error {
 		return errors.New(i18n.T("config.err_mode", string(m)))
 	}
 	return o.updateConfig(func(c *config.Config) error {
-		if m == config.ModeApps && len(c.Apps) == 0 {
-			sites, err := config.ReadList(o.P.UserHosts)
-			if err != nil {
-				return err
-			}
-			if len(sites) == 0 {
-				return ErrAppsModeEmpty
-			}
-		}
 		c.Mode = m
-		return nil
+		return o.checkAppsMode(*c, presets.App{}, "")
 	})
 }
 
