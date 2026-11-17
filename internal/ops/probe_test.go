@@ -137,3 +137,34 @@ func TestProbeSitesWithoutApps(t *testing.T) {
 		t.Errorf("results %+v", res)
 	}
 }
+
+// An app made with apps new and add-host has no probe URL: it is probed at
+// its hosts. An app without hosts has nothing to probe.
+func TestProbeUserAppWithoutProbe(t *testing.T) {
+	h := &fakeHTTP{}
+	o := &Ops{P: paths.Under(t.TempDir()), HTTP: &http.Client{Transport: h}}
+	if err := o.AppNew("steam", "Steam"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.AppHostAdd("steam", "store.steampowered.com"); err != nil {
+		t.Fatal(err)
+	}
+	res, err := o.Probe(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rs := res["steam"]; len(rs) != 1 || rs[0].URL != "https://store.steampowered.com/" || !rs[0].OK {
+		t.Errorf("results %+v", res)
+	}
+	if !slices.Equal(h.seen(), []string{"https://store.steampowered.com/"}) {
+		t.Errorf("requests %q", h.seen())
+	}
+
+	if err := o.AppNew("empty", ""); err != nil {
+		t.Fatal(err)
+	}
+	var noApps NoAppsError
+	if _, err := o.Probe(context.Background(), []string{"empty"}); !errors.As(err, &noApps) || !noApps.NoHosts {
+		t.Errorf("app without hosts: got %v, want NoAppsError with NoHosts", err)
+	}
+}

@@ -86,6 +86,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 	}
 	rep.VoiceUnverified = voiceUnverified(env.Set, opt.Apps)
 	urls := probeURLs(env.Set, opt.Apps, opt.Sites)
+	if len(urls) == 0 && opt.Site == "" {
+		return Report{}, errors.New(i18n.T("probe.no_hosts"))
+	}
 	cands := env.Set.Candidates(info.ASN, info.Country)
 
 	if !opt.BlockcheckOnly {
@@ -217,7 +220,7 @@ func probeURLs(set presets.Set, apps, sites []string) []string {
 	var urls []string
 	for _, id := range apps {
 		if a, ok := set.Apps[id]; ok {
-			urls = append(urls, a.Probe...)
+			urls = append(urls, probe.AppURLs(a)...)
 		}
 	}
 	for _, d := range sites {
@@ -240,7 +243,7 @@ func probeHosts(set presets.Set, apps, sites []string) ([]string, error) {
 		if !ok {
 			return nil, fmt.Errorf("unknown app %q", id)
 		}
-		for _, raw := range a.Probe {
+		for _, raw := range probe.AppURLs(a) {
 			u, err := url.Parse(raw)
 			if err != nil || u.Hostname() == "" {
 				return nil, fmt.Errorf("bad probe url %q", raw)

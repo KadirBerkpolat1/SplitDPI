@@ -296,3 +296,51 @@ func TestScanSitesWithoutApps(t *testing.T) {
 		t.Fatalf("winner %+v", rep.Winner)
 	}
 }
+
+// An app the user made has hosts but no probe URL: trials probe its hosts,
+// and blockcheck2 tests them. With no host either there is nothing to test.
+func TestScanUserAppWithoutProbe(t *testing.T) {
+	set := testSet()
+	set.Apps["steam"] = presets.App{ID: "steam", Hosts: []string{"steampowered.com", "store.steampowered.com"}, User: true}
+	set.Apps["empty"] = presets.App{ID: "empty", User: true}
+	env, _, _ := testEnv(t, set, nil)
+	var probed []string
+	env.Probe = func(_ context.Context, urls []string) []probe.Result {
+		probed = urls
+		rs := make([]probe.Result, len(urls))
+		for i, u := range urls {
+			rs[i] = probe.Result{URL: u, OK: true}
+		}
+		return rs
+	}
+	rep, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"steam", "empty"}, NoBlockcheck: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"https://steampowered.com/", "https://store.steampowered.com/"}; !slices.Equal(probed, want) {
+		t.Errorf("probed %q, want %q", probed, want)
+	}
+	if rep.Winner == nil || rep.Winner.ID != "fail-one" {
+		t.Errorf("winner %+v", rep.Winner)
+	}
+
+	var params scan.BlockcheckParams
+	env.Blockcheck = func(_ context.Context, p scan.BlockcheckParams, _ func(string)) (string, error) {
+		params = p
+		return readFixture(t, "bc-simulate.log"), nil
+	}
+	if _, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"steam"}, BlockcheckOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"steampowered.com", "store.steampowered.com"}; !slices.Equal(params.Domains, want) {
+		t.Errorf("blockcheck2 domains %q, want %q", params.Domains, want)
+	}
+
+	env.StartTrial = func(context.Context, presets.Strategy) (func(), error) {
+		t.Fatal("trial started with nothing to test")
+		return nil, nil
+	}
+	if _, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"empty"}}); err == nil {
+		t.Error("an app without hosts scanned")
+	}
+}

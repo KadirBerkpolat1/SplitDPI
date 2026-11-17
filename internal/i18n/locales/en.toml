@@ -47,6 +47,7 @@ help = "Test HTTPS reachability of enabled app probe URLs and your sites."
 [probe]
 usage = "Usage: splitdpi probe [--apps id,id] [-v]"
 no_apps = "No apps enabled and no sites added. Run: sudo splitdpi apps enable discord  or: sudo splitdpi sites add DOMAIN"
+no_hosts = "The enabled apps have no addresses and no sites are added. Run: sudo splitdpi apps add-host ID DOMAIN  or: sudo splitdpi sites add DOMAIN"
 failed = "One or more probes failed."
 dns.mismatch = "system and DoH disagree"
 

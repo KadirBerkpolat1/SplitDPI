@@ -52,6 +52,7 @@ help = "Açık uygulamaların test adreslerine ve sitelerinize HTTPS ile erişil
 [probe]
 usage = "Kullanım: splitdpi probe [--apps id,id] [-v]"
 no_apps = "Açık uygulama ya da eklenmiş site yok. Şunu çalıştırın: sudo splitdpi apps enable discord  ya da: sudo splitdpi sites add ALAN"
+no_hosts = "Açık uygulamaların adresi yok ve eklenmiş site yok. Şunu çalıştırın: sudo splitdpi apps add-host ID ALAN  ya da: sudo splitdpi sites add ALAN"
 failed = "Bir veya daha fazla test başarısız oldu."
 dns.mismatch = "sistem ile DoH farklı yanıt veriyor"
 
