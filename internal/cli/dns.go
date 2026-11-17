@@ -38,7 +38,7 @@ func runDNS(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		fmt.Fprintln(w, i18n.T("status.dns"))
 	}
 	if running {
-		fmt.Fprintln(w, i18n.T("dns.restart"))
+		fmt.Fprintln(w, i18n.T("restart.hint", o.RestartCommand()))
 	}
 	return nil
 }

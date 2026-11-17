@@ -134,10 +134,12 @@ removed = "Removed %s from your sites. Restart splitdpi to apply."
 usage = "Usage: splitdpi strategy list | set ID"
 unknown = "Unknown strategy %q. See: splitdpi strategy list"
 set = "Strategy set to %s (%s)."
-restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
 current = "Current strategy: %s (from %s)"
 from_country = "%s country-wide"
 from_generic = "generic"
+
+[restart]
+hint = "splitdpi is running: restart it to apply: %s"
 
 [cmd.doctor]
 help = "Check this machine for everything splitdpi needs."

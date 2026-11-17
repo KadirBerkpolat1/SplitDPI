@@ -139,10 +139,12 @@ removed = "%s sitelerinizden çıkarıldı. Uygulamak için splitdpi'yi yeniden 
 usage = "Kullanım: splitdpi strategy list | set ID"
 unknown = "Bilinmeyen strateji %q. Listeyi görmek için: splitdpi strategy list"
 set = "Strateji %s olarak ayarlandı (%s)."
-restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
 current = "Geçerli strateji: %s (kaynak: %s)"
 from_country = "%s geneli"
 from_generic = "genel"
+
+[restart]
+hint = "splitdpi çalışıyor; uygulamak için yeniden başlatın: %s"
 
 [cmd.doctor]
 help = "Bu bilgisayarda splitdpi'nin ihtiyaç duyduğu her şeyi denetler."

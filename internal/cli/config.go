@@ -108,7 +108,7 @@ func setConfig(o *ops.Ops, w io.Writer, s setting, v string) error {
 	}
 	switch {
 	case s.restart && o.Running():
-		fmt.Fprintln(w, i18n.T("strategy.restart"))
+		fmt.Fprintln(w, i18n.T("restart.hint", o.RestartCommand()))
 	case s.restart:
 		fmt.Fprintln(w, i18n.T("config.next_start"))
 	}

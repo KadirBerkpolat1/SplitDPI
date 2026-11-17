@@ -124,6 +124,20 @@ func (o *Ops) Running() bool {
 	return held
 }
 
+// RestartCommand is the command that restarts the bypass the way it runs now:
+// the service through stop and enable, which starts it again, a background
+// run in the background, anything else in the foreground.
+func (o *Ops) RestartCommand() string {
+	_, mode, _ := supervisor.LockInfo(o.P)
+	switch mode {
+	case "service":
+		return "sudo splitdpi stop && sudo splitdpi enable"
+	case "background":
+		return "sudo splitdpi stop && sudo splitdpi run --background"
+	}
+	return "sudo splitdpi stop && sudo splitdpi run"
+}
+
 // updateConfig saves the config after f changes it; an error from f saves nothing.
 func (o *Ops) updateConfig(f func(*config.Config) error) error {
 	c, err := config.Load(o.P)

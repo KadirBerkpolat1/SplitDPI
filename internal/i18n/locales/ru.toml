@@ -139,10 +139,12 @@ removed = "%s удалён из ваших сайтов. Перезапусти�
 usage = "Использование: splitdpi strategy list | set ID"
 unknown = "Неизвестная стратегия %q. Список: splitdpi strategy list"
 set = "Выбрана стратегия %s (%s)."
-restart = "splitdpi запущен; перезапустите его, чтобы применить: sudo splitdpi stop && sudo splitdpi run"
 current = "Текущая стратегия: %s (источник: %s)"
 from_country = "%s, общая для страны"
 from_generic = "общая"
+
+[restart]
+hint = "splitdpi запущен; перезапустите его, чтобы применить: %s"
 
 [cmd.doctor]
 help = "Проверить, есть ли на этом компьютере всё, что нужно splitdpi."

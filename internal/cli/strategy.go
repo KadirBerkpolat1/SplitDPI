@@ -44,7 +44,7 @@ func runStrategy(_ context.Context, o *ops.Ops, w io.Writer, args []string) erro
 		}
 		fmt.Fprintln(w, i18n.T("strategy.set", ch.Strategy.ID, ch.From()))
 		if running {
-			fmt.Fprintln(w, i18n.T("strategy.restart"))
+			fmt.Fprintln(w, i18n.T("restart.hint", o.RestartCommand()))
 		}
 		return nil
 	}
