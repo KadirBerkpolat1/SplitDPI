@@ -125,6 +125,40 @@ func TestUninstallRemovesEverything(t *testing.T) {
 	}
 }
 
+// The binary install.sh put under another prefix, which runs uninstall and
+// which the service ran, goes too, last like BinPath.
+func TestUninstallRemovesPrefixBinary(t *testing.T) {
+	const bin = "/opt/splitdpi/bin/splitdpi"
+	host := selfAt(bin)
+	for name, f := range systemdHost {
+		host[name] = f
+	}
+	o, unrelated, _ := uninstallOps(t, host)
+	installUnit(t, o.P)
+	prefixed := filepath.Join(o.P.Root, bin)
+	installAt(t, prefixed)
+	if plan := o.UninstallPlan(); !slices.Equal(plan.Paths[len(plan.Paths)-2:], []string{o.P.BinPath, prefixed}) {
+		t.Errorf("plan %q, want both binaries last", plan.Paths)
+	}
+	r, err := o.Uninstall(context.Background())
+	if err != nil {
+		t.Fatalf("uninstall: %v, leftover %q", err, r.Leftover)
+	}
+	for _, f := range []string{o.P.BinPath, prefixed} {
+		if _, err := os.Lstat(f); !os.IsNotExist(err) {
+			t.Errorf("%s still there: %v", f, err)
+		}
+	}
+	if n := len(r.Removed); n < 2 || !slices.Equal(r.Removed[n-2:], []string{o.P.BinPath, prefixed}) {
+		t.Errorf("removed %q, want the binaries last", r.Removed)
+	}
+	for _, f := range unrelated {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("unrelated %s removed: %v", f, err)
+		}
+	}
+}
+
 // A path that cannot be removed is reported, and the binary stays so
 // uninstall can be run again.
 func TestUninstallPartialFailure(t *testing.T) {

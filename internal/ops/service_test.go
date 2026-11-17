@@ -801,8 +801,8 @@ func TestEnableReplacedBinary(t *testing.T) {
 	}
 }
 
-// BinPath, where install.sh puts splitdpi by default, is used as before,
-// whatever binary runs enable.
+// BinPath, where install.sh puts splitdpi by default, is used when the
+// binary that runs enable is not one only root can change.
 func TestEnableBinPathFirst(t *testing.T) {
 	host := selfAt("/home/berk/splitdpi")
 	o, _ := serviceOps(t, sysinfo.Systemd, host)
@@ -811,6 +811,20 @@ func TestEnableBinPathFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(o.P.SystemdUnit); !strings.Contains(string(b), "ExecStart="+o.P.BinPath+" run --service\n") {
+		t.Errorf("unit:\n%s", b)
+	}
+}
+
+// A copy left at BinPath does not replace the binary that runs enable when
+// only root can change that one: the service runs what was installed last.
+func TestEnablePrefersSafeSelf(t *testing.T) {
+	const bin = "/opt/splitdpi/bin/splitdpi"
+	o, _ := serviceOps(t, sysinfo.Systemd, selfAt(bin))
+	installBinPath(t, o)
+	if _, err := o.Enable(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(o.P.SystemdUnit); !strings.Contains(string(b), "ExecStart="+bin+" run --service\n") {
 		t.Errorf("unit:\n%s", b)
 	}
 }

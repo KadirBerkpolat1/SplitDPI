@@ -35,6 +35,9 @@ if [ "$(id -u)" -ne 0 ]; then
 		exit 1
 	fi
 fi
+# splitdpi enable runs the binary as root only if no group or other user may
+# change it or a directory above it, whatever the caller's umask.
+umask 022
 mkdir -p "$bindir"
 
 asset=splitdpi-linux-$goarch

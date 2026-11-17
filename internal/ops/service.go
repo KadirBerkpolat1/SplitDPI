@@ -381,14 +381,24 @@ func (o *Ops) waitReleased() bool {
 }
 
 // serviceBinary is the splitdpi the service runs, provided only root can
-// change it: BinPath, where install.sh puts it by default, as always; else
-// this binary. /proc/self/exe is what os.Executable reads on Linux, the path
-// with every symlink resolved; like the rest of the host it is read through
-// Root.
+// change it: this binary, so that the service never runs an older copy left
+// at BinPath; else BinPath, where install.sh puts it by default.
 func (o *Ops) serviceBinary() (string, error) {
-	if _, err := os.Stat(o.P.BinPath); err == nil {
+	self, err := o.selfBinary()
+	if err == nil {
+		return self, nil
+	}
+	if _, serr := os.Stat(o.P.BinPath); serr == nil {
 		return o.P.BinPath, o.checkBinary(o.P.BinPath, o.onHost(o.P.BinPath))
 	}
+	return "", err
+}
+
+// selfBinary is this binary as the host has it, provided only root can
+// change it. /proc/self/exe is what os.Executable reads on Linux, the path
+// with every symlink resolved; like the rest of the host it is read through
+// Root.
+func (o *Ops) selfBinary() (string, error) {
 	self, err := fs.ReadLink(o.Root, "proc/self/exe")
 	if err != nil {
 		return "", BinaryMissingError{Path: o.P.BinPath}
