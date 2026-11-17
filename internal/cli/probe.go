@@ -25,7 +25,7 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 		return usageError(i18n.T("probe.usage"))
 	}
 	if dnsApps, _ := appsForProbe(o, apps); len(dnsApps) > 0 {
-		printDNS(w, o.ProbeDNS(ctx, dnsApps))
+		printDNSChecks(w, o.ProbeDNS(ctx, dnsApps))
 	}
 	results, err := o.Probe(ctx, apps)
 	if err != nil {
@@ -42,9 +42,9 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 	return printProbe(w, results, verbose)
 }
 
-// printDNS lists each domain's DNS check. A lookup that failed is no clean
-// answer either, so it is marked like poisoning.
-func printDNS(w io.Writer, rs []probe.DNSResult) {
+// printDNSChecks lists each domain's DNS check. A lookup that failed is no
+// clean answer either, so it is marked like poisoning.
+func printDNSChecks(w io.Writer, rs []probe.DNSResult) {
 	for _, r := range rs {
 		switch {
 		case r.Poisoned, r.Err != nil:

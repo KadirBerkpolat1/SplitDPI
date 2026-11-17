@@ -76,7 +76,7 @@ func TestProbeCLIMarksDNSFailure(t *testing.T) {
 	}
 	doh := func(context.Context, string) ([]netip.Addr, error) { return public, nil }
 	var b bytes.Buffer
-	printDNS(&b, probe.CheckDNS(context.Background(), []string{"discord.com", "discord.gg", "pastebin.com"}, sys, doh))
+	printDNSChecks(&b, probe.CheckDNS(context.Background(), []string{"discord.com", "discord.gg", "pastebin.com"}, sys, doh))
 	out := b.String()
 	for _, want := range []string{"dns  discord.com  ✗  (", "dns  discord.gg  ✗  (", "dns  pastebin.com  ✓\n"} {
 		if !strings.Contains(out, want) {
