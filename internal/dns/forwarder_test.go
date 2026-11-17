@@ -3,6 +3,7 @@ package dns_test
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -217,4 +219,32 @@ func TestStopsOnCancel(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Error("still listening after cancel")
+}
+
+// Another process on [::1]:Port fails the start, so the supervisor loads no
+// redirect that would send IPv6 DNS to it; 127.0.0.1:Port is let go again.
+func TestForwarderStartFailsWhenIPv6BindInUse(t *testing.T) {
+	taken, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback})
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	defer taken.Close()
+	port := taken.LocalAddr().(*net.UDPAddr).Port
+	up := doh(t, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}, Port: port}
+	if err := f.Start(ctx); !errors.Is(err, syscall.EADDRINUSE) {
+		t.Fatalf("got %v, want [::1]:%d in use", err, port)
+	}
+	c, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+	if err != nil {
+		t.Fatalf("udp 127.0.0.1:%d still bound: %v", port, err)
+	}
+	c.Close()
+	l, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: port})
+	if err != nil {
+		t.Fatalf("tcp 127.0.0.1:%d still bound: %v", port, err)
+	}
+	l.Close()
 }
