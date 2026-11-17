@@ -33,6 +33,7 @@ type RulesetInput struct {
 	TCPPorts, UDPPorts []string
 	SkipIfaces         []string // nft wildcards allowed, e.g. "wg*"
 	DNSRedirectPort    int      // 0 = off; else outbound port 53 goes to this local port
+	DNSIPv4Only        bool     // redirect IPv4 only: the host has no IPv6 loopback for the forwarder
 }
 
 var (
@@ -112,6 +113,10 @@ func Ruleset(in RulesetInput) (string, error) {
 	// interfaces (split DNS) and loopback, so local stub resolvers are
 	// reached and their upstream queries redirected.
 	if in.DNSRedirectPort > 0 {
+		family := ""
+		if in.DNSIPv4Only {
+			family = "meta nfproto ipv4 "
+		}
 		fmt.Fprintf(&b, "\tchain %s {\n\t\ttype nat hook output priority -100; policy accept;\n", DNSChain)
 		fmt.Fprintf(&b, "\t\tmeta mark and 0x%08x != 0 return\n", LocalDNSMark)
 		for _, i := range skips {
@@ -119,9 +124,9 @@ func Ruleset(in RulesetInput) (string, error) {
 		}
 		fmt.Fprintf(&b, `		ip daddr 127.0.0.0/8 return
 		ip6 daddr ::1 return
-		meta l4proto { tcp, udp } th dport 53 counter redirect to :%d
+		%smeta l4proto { tcp, udp } th dport 53 counter redirect to :%d
 	}
-`, in.DNSRedirectPort)
+`, family, in.DNSRedirectPort)
 	}
 
 	fmt.Fprintf(&b, `	chain predefrag {

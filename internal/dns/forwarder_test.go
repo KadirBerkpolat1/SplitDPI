@@ -63,7 +63,7 @@ func start(t *testing.T, client *http.Client, urls ...string) *dns.Forwarder {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, urls...), HTTP: client}, Port: 0}
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, urls...), HTTP: client}, Port: 0, IPv4Only: !dns.IPv6Loopback()}
 	if err := f.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestTruncatesLargeUDPAnswer(t *testing.T) {
 func TestStopsOnCancel(t *testing.T) {
 	up := doh(t, 1)
 	ctx, cancel := context.WithCancel(context.Background())
-	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}}
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}, IPv4Only: !dns.IPv6Loopback()}
 	if err := f.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -247,4 +247,25 @@ func TestForwarderStartFailsWhenIPv6BindInUse(t *testing.T) {
 		t.Fatalf("tcp 127.0.0.1:%d still bound: %v", port, err)
 	}
 	l.Close()
+}
+
+// A host without an IPv6 loopback gets an IPv4-only forwarder (and redirect):
+// [::1]:Port is not tried, so whatever holds it cannot fail the start.
+func TestForwarderIPv4OnlySkipsIPv6(t *testing.T) {
+	taken, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback})
+	if err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	}
+	defer taken.Close()
+	port := taken.LocalAddr().(*net.UDPAddr).Port
+	up := doh(t, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}, Port: port, IPv4Only: true}
+	if err := f.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m := udp(t, port, query(t, 9)); len(m.Answers) != 1 {
+		t.Errorf("%d answers over 127.0.0.1:%d", len(m.Answers), port)
+	}
 }
