@@ -13,16 +13,13 @@ lang_value = "Для --lang нужно значение: en, tr или ru"
 help = "Показать версию."
 
 [cmd.engine]
-help = "Установить закреплённый движок zapret2 (install [--from ФАЙЛ]) или показать его состояние (status)."
+help = "Установить закреплённый движок zapret2 (install [--from ФАЙЛ])."
 
 [engine]
-usage = "Использование: splitdpi engine install [--from ФАЙЛ] | splitdpi engine status"
+usage = "Использование: splitdpi engine install [--from ФАЙЛ]"
 downloading = "Загрузка %s"
 installed = "zapret2 %s установлен в %s"
 not_installed = "Движок не установлен. Выполните: sudo splitdpi engine install"
-status = "Движок: zapret2 %s\nКаталог: %s"
-pin_ok = "Совпадает с закреплённой версией."
-pin_mismatch = "Отличается от закреплённой версии %s. Выполните: sudo splitdpi engine install"
 download_hint = "Если загрузка заблокирована, скачайте %s другим способом и выполните: sudo splitdpi engine install --from ФАЙЛ"
 remove_old_failed = "Не удалось удалить старую версию движка: %v"
 

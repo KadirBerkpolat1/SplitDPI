@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -15,15 +16,18 @@ func TestEngineUsage(t *testing.T) {
 }
 
 func TestEngineNeedsRoot(t *testing.T) {
-	out, code := run(t, 1000, "engine", "status")
-	eq(t, code, 1)
-	has(t, out, "sudo splitdpi engine status")
-}
-
-func TestEngineStatusNotInstalled(t *testing.T) {
-	out, code := run(t, 0, "engine", "status")
+	out, code := run(t, 1000, "engine", "install")
 	eq(t, code, 1)
 	has(t, out, "sudo splitdpi engine install")
+}
+
+// status and doctor show the installed engine; only install is left.
+func TestEngineStatusRemoved(t *testing.T) {
+	out, code := run(t, 0, "engine", "status")
+	eq(t, code, 2)
+	if strings.Contains(out, "status") {
+		t.Errorf("usage still offers status: %q", out)
+	}
 }
 
 func TestEngineInstallFromWrongFile(t *testing.T) {
