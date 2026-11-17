@@ -1,49 +1,21 @@
 # SplitDPI
 
-SplitDPI gets Discord, YouTube, Roblox and other blocked apps working again on
-Linux when your ISP blocks them with deep packet inspection (DPI). It finds a
-[zapret2](https://github.com/bol-van/zapret2) strategy that works on your ISP,
-runs it on demand or as a service, and removes every trace with one command.
+SplitDPI gets Discord, YouTube, Roblox and other blocked apps and sites
+working again on Linux when your internet provider blocks them with deep
+packet inspection (DPI). It is meant for people who just want those apps back,
+without learning how the blocking works.
 
-**Status:** v0.2.7. v0.1.0 was tested on a real Türk Telekom connection and in
-Debian, Fedora and Alpine VMs. v0.2.7's boot service was set up from a running
-bypass on CachyOS with a real Türk Telekom connection, and tested across a
-restart in an Ubuntu 26.04 container. The other features added since v0.2.0
-are covered by automated tests and by CI on seven distros, but were not
-retested on a real connection or in VMs; see
+It finds a [zapret2](https://github.com/bol-van/zapret2) strategy that works
+on your provider, runs it when you want or at every boot, and removes every
+trace with one command. It never edits your firewall, DNS or network
+configuration files.
+
+**Status:** latest release v0.2.7. Tested on a real Türk Telekom connection
+(CachyOS) and in Debian, Fedora, Alpine and Ubuntu VMs or containers; see
+[Supported systems](#supported-systems) and
 [the release checklist](docs/release-checklist.md).
 
 [Türkçe](README.tr.md)
-
-If you use keift/zapret today, SplitDPI replaces it. It runs zapret2 instead of
-the end-of-life zapret v1, tries ISP presets before a full blockcheck2 scan,
-leaves your DNS and firewall configuration alone, and works on immutable
-distros and with SELinux enforcing. `splitdpi takeover` switches an existing
-zapret or zapret2 install over to SplitDPI.
-
-## Supported systems
-
-| Distro | Init | Service mode | On demand | Tested |
-|---|---|---|---|---|
-| Debian | systemd | yes | yes | 13.7 in a VM: service mode across reboot, revert (2026-10-29) |
-| Ubuntu LTS, Linux Mint | systemd | yes | yes | 26.04 in an Incus container: integration tests, service mode across reboot, moving a running bypass to the service, rollback when the service cannot start (2026-11-09) |
-| Fedora (Workstation, Cloud) | systemd | yes | yes | 44 Cloud in a VM, SELinux enforcing: service mode across reboot, revert (2026-10-29) |
-| Fedora Atomic (Silverblue, Bazzite) | systemd | yes | yes | not tested yet |
-| CachyOS | systemd | yes | yes | Türk Telekom connection: `scan` (presets and `--site`), `probe` on Discord, Roblox, Pastebin and more, `revert` (2026-10-29); `enable` while a background run was active, engine upgrade to v1.0.7 (2026-11-09) |
-| Arch, EndeavourOS | systemd | yes | yes | not tested yet |
-| openSUSE Tumbleweed | systemd | yes | yes | not tested yet |
-| Alpine | OpenRC | yes | yes | 3.24.3 in a VM: service mode across reboot, revert (2026-10-29) |
-| Gentoo | OpenRC | yes | yes | not tested yet |
-| Void (glibc and musl) | runit | yes | yes | not tested yet |
-| Artix, antiX, dinit, s6 or sysvinit distros | other | no: run on demand | yes | not tested yet |
-
-SplitDPI needs an x86_64 or arm64 kernel 5.4 or newer with nftables, plus the
-`nft` and `curl` commands; the blockcheck2 scan also needs `nslookup` or
-`host`. The setup asks before it installs missing packages with your distro's
-package manager, and `sudo splitdpi deps install` does the same from the
-command line (`--yes` installs without asking). `splitdpi doctor` checks all of
-this and prints the install command for your package manager. NixOS users
-should look at zapret2-flake or zapret2-nix instead.
 
 ## Quick start
 
@@ -52,258 +24,217 @@ curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/insta
 sudo splitdpi
 ```
 
-The install script verifies the download's checksum and installs
-`/usr/local/bin/splitdpi`. `sudo splitdpi` opens the terminal UI; press `w` to
-start the setup. The setup checks your system, offers to install missing
-packages, installs the zapret2 engine itself, finds your ISP, asks which apps
-should work, tests strategies, and then runs SplitDPI now or at every boot.
+The first line installs `/usr/local/bin/splitdpi` after checking its
+checksum. The second opens the terminal UI: on the Setup page, start the
+setup. It checks your system, offers to install missing packages, installs the
+zapret2 engine, finds your provider, asks which apps should work, tests
+strategies and starts SplitDPI.
 
-To install it somewhere else, set `SPLITDPI_PREFIX` (default `/usr/local`);
-this installs `/opt/splitdpi/bin/splitdpi`:
+- **Another place:** `sudo SPLITDPI_PREFIX=/opt/splitdpi sh` instead of
+  `sudo sh` installs `/opt/splitdpi/bin/splitdpi` (default prefix
+  `/usr/local`).
+- **Upgrading:** run the install line again. The installed zapret2 engine
+  stays in use until `sudo splitdpi engine install` installs the one the new
+  version pins; `doctor` reports an older engine. Older engine directories are
+  removed once nothing uses them.
+- **Requirements:** x86_64 or arm64, kernel 5.4 or newer with nftables, the
+  `nft` and `curl` commands, and `nslookup` or `host` for blockcheck2. Setup
+  asks before installing missing packages; `sudo splitdpi deps install` does
+  the same. On NixOS use zapret2-flake or zapret2-nix instead.
+
+## Everyday use
+
+<!-- tui: check after redesign -->
+`sudo splitdpi` opens the terminal UI with five pages: **Status**, **Sites**,
+**Setup**, **Logs** and **Settings**. Tab and Shift+Tab or the number keys
+switch pages; the arrow keys move inside a page and Enter acts. Esc goes back,
+`?` lists every key, `q` quits.
+
+- **Status** shows whether the bypass runs and whether your apps and sites
+  open. Start or stop it here and turn **Start at boot** on or off. After a
+  change that needs a restart, a **Restart** action appears.
+- **Sites** has three sections: **Apps** (turn app profiles on or off, edit
+  their addresses), **My sites** (blocked sites you add) and **Never-touched
+  sites** (sites the bypass leaves alone).
+- **Setup** runs the guided setup, and finds a new strategy when the current
+  one stops working.
+- **Logs** shows SplitDPI's log as it runs.
+- **Settings** has a main group (Language, Start at boot, Encrypted DNS,
+  Scope) and an **Advanced** group with the rest: interfaces to leave alone,
+  the queue number, and maintenance such as updating presets, checking the
+  system and uninstalling.
+
+Before anything that changes the system, a dialog says what will change and
+how to undo it; answer `y` or `n` (`e` or `h` in Turkish). The UI needs at
+least 80x24 and uses plain ASCII on the Linux console or a non-UTF-8 locale.
+<!-- /tui -->
+
+The commands you will use most:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh | sudo SPLITDPI_PREFIX=/opt/splitdpi sh
+sudo splitdpi status                  # running? which strategy and engine?
+sudo splitdpi probe                   # do my apps and sites open, and if not, why
+sudo splitdpi sites add pastebin.com  # handle a blocked site
+sudo splitdpi exclude add https://www.example-bank.com/   # leave a site alone
+sudo splitdpi stop
+sudo splitdpi run --background        # start again, until reboot
 ```
 
-The service runs `/usr/local/bin/splitdpi` if that exists, else the binary
-that sets it up, by its real path. Because root runs the service at every
-boot, `enable` accepts that binary, `/usr/local/bin/splitdpi` included, only
-if no one but root can change it: the binary and every directory on the way to
-it, from `/` and along symbolic links, must belong to root and must not be
-writable by their group or others, and the binary must not be under `/tmp`,
-`/var/tmp`, `/dev/shm` or a home directory (`/home`, `/var/home`, `/root`,
-`/var/roothome`), nor lead there through a link. The error names the file or
-directory at fault. For `/usr/local/bin/splitdpi` it asks you to fix that; for
-another binary it gives the `sudo install` command that installs it as
-`/usr/local/bin/splitdpi`.
+Most changes apply when SplitDPI restarts. A command that changes something
+while SplitDPI runs prints the restart command for the way it runs, for
+example `sudo splitdpi stop && sudo splitdpi enable` for the boot service.
 
-After you upgrade SplitDPI, the zapret2 engine already installed stays in use
-until `sudo splitdpi engine install` installs the one the new version pins;
-`doctor` reports the older engine and asks for a new scan. Installing an engine
-also removes the older zapret2 engine directories once nothing uses them: at
-once if neither SplitDPI nor a scan is running, else the next time SplitDPI
-starts.
+Every command except `--help`, `version` and `presets list` needs root. The
+language is English, Turkish or Russian: `--lang en|tr|ru`, else the one set
+in Settings, else `LANG`.
 
-There are three ways to keep the bypass on. In the UI window (`r`, or
-`splitdpi run`) it stops when that window closes. In the background (`b`, or
-`sudo splitdpi run --background`) it keeps running after the terminal closes
-and stops at reboot. On systemd it runs as the transient unit
-`splitdpi-background.service`: logging out leaves it running, and shutdown
-stops it cleanly, removing its rules. Without systemd or `systemd-run`, or if
-that fails, it runs as a detached process instead. At every boot
-(`sudo splitdpi enable`) it runs as a service; `enable` stops a bypass running
-in the background or in a window, and the service takes its place. If the
-service does not take its place, `enable` removes it again and starts the run
-it stopped again in the background, and the message says so: "The previous run
-was restarted in the background (pid N)." If that fails too, the message gives
-the command to start it: `sudo splitdpi run --background`.
-`sudo splitdpi stop` stops any of them.
+## Apps
 
-Settings → Run mode chooses which of the three `r` on the Status page uses.
-Choosing "Also at boot" asks, then installs, enables and starts the service at
-once; a bypass running now moves to it, leaving usually under a second without
-the bypass. Choosing "In this window" or "In the background" while the service is
-set up asks, then removes the service. Init systems without service mode (see
-[Supported systems](#supported-systems)) do not offer "Also at boot". Settings
-("Starts at boot") and Status ("At boot") show whether SplitDPI starts at boot,
-as the init system has it. When the run mode is "Also at boot" but the service
-is not set up, both warn; Enter on that Settings row sets it up, as does `r`
-on Status (`e` while the bypass runs). Quitting the UI while it runs the
-bypass offers to move it to the background, or in run mode "Also at boot" to
-the service. While the UI sets up or removes the service, quitting waits for
-it: `q` shows "The boot service is being changed. Please wait: SplitDPI quits
-once that is done." and quits when it is done, unless the change failed; then
-the UI stays open to show why.
+An app profile is a list of the app's domains. Enable the ones you need on the
+Sites page or with `sudo splitdpi apps enable ID`; enabled apps are handled
+from the first packet.
 
-On the command line, `enable` saves run mode `boot` once the service runs, and
-`disable` and `revert` set it back to `window`.
-`sudo splitdpi config set run_mode` only saves the choice, and warns when the
-service does not match it (for example `boot` without the service set up).
-`sudo splitdpi status` also says whether SplitDPI starts at boot. If SplitDPI
-already runs when the service starts, the service exits with code 4 and is not
-restarted.
+| ID | App | What is covered |
+|---|---|---|
+| `discord` | Discord | Chat, website, attachments and activities. Not voice channels or Go Live streams. |
+| `facebook` | Facebook / Messenger | Website and Messenger. Not calls. |
+| `grindr` | Grindr | Website. New. |
+| `hornet` | Hornet | Website. New. |
+| `instagram` | Instagram | App and website. Not calls. |
+| `linkedin` | LinkedIn | Website. |
+| `pastebin` | Pastebin | Website. |
+| `roblox` | Roblox | Website, sign-in and developer sites. Not game servers (UDP). |
+| `scruff` | Scruff | Website. New. |
+| `signal` | Signal | App connection and updates. Not calls. |
+| `telegram` | Telegram | Web, API and Telegram's own sites such as Fragment. Not the apps' direct connections to IP addresses. |
+| `threads` | Threads | Website and its images. New. |
+| `tiktok` | TikTok | App and website. |
+| `viber` | Viber | Website and downloads only. |
+| `vpn-sites` | VPN provider websites | Websites, accounts and downloads of NordVPN, Proton VPN, Mullvad, Surfshark, ExpressVPN, CyberGhost, Private Internet Access, PureVPN, hide.me and Psiphon. Not the VPN connections. New. |
+| `wattpad` | Wattpad | Website. |
+| `whatsapp` | WhatsApp | WhatsApp Web, media and website. Not the phone app's chats and calls. |
+| `wikileaks` | WikiLeaks | Website. New. |
+| `x` | X (Twitter) | App, website and Periscope. |
+| `youtube` | YouTube | Website, app and video. |
 
-## The terminal UI
+Calls and app connections that carry no TLS hostname cannot be covered; the
+Sites page notes this next to each app.
 
-- **Top:** the name and version, and a status pill on the right that shows
-  whether the bypass is running, stopped or failed. Clicking the pill starts
-  or stops the bypass as the Status page does.
-- **Left:** the menu: Status, Sites, Strategy, Scan, Logs and Settings. Use the
-  arrow keys or click an entry; Enter or Tab opens the page, Esc goes back to
-  the menu.
-- **Right:** the chosen page. Settings lists every setting with its value,
-  grouped as General (language, run mode, whether it starts at boot), Bypass
-  (scope, excluded sites, strategy), DNS, Network (interfaces to leave alone,
-  provider lookup service), Maintenance (update presets, install the engine,
-  check the system, switch from or back to zapret, uninstall) and Advanced
-  (queue number). `/` searches the list; Esc clears the search.
-- **Bottom:** the result of the last action; under it the page's actions as
-  buttons with their keys (`?` Help and `q` Quit on the right), where a click
-  does what the key does; and last the command that does the selected action,
-  so anything you do in the UI can be scripted.
+**Discord voice channels and Go Live streams are deliberately left alone.**
+They do not use the Discord domains that are blocked, and in Türkiye they work
+without SplitDPI, so changing their traffic could only break calls. The
+Discord profile has no voice or stream addresses and no UDP rules, and a test
+keeps every shipped app that way. Where voice itself is blocked, SplitDPI does
+not help.
 
-`?` lists every key. Before anything that changes the system, a dialog says what
-will change and how to undo it; answer `y` or `n` (`e` or `h` in Turkish). On
-the Linux console or with a non-UTF-8 locale the UI draws with plain ASCII. It
-needs a terminal of at least 80x24.
+**Editing apps.** Change an app, or add one of your own:
 
-## Commands
+```sh
+sudo splitdpi apps show discord                    # its addresses
+sudo splitdpi apps remove-host discord klipy.com    # one address fewer
+sudo splitdpi apps new steam Steam                  # a new app, enabled
+sudo splitdpi apps add-host steam store.steampowered.com
+sudo splitdpi apps reset discord                    # back as shipped
+```
 
-| Command | What it does |
-|---|---|
-| `splitdpi` | Opens the terminal UI. |
-| `splitdpi doctor` | Checks the system and lists anything that blocks SplitDPI. |
-| `splitdpi deps [install [--yes]]` | Lists the missing packages SplitDPI needs, or installs them with your package manager after asking; `--yes` installs without asking. |
-| `splitdpi engine install [--from FILE]` / `engine status` | Installs the pinned zapret2 release after checking its SHA-256, or shows the installed one. |
-| `splitdpi detect [--asn N] [--country CC]` | Looks up your ISP and lists its preset strategies. |
-| `splitdpi scan [--site DOMAIN] [--dns keep\|auto\|PROVIDER] [--apps ID,ID] [--asn N] [--country CC] [--blockcheck-only\|--no-blockcheck] [-v]` | Finds a strategy that works and saves it; see [Finding a strategy](#finding-a-strategy). |
-| `splitdpi probe [--apps ID,ID] [-v]` | Tests whether each enabled app's sites and your own sites are reachable, and says why one is not. |
-| `splitdpi strategy list\|set ID` | Lists the preset strategies or picks one without a scan. |
-| `splitdpi run` | Runs in this terminal; Ctrl-C stops it and removes its rules. |
-| `splitdpi run --background` | Runs on after the terminal closes, until reboot; its output goes to `/var/log/splitdpi.log`. |
-| `splitdpi enable` / `disable` | Installs and starts the service, which takes over from a background or window run, or stops and removes it. |
-| `splitdpi stop` / `status` / `logs [-f]` | Stops it, shows its state and whether it starts at boot, or shows its log. |
-| `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
-| `splitdpi apps show ID\|new ID NAME\|add-host ID DOMAIN\|remove-host ID DOMAIN\|udp ID on\|off\|reset ID` | Edits an app's addresses and its voice and stream profile, or adds an app of your own; see [Editing apps](#editing-apps). |
-| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites, which the bypass always handles. |
-| `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
-| `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install over to SplitDPI. |
-| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Turns encrypted DNS on or off; without an argument, shows the current choice. |
-| `splitdpi config [get KEY\|set KEY VALUE\|reset KEY]` | Lists the settings with their defaults, or shows, changes or resets one. |
-| `splitdpi presets list\|update` | Shows the preset data, or refreshes it after checking its SHA-256; see [Where presets come from](#where-presets-come-from). |
-| `splitdpi revert [--purge]` | Removes everything SplitDPI added. |
-| `splitdpi uninstall [--yes]` | Removes SplitDPI itself, its files and its program. |
-| `splitdpi version` | Prints the version. |
+An edit saves your copy as `/etc/splitdpi/apps/ID.toml`; it replaces the
+shipped app, so `presets update` leaves it alone until you `reset` it. `reset`
+deletes an app of your own. Your apps are tested at their domains by `scan`,
+`probe` and `doctor`.
 
-All commands except `--help`, `version` and `presets list` need root. Add
-`--lang tr` or `--lang en` to pick a language; otherwise SplitDPI uses the
-language chosen under Settings in the terminal UI, or else follows `LANG`.
+## Countries
 
-`splitdpi config` covers the settings of the Settings page: `lang`,
-`run_mode` (`window`, `background`, `boot`), `mode` (`broad` handles every
-blocked site it learns plus your sites, `apps` only enabled apps and your
-sites), `skip_ifaces` (interfaces never touched, as a comma list such as
-`'wg*,tun*'`), `ipinfo_url` (the https service that finds your provider) and
-`qnum` (the NFQUEUE number, 0-65535; no other program may use it). A running
-SplitDPI picks up `mode`, `skip_ifaces` and `qnum` when it restarts. Encrypted
-DNS stays under `splitdpi dns`.
+When SplitDPI knows your country, setup preselects the apps blocked there by
+SNI, the kind of block it can bypass. Only Türkiye was tested on a real
+connection; the other rows come from [OONI](https://explorer.ooni.org)
+measurements from August to October 2026.
 
-## Your sites
+| Country | Preselected apps | What SplitDPI can do | What it cannot do |
+|---|---|---|---|
+| Türkiye | Discord, Roblox | Tested on a real Türk Telekom line. Both apps are blocked by DNS and SNI ([OONI](https://explorer.ooni.org/findings/267640924000)). | |
+| Russia | YouTube, Discord, WhatsApp, X, Viber | Partly, not tested: these apps are blocked by SNI ([OONI](https://ooni.org/post/2024-russia-report)), but working strategies differ by provider and break often. Plain DNS is rewritten, so turn on [encrypted DNS](#encrypted-dns). | Telegram, Instagram and Facebook are blocked by IP address. Mobile whitelist mode ([net4people](https://github.com/net4people/bbs/issues/516)) and the freeze after about 16 KB to foreign hosting ([net4people](https://github.com/net4people/bbs/issues/490)). |
+| Uzbekistan | TikTok | Not tested. TikTok is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030202526.825336_UZ_webconnectivity_052c7879728aa664)). | |
+| Pakistan | Signal | Not tested. Signal is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030220511.996290_PK_signal_5ac96b6fcef513f4)). | Signal calls. The firewall reassembles TCP, so simple split strategies may fail. |
+| Oman | Signal, Viber | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030153230.174668_OM_signal_587cc9ac388c198c)). | Signal and Viber calls. |
+| Myanmar | X, Signal | Not tested. Both are blocked by SNI on several providers ([OONI](https://explorer.ooni.org/m/20261030164419.537459_MM_webconnectivity_04a4276a4ab2ba2c)). | Facebook, Instagram, Messenger and WhatsApp are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030185034.005475_MM_webconnectivity_feef379ddff0b397)). Signal calls. |
+| Tanzania | Discord, Signal | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030224510.394340_TZ_signal_ff0333dd53e6a624)). | X and Telegram's website are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030115612.829938_TZ_webconnectivity_595b8e6a4a66486b)). Signal calls. |
+| Syria | Discord | Not tested. Discord is blocked by SNI on two providers, from few measurements ([OONI](https://explorer.ooni.org/m/20261013164632.158025_SY_webconnectivity_9e07ffe0537f7f05)). | |
 
-If a site you need is blocked and no app profile covers it, add it. SplitDPI
-then handles it from the first packet, and `probe` and `scan` test it too:
+Iran and China are not supported: blocking there is based on IP addresses and
+allowlists, which SplitDPI cannot get past.
+
+## Sites and exclusions
+
+**My sites.** If a blocked site has no app profile, add it. SplitDPI then
+handles it from the first packet, and `probe` and `scan` test it:
 
 ```sh
 sudo splitdpi sites add pastebin.com
+sudo splitdpi sites import FILE     # one domain per line, # starts a comment
 ```
 
-To add many at once, put them in a text file, one per line, and run
-`sudo splitdpi sites import FILE`. Lines starting with `#` are comments, and
-`*.example.com` or `.example.com` mean `example.com`; lines that are not a
-domain are skipped and listed. The Sites page of the terminal UI turns apps on
-and off and adds or removes sites. Restart SplitDPI to apply a change.
-
-## Editing apps
-
-An app profile is a list of addresses, and can carry a voice and stream (UDP)
-profile that sends decoy packets ahead of calls and screen shares. No shipped
-app has one: SplitDPI leaves Discord's voice servers, calls and streams alone.
-You can change an app, or add an app of your own:
-
-```sh
-sudo splitdpi apps show discord                     # its addresses and voice state
-sudo splitdpi apps remove-host discord klipy.com     # one address fewer
-sudo splitdpi apps udp myapp off                     # leave its calls and streams alone
-sudo splitdpi apps new steam Steam                   # a new app, enabled
-sudo splitdpi apps add-host steam store.steampowered.com
-sudo splitdpi apps reset discord                     # back as shipped
-```
-
-An edit saves your copy of the app in `/etc/splitdpi/apps/ID.toml`, in the
-same format as the preset apps; it replaces the shipped app of that id, so
-`presets update` no longer changes it until you reset it. `reset` on an app of
-your own deletes it. On the Sites page, `o` opens the app under the cursor and
-`n` adds a new one. `udp ID off` drops a voice profile you wrote into your
-copy; `udp ID on` brings back a shipped one. Restart SplitDPI to apply a change.
-
-## Switching from zapret or zapret2
-
-`sudo splitdpi takeover` looks for another zapret or zapret2 install, such as
-the one keift's installer sets up: its directory under `/opt`, its service and
-its running processes. It shows what switching would change, without changing
-anything. `sudo splitdpi takeover --yes` then adds the sites from its
-user list to your sites, stops its service and turns off its start on boot.
-It never deletes or edits that install's files, and `sudo splitdpi revert`
-turns its service back on. If such a tool is still running, `run` refuses to
-start, because both would handle the same traffic.
-
-## Finding a strategy
-
-`sudo splitdpi scan` first tries your ISP's preset strategies on your apps and
-sites, and runs blockcheck2 only if none works. It saves the strategy that
-works.
-
-- **One site.** To skip the presets and search for a strategy for one site,
-  run `sudo splitdpi scan --site pastebin.com`, or choose "Scan a site with
-  blockcheck2" on the Scan page. blockcheck2 tests that site over IPv4, and over
-  IPv6 too if this machine has it. Its results are re-tested on your apps and
-  sites before one is saved: SplitDPI keeps the simplest one that opens all of
-  them, preferring those that work on both IPv4 and IPv6, and adds the site to
-  your sites. This takes longer than the preset trials.
-- **Poisoned DNS.** Before blockcheck2 runs, `scan` checks whether your ISP's
-  DNS answers for its domains are poisoned. If they are, it asks whether to
-  turn on encrypted DNS (automatic) and keep it on; the terminal UI offers
-  Cloudflare, another provider, or no. When nobody can answer,
-  pass `--dns auto` (or a provider) to turn it on, or `--dns keep` to go on
-  without it.
-- **blockcheck2's packages.** blockcheck2 cannot run without `curl` and
-  `nslookup` or `host`. When they are missing, `scan` asks on the terminal
-  whether to install them before blockcheck2 runs; when nobody can answer, or
-  you say no, it stops without running blockcheck2 and prints the install
-  command (`sudo splitdpi deps install`).
-- **Other options.** `--apps` tests only the given apps, `--asn` and `--country`
-  skip the ISP lookup, `--blockcheck-only` skips the presets, `--no-blockcheck`
-  stops after them, and `-v` shows the raw error of every failed test.
-- **Why it failed.** `scan` and `probe` say in plain words why a site did not
-  open (the connection was cut, it timed out, DNS or the secure connection
-  failed, or something else answered) and what to try next. A domain that has
-  no address of its own, by both your DNS and encrypted DNS (only its
-  subdomains are used, it does not exist, or it points to this computer), is
-  shown as not tested and does not count as a failure; `probe` ends with how
-  many sites open, are blocked and were not tested. The terminal UI's Status
-  page shows the same counts and up to three blocked sites; Sites lists every
-  result.
-- **Sharing the result.** When `scan` saves a strategy, it prints a link that
-  opens a prefilled issue in
-  [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets) with
-  your AS number, ISP, country, the strategy and the versions. The terminal UI
-  shows the same link, copies it with `c` and prints it again when you quit.
-  Nothing is sent
-  until you submit the issue, and it never contains your IP address or your own
-  sites.
-
-`splitdpi strategy list` shows every preset strategy and marks the one in use;
-`sudo splitdpi strategy set ID` picks another without a scan. The Strategy page
-of the terminal UI does the same. Restart SplitDPI to apply it.
-
-## A site broke
-
-Banks, government sites and some shops refuse modified traffic. Exclude the
-site and restart SplitDPI:
+**Never-touched sites.** Banks, government sites and some shops refuse
+modified traffic. Exclude such a site, then restart SplitDPI:
 
 ```sh
 sudo splitdpi exclude add https://www.example-bank.com/
 ```
 
-In the terminal UI, press `e` on the Sites page.
+SplitDPI also ships exclusion lists: a global one (for example GitHub, Google,
+Microsoft, Steam and game launchers) and lists of domestic sites such as banks
+and government portals for Türkiye, Russia and Uzbekistan. An app you enable
+or a site you add always wins over the shipped lists (enabling YouTube takes
+`youtube.com` off them); your own exclusions win over everything.
 
-SplitDPI ships exclusion lists for common Turkish sites already.
+**Editing the files by hand.** Your sites are in `/etc/splitdpi/hosts.txt`,
+your exclusions in `/etc/splitdpi/exclude.txt`. SplitDPI reads each line as a
+domain: capitals, spaces, `*.` or a leading dot, a trailing `# comment` and a
+byte order mark do not matter, and a line that is not a domain is ignored but
+stays in the file.
+
+**Scope** (Settings, or `config set mode`). `broad`, the default, handles your
+apps and sites from the first packet and learns other blocked sites: the first
+visits (three by default) to a newly blocked site fail, later ones work.
+`apps` handles only enabled apps and your sites; in this scope SplitDPI refuses
+any change that would leave it nothing to handle, such as disabling the last
+app with addresses or removing your last site.
+
+## Finding a strategy
+
+`sudo splitdpi scan`, or the Setup page, first tries your provider's preset
+strategies on your apps and sites and runs blockcheck2 only if none works. It
+saves the strategy that works.
+
+- **One site:** `scan --site DOMAIN` skips the presets and searches with
+  blockcheck2 for that site (IPv4, and IPv6 if this machine has it), re-tests
+  the results on your apps and sites, keeps the simplest one that opens them
+  all and adds the site to your sites. It takes longer.
+- **DNS:** before blockcheck2 runs, `scan` checks whether your provider
+  tampers with DNS and asks whether to turn on encrypted DNS. Without a
+  terminal, pass `--dns auto` (or a provider) or `--dns keep`.
+- **Packages:** if blockcheck2's packages are missing, `scan` asks to install
+  them; if blockcheck2 cannot start, it says why.
+- **Options:** `--apps` tests only those apps, `--asn` and `--country` skip
+  the provider lookup, `--blockcheck-only` skips the presets,
+  `--no-blockcheck` stops after them, `-v` shows raw errors.
+- **By hand:** `splitdpi strategy list` shows the preset strategies;
+  `sudo splitdpi strategy set ID` picks one without a scan.
+- **Share it:** after a scan, SplitDPI prints a link to a prefilled issue in
+  [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
+  with your AS number, provider, country, strategy and versions. Nothing is
+  sent until you submit it, and it never contains your IP address or your
+  sites. The "Strategy report" issue template here works too.
+
+**Presets.** Provider strategies and app profiles ship inside SplitDPI.
+`sudo splitdpi presets update` downloads the latest SplitDPI-presets release
+and changes nothing unless its checksum file matches; `splitdpi presets list`
+shows the version in use. Preset authors: `splitdpi presets check DIR` is
+described in [the release checklist](docs/release-checklist.md).
 
 ## Encrypted DNS
 
-Some ISPs poison DNS answers; `doctor` and `probe` detect it. With encrypted
-DNS on, SplitDPI sends port 53 traffic through a forwarder inside itself to one
-of these providers:
+Some providers tamper with DNS answers. With encrypted DNS on, SplitDPI sends
+port 53 traffic through a forwarder inside itself to a provider:
 
 | Choice | What it does |
 |---|---|
@@ -312,158 +243,211 @@ of these providers:
 | `quad9` | Also blocks known malware and phishing domains. |
 | `adguard` | Also blocks ads and trackers. |
 
-It uses DNS-over-HTTPS by default; `--dot` picks DNS-over-TLS, which uses port
-853 and is blocked by some ISPs. `sudo splitdpi dns off` turns it off. The
-choice applies on the next start, and Settings in the terminal UI offers the
-same choices.
+`sudo splitdpi dns auto` turns it on over DNS-over-HTTPS; add `--dot` for
+DNS-over-TLS (port 853, blocked by some providers). `dns off` turns it off,
+`dns` alone shows the choice. It applies on the next start.
 
-- **System settings stay as they are.** SplitDPI never changes system DNS
-  settings: no resolver configuration file or service is edited, and the
-  redirect disappears with the `inet splitdpi` table.
-- **Stale answers are cleared.** Each time the redirect loads (every start and
-  restart), and when you add a site while SplitDPI runs with encrypted DNS, it
-  clears the caches of systemd-resolved (`resolvectl flush-caches`) and nscd
-  (`nscd -i hosts`) if they run. Answers cached while DNS went around the
-  forwarder, before the start or in the moment between stopping and starting,
-  can be your ISP's poisoned ones and would keep a site on its block page.
-  Other local resolvers keep their caches.
-- **Local resolvers decide.** Queries to resolvers on this machine
-  (`127.0.0.0/8`, `::1`) are never redirected, so programs keep using the
-  systemd-resolved stub (127.0.0.53), dnscrypt-proxy or any other local
-  resolver as before, with its own rules. Only DNS leaving the machine on port
-  53 is redirected. A resolver that already encrypts DNS sends nothing on port
-  53, so SplitDPI's DNS then only affects programs that query an outside server
-  directly.
-- **Already encrypted.** When dnscrypt-proxy, Stubby, NextDNS, AdGuard Home,
-  Unbound or Knot Resolver forwarding over TLS, or systemd-resolved with
-  DNS-over-TLS is in use, `doctor` says so, `splitdpi dns` and Settings say
-  SplitDPI's DNS is not needed (turning it on is still allowed), and `scan`
-  skips the poisoning question unless you pass `--dns`.
-- **VPNs and local names.** DNS through VPN interfaces (`skip_ifaces` in
-  config.toml) is left alone, so VPN split DNS keeps working. Local names go to
-  your network's usual DNS server, never to the provider: single-label names,
-  `.lan`, `.local`, `.home.arpa`, `.internal`, `.localdomain`, your search
-  domains, and reverse lookups of private addresses.
-- **What still changes.** With `quad9` or `adguard`, the domains they block do
-  not resolve. Hotel, airport and other captive-portal Wi-Fi may not show its
-  login page until you turn DNS off (`sudo splitdpi dns off`) and restart
-  SplitDPI.
+- **Tampering detection:** `doctor`, `probe` and `scan` compare your system's
+  answers with encrypted DNS. A known block-page address, or "no such name"
+  or an empty answer while encrypted DNS finds a public address, counts as
+  tampering. `probe` prints a `dns` line per domain: `✓` same, `~` different,
+  `✗` tampered or failed, with the reason.
+- **Nothing in your system changes:** no resolver configuration is edited;
+  the redirect lives in SplitDPI's `inet splitdpi` table. Queries to
+  resolvers on this machine (`127.0.0.0/8`, `::1`), such as the
+  systemd-resolved stub or dnscrypt-proxy, are never redirected.
+- **IPv4 and IPv6:** the forwarder listens on `127.0.0.1:5453` and
+  `[::1]:5453`. Without an IPv6 loopback only IPv4 DNS is redirected, and IPv6
+  DNS goes out unencrypted as before. If `[::1]:5453` cannot be opened for
+  another reason, such as the port being taken, SplitDPI does not start.
+- **Already encrypted:** with dnscrypt-proxy, Stubby, NextDNS, AdGuard Home,
+  Unbound or Knot Resolver over TLS, or systemd-resolved with DNS-over-TLS,
+  `doctor` and Settings say SplitDPI's DNS is not needed and `scan` does not
+  ask about DNS.
+- **VPNs and local names:** DNS through VPN interfaces (`skip_ifaces`) is left
+  alone. Single-label names, `.lan`, `.local`, `.home.arpa`, `.internal`,
+  `.localdomain`, your search domains and reverse lookups of private addresses
+  go to your network's usual DNS server.
+- **Side effects:** `quad9` and `adguard` do not resolve what they block.
+  Captive-portal Wi-Fi (hotels, airports) may not show its login page until
+  you run `dns off` and restart SplitDPI.
 
-## How it works, and what to expect
+## Run modes and boot service
 
-SplitDPI keeps its firewall rules in its own nftables table, `inet splitdpi`.
-It never flushes your ruleset and never edits firewall, DNS or network
-configuration files. Its rules fail open: if nfqws2 stops, traffic passes
-unmodified.
+| Mode | Command | Stops when |
+|---|---|---|
+| In this window | `sudo splitdpi run` | the window closes or you press Ctrl-C |
+| In the background | `sudo splitdpi run --background` | you run `stop`, or at reboot |
+| At every boot | `sudo splitdpi enable` | you run `disable`, `stop` or `revert` |
 
-- **Learning new sites.** Apps you enable are handled from the first packet.
-  Other sites are learned: the first visits (three by default) to a newly
-  blocked site fail, and later visits work. If a site fails, retry it.
-- **Telegram.** Only Telegram's web and API domains are covered. The apps'
-  MTProto connections to raw IP addresses are not.
-- **Calls and app protocols.** Voice and video calls in Instagram, Messenger,
-  WhatsApp and Signal, Roblox game servers, and the WhatsApp and Viber phone
-  apps' own connections carry no TLS hostname, so they are not covered. The
-  Sites page notes this next to each app.
-- **Discord voice and streams.** SplitDPI does not touch them: the Discord app
-  has no voice profile and no voice server (`discord.media`) addresses. In
-  Türkiye voice works without SplitDPI.
+- **Background** runs as the transient systemd unit
+  `splitdpi-background.service` (logging out leaves it running), or without
+  systemd as a detached process. Its output goes to `/var/log/splitdpi.log`.
+- **Boot service:** `enable` installs and starts the service; a bypass running
+  in a window or the background hands over to it, usually in under a second.
+  If the service does not start, `enable` removes it, restarts the previous
+  run in the background and says so. If SplitDPI already runs when the service
+  starts, the service exits with code 4 and is not restarted.
+- `enable` saves run mode `boot`, `disable` and `revert` set it back to
+  `window`; `config set run_mode` only saves the choice and warns when the
+  service does not match. `status` says whether SplitDPI starts at boot.
+- Distros without service mode (see [Supported systems](#supported-systems))
+  run SplitDPI in a window or the background.
 
-## Revert guarantee
+## Switching from zapret or zapret2
 
-`sudo splitdpi revert` stops SplitDPI, removes its service, deletes its table
-and its runtime files, and then checks that nothing is left. It says the
-system is clean, or lists what remains. `--purge` also removes its settings and
-data. If `takeover` switched off another zapret install, revert turns its
-service back on. Revert reads the configuration only to set run mode `boot`
-back to `window` once no service is left, and skips that when it cannot read
-it, so a broken config cannot block revert. If SplitDPI is killed, its queue
-rules stay in place but let all traffic through until you run `revert` or start
-it again.
+SplitDPI replaces keift/zapret and other zapret or zapret2 installs.
+`sudo splitdpi takeover` shows what switching would change without changing
+anything; `takeover --yes` adds that install's user sites to yours, stops its
+service and turns off its start at boot. It never deletes or edits its files,
+and `revert` turns its service back on. While another zapret runs, `run`
+refuses to start.
 
-## Removing SplitDPI
+## Troubleshooting
 
-`sudo splitdpi uninstall` lists what it would remove and changes nothing.
-`sudo splitdpi uninstall --yes` does what `revert --purge` does, then deletes
-the log and `/usr/local/bin/splitdpi`, and lists anything it could not remove;
-run it again once that is fixed. A binary installed elsewhere with
-`SPLITDPI_PREFIX` stays; delete it yourself. Settings in the terminal UI does
-the same after showing the list. It cannot be undone: to use SplitDPI again,
-install it again as in [Quick start](#quick-start).
+- **Start with `sudo splitdpi doctor`.** It checks the kernel, tools,
+  NFQUEUE, engine, SELinux, conflicting tools, init system, IPv6 and DNS
+  tampering, and prints the command that fixes each problem.
+- **Then `sudo splitdpi probe`.** It says in plain words why an app or site
+  did not open (connection cut, timeout, DNS or secure connection failed,
+  something else answered) and what to try next. A domain without an address
+  of its own is shown as not tested, not as a failure.
+- **The site is on the list but shows a block page or certificate error.**
+  Usually a poisoned DNS answer is still cached; the bypass cannot fix a wrong
+  address. SplitDPI clears the systemd-resolved and nscd caches at every start
+  and when you add a site with encrypted DNS on, but answers cached earlier or
+  while encrypted DNS was off can remain. Check with
+  `resolvectl query --cache=no DOMAIN`, clear with `resolvectl flush-caches`,
+  and turn on [encrypted DNS](#encrypted-dns). Other resolvers and browsers
+  keep their own caches.
+- **A site broke** (a bank or shop will not load): `sudo splitdpi exclude add
+  URL`, then restart.
+- **A new site fails a few times, then works:** in `broad` scope SplitDPI
+  learns blocked sites from failed visits. Retry, or add it to your sites.
+- **Nothing opens any more:** providers change their blocking. Run
+  `sudo splitdpi scan`, or `scan --site DOMAIN`.
+- **SplitDPI was killed:** its rules stay but let all traffic through
+  unmodified until you run `revert` or start it again.
 
-## Countries
+## Supported systems
 
-When SplitDPI knows your country, setup preselects the apps blocked there by
-SNI, the kind of block it can bypass. Only Turkey has been tested on a real
-connection; the other rows come from [OONI](https://explorer.ooni.org)
-measurements from August to October 2026.
-
-| Country | Preselected apps | What SplitDPI can do | What it cannot do |
+| Distro | Init | Boot service | Tested |
 |---|---|---|---|
-| Turkey | Discord, Roblox | Tested on a real Türk Telekom line. Both apps are blocked by DNS and SNI ([OONI](https://explorer.ooni.org/findings/267640924000)). | |
-| Russia | YouTube, Discord, WhatsApp, X, Viber | Partly, not tested: these apps are blocked by SNI ([OONI](https://ooni.org/post/2024-russia-report)), but working strategies differ by ISP and break often. Plain DNS is rewritten, so turn on [encrypted DNS](#encrypted-dns). | Telegram, Instagram and Facebook are blocked by IP address. Mobile whitelist mode ([net4people](https://github.com/net4people/bbs/issues/516)) and the freeze after about 16 KB to foreign hosting ([net4people](https://github.com/net4people/bbs/issues/490)) cannot be bypassed. |
-| Uzbekistan | TikTok | Not tested. TikTok is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030202526.825336_UZ_webconnectivity_052c7879728aa664)). | |
-| Pakistan | Signal | Not tested. Signal is blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030220511.996290_PK_signal_5ac96b6fcef513f4)). | Signal calls. The firewall reassembles TCP, so simple split strategies may fail. |
-| Oman | Signal, Viber | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030153230.174668_OM_signal_587cc9ac388c198c)). | Signal and Viber calls. |
-| Myanmar | X, Signal | Not tested. Both are blocked by SNI on several ISPs ([OONI](https://explorer.ooni.org/m/20261030164419.537459_MM_webconnectivity_04a4276a4ab2ba2c)). | Facebook, Instagram, Messenger and WhatsApp are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030185034.005475_MM_webconnectivity_feef379ddff0b397)). Signal calls. |
-| Tanzania | Discord, Signal | Not tested. Both are blocked by SNI ([OONI](https://explorer.ooni.org/m/20261030224510.394340_TZ_signal_ff0333dd53e6a624)). | X and Telegram's website are blocked by IP address ([OONI](https://explorer.ooni.org/m/20261030115612.829938_TZ_webconnectivity_595b8e6a4a66486b)). Signal calls. |
-| Syria | Discord | Not tested. Discord is blocked by SNI on two ISPs, from few measurements ([OONI](https://explorer.ooni.org/m/20261013164632.158025_SY_webconnectivity_9e07ffe0537f7f05)). | |
+| Debian | systemd | yes | 13.7 in a VM: service mode across reboot, revert (2026-10-29) |
+| Ubuntu LTS, Linux Mint | systemd | yes | 26.04 in an Incus container: integration tests, service mode across reboot, moving a running bypass to the service, rollback when the service cannot start (2026-11-09) |
+| Fedora (Workstation, Cloud) | systemd | yes | 44 Cloud in a VM, SELinux enforcing: service mode across reboot, revert (2026-10-29) |
+| Fedora Atomic (Silverblue, Bazzite) | systemd | yes | not tested yet |
+| CachyOS | systemd | yes | Türk Telekom connection: `scan` (presets and `--site`), `probe` on Discord, Roblox, Pastebin and more, `revert` (2026-10-29); `enable` while a background run was active, engine upgrade to v1.0.7 (2026-11-09); service restart with a maintenance build, DNS forwarder on IPv4 and IPv6, Discord opens (2026-11-17) |
+| Arch, EndeavourOS | systemd | yes | not tested yet |
+| openSUSE Tumbleweed | systemd | yes | not tested yet |
+| Alpine | OpenRC | yes | 3.24.3 in a VM: service mode across reboot, revert (2026-10-29) |
+| Gentoo | OpenRC | yes | not tested yet |
+| Void (glibc and musl) | runit | yes | not tested yet |
+| Artix, antiX, dinit, s6 or sysvinit distros | other | no | not tested yet |
 
-Russia, Turkey and Uzbekistan also ship a list of domestic sites, such as banks
-and government portals, that SplitDPI leaves alone.
+Every distro can run SplitDPI in a window or the background. Immutable distros
+and SELinux enforcing are supported.
 
-Iran and China are not supported: blocking there is based on IP addresses and
-allowlists, which SplitDPI cannot get past.
+## Command reference
 
-## Where presets come from
+| Command | What it does |
+|---|---|
+| `splitdpi` | Opens the terminal UI. |
+| `splitdpi status` | Shows whether and how it runs, the strategy, the engine and whether it starts at boot. |
+| `splitdpi probe [--apps ID,ID] [-v]` | Tests DNS and HTTPS for enabled apps and your sites. |
+| `splitdpi doctor` | Checks the system and lists problems with fixes. |
+| `splitdpi scan [--site DOMAIN] [--dns keep\|auto\|PROVIDER] [--apps ID,ID] [--asn N] [--country CC] [--blockcheck-only\|--no-blockcheck] [-v]` | Finds a working strategy and saves it. |
+| `splitdpi run [--background]` | Runs in this terminal, or in the background until reboot. |
+| `splitdpi stop` | Stops the bypass, however it runs. |
+| `splitdpi enable` / `disable` | Installs and starts the boot service, or removes it. |
+| `splitdpi logs [-f]` | Shows the log; `-f` keeps following it. |
+| `splitdpi apps list\|enable ID\|disable ID` | Chooses which apps get the bypass. |
+| `splitdpi apps show ID\|new ID NAME\|add-host ID DOMAIN\|remove-host ID DOMAIN\|reset ID` | Shows or edits an app, or adds your own. |
+| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Manages your own blocked sites. |
+| `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Manages sites the bypass never touches. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Sets or shows encrypted DNS. |
+| `splitdpi strategy list\|set ID` | Lists preset strategies, or picks one. |
+| `splitdpi detect [--asn N] [--country CC]` | Looks up your provider and its preset strategies. |
+| `splitdpi config [get KEY\|set KEY VALUE\|reset KEY]` | Shows or changes `lang`, `run_mode`, `mode`, `skip_ifaces` (comma list such as `'wg*,tun*'`), `ipinfo_url` and `qnum` (NFQUEUE number, no other program may use it). |
+| `splitdpi presets list\|update` | Shows the preset data, or updates it after checking its SHA-256. |
+| `splitdpi engine install [--from FILE]` | Installs the pinned zapret2 release after checking its SHA-256. |
+| `splitdpi deps [install [--yes]]` | Lists or installs missing packages. |
+| `splitdpi takeover [--yes]` | Switches another zapret or zapret2 install to SplitDPI. |
+| `splitdpi revert [--purge]` | Removes everything SplitDPI added; `--purge` also settings and data. |
+| `splitdpi uninstall [--yes]` | Removes SplitDPI itself. |
+| `splitdpi version` | Prints the version. |
 
-The ISP strategies started from
-[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) by Çağrı
-Taşkın (MIT). Other MIT-licensed collections, such as
-[erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs),
-are used to cross-check them. Each ISP file records in its `reported` field
-when its strategies were last seen working on a real connection; the links
-`scan` prints feed these files.
+**Removed on 2026-11-17:** `engine status` (`status` and `doctor` show the
+engine), `dns on` (use `dns auto`) and `apps udp` (no app has a voice or
+stream profile).
 
-`sudo splitdpi presets update`, or "Update presets" under Settings, downloads
-`presets.tar.gz` from the latest SplitDPI-presets release together with the
-`presets.tar.gz.sha256` file published next to it, and unpacks nothing unless
-the two match. If the release has no checksum file, or it is not a single
-`<sha256>  presets.tar.gz` line, or the download does not match it (damaged or
-changed on the way), the message says so and that nothing was changed, for
-example "The downloaded presets did not match their checksum, so nothing was
-changed. Try again later; if it keeps happening, report it." Only a checksum
-file that could not be downloaded gives an error that starts with
-`preset bundle checksum`. In every case the presets in use stay as they are.
+## Security notes
 
-## Reporting a strategy
+- **Installer:** `install.sh` downloads from GitHub over https only (curl
+  refuses plain http, also on redirects, and needs TLS 1.2 or newer) and
+  installs the binary only if it matches its line in the release's
+  `sha256sums.txt`. Directories are created with umask 022. Without curl it
+  falls back to wget, which does not enforce https.
+- **Downloads:** the zapret2 engine is a pinned release checked against its
+  SHA-256; a preset update is refused unless its `presets.tar.gz.sha256`
+  matches.
+- **The root service runs only a binary that only root can change:** the one
+  that ran `enable` if it qualifies, else `/usr/local/bin/splitdpi`. The
+  binary and every directory above it, along symbolic links, must belong to
+  root and not be writable by group or others, and it must not be under
+  `/tmp`, `/var/tmp`, `/dev/shm` or a home directory (`/home`, `/var/home`,
+  `/root`, `/var/roothome`). The error names the file at fault and gives the
+  `sudo install` command to fix it.
+- **Preset hostnames are validated:** every domain in an app profile, shipped
+  or yours, must be a plain hostname (letters, digits, hyphens, at most 253
+  bytes); a profile that breaks this is skipped with a warning. `scan` checks
+  each domain again before passing it to blockcheck2, which runs as root.
+- **Firewall:** SplitDPI keeps its rules in its own nftables table,
+  `inet splitdpi`, and never flushes your ruleset. The rules fail open: if the
+  engine stops, traffic passes unmodified.
 
-Open an issue with the "Strategy report" template. Include the output of
-`splitdpi doctor`, your ISP's AS number, the preset or strategy, and
-`splitdpi probe`.
+## Uninstall
 
-## Disclaimer
+`sudo splitdpi revert` stops SplitDPI, removes its service, table and runtime
+files, then checks that nothing is left and says so or lists what remains.
+`--purge` also removes settings and data. A zapret install switched off by
+`takeover` gets its service back. A broken configuration cannot block revert.
 
-SplitDPI changes how your computer sends some network traffic. Whether using
-such a tool is allowed depends on where you are; check the rules that apply to
-you. You use SplitDPI at your own responsibility, and it comes without
-warranty.
+`sudo splitdpi uninstall` lists what it would remove and changes nothing;
+`uninstall --yes` does what `revert --purge` does, then deletes the log,
+`/usr/local/bin/splitdpi` and the binary you ran it with if only root can
+change it (such as one installed with `SPLITDPI_PREFIX`). If something is left
+over, the binaries stay so you can run it again. Settings in the terminal UI
+does the same.
 
-## Credits
+## Credits and licence
 
 - [zapret2](https://github.com/bol-van/zapret2) by bol-van (MIT): the engine.
   SplitDPI downloads it; it does not redistribute it.
 - [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) by Çağrı
-  Taşkın (MIT): ISP strategies, the exclusion list and Roblox hosts.
+  Taşkın (MIT): provider strategies, the exclusion list and Roblox hosts;
+  [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs)
+  (MIT) to cross-check them.
 - [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)
   (MIT): Discord and YouTube hosts and the Russian exclusion list.
 - [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT): the
   built-in-blob fallback.
 - [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
   (MIT): hosts for Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn,
-  TikTok and Pastebin, and the added Telegram, YouTube and Discord hosts.
+  TikTok and Pastebin, and added Telegram, YouTube and Discord hosts.
 - [1andrevich/Re-filter-lists](https://github.com/1andrevich/Re-filter-lists)
   (MIT): one TikTok host.
+- [itdoginfo/allow-domains](https://github.com/itdoginfo/allow-domains)
+  (no licence; domain names only, no code or data files copied): VPN provider
+  and Threads hosts, and hosts added to Telegram, X, TikTok, WhatsApp, Roblox
+  and Facebook.
+- [OONI](https://explorer.ooni.org) and
+  [EngelliWeb](https://ifade.org.tr/engelliweb/): which new apps are blocked
+  in Türkiye.
 - alimali54/zapret-win-turkey: the origin of the Turkish zapret2 strategies.
 
-See [NOTICE](NOTICE) for licenses. SplitDPI is MIT-licensed.
+See [NOTICE](NOTICE) for licences. SplitDPI is MIT-licensed.
+
+SplitDPI changes how your computer sends some network traffic. Whether that is
+allowed depends on where you are; check the rules that apply to you. You use
+SplitDPI at your own responsibility, without warranty.
