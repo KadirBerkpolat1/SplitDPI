@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
@@ -22,7 +24,8 @@ type Manager interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Disable(ctx context.Context) error
-	Remove() error
+	// Remove deletes the service files once the init has let go of them.
+	Remove(ctx context.Context) error
 	Installed() bool
 	// Enabled reports whether the init starts the service at boot: its
 	// enable link is there.
@@ -132,8 +135,14 @@ func (m *systemd) Disable(ctx context.Context) error {
 	return err
 }
 
-func (m *systemd) Remove() error {
-	return os.Remove(m.p.SystemdUnit)
+// Remove deletes the unit; systemd keeps a deleted unit loaded until it
+// reloads.
+func (m *systemd) Remove(ctx context.Context) error {
+	if err := os.Remove(m.p.SystemdUnit); err != nil {
+		return err
+	}
+	_, err := m.run(ctx, "", "systemctl", "daemon-reload")
+	return err
 }
 
 func (m *systemd) Installed() bool {
@@ -181,7 +190,7 @@ func (m *openrc) Disable(ctx context.Context) error {
 	return err
 }
 
-func (m *openrc) Remove() error {
+func (m *openrc) Remove(context.Context) error {
 	return os.Remove(m.p.OpenRCScript)
 }
 
@@ -241,9 +250,43 @@ func (m *runit) Disable(context.Context) error {
 	return nil
 }
 
-func (m *runit) Remove() error {
+// Remove unlinks the service and deletes its directory once runsv reports it
+// down: sv down and the unlink only ask runsv to stop it, and the directory
+// holds the finish script that runs after it.
+func (m *runit) Remove(ctx context.Context) error {
 	_ = os.Remove(m.p.RunitLink)
+	if err := m.waitDown(ctx); err != nil {
+		return err
+	}
 	return os.RemoveAll(m.p.RunitDir)
+}
+
+// runitDownWait bounds how long Remove waits for runsv to stop the service.
+const runitDownWait = 10 * time.Second
+
+// waitDown waits until runsv's status of the service says down. A service
+// runsv never supervised has no status.
+func (m *runit) waitDown(ctx context.Context) error {
+	stat := filepath.Join(m.p.RunitDir, "supervise", "stat")
+	deadline := time.Now().Add(runitDownWait)
+	for {
+		b, err := os.ReadFile(stat)
+		switch {
+		case os.IsNotExist(err):
+			return nil
+		case err != nil:
+			return err
+		case strings.HasPrefix(string(b), "down"):
+			return nil
+		case time.Now().After(deadline):
+			return fmt.Errorf("runit service still %q after %s", strings.TrimSpace(string(b)), runitDownWait)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 }
 
 func (m *runit) Installed() bool {

@@ -354,7 +354,7 @@ func (s *serviceSetup) undo(ctx context.Context) error {
 		errs = append(errs, s.m.Disable(ctx))
 	}
 	if !s.was.Installed {
-		if err := s.m.Remove(); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := s.m.Remove(ctx); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, err)
 		}
 	}
@@ -558,7 +558,7 @@ func removeService(ctx context.Context, m initsys.Manager) error {
 	if err := m.Disable(ctx); err != nil {
 		return errors.Join(stopErr, err)
 	}
-	return m.Remove()
+	return m.Remove(ctx)
 }
 
 // Logs writes the service log to w: the journal on systemd, else LogFile

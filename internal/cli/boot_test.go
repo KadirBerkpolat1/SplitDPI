@@ -143,7 +143,7 @@ func TestEnableRunWontStop(t *testing.T) {
 	if strings.Contains(out, "Stopped the") {
 		t.Errorf("reports a takeover:\n%s", out)
 	}
-	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl disable splitdpi"}; !slices.Equal(steps(f), want) {
+	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl disable splitdpi", "systemctl daemon-reload"}; !slices.Equal(steps(f), want) {
 		t.Errorf("steps %q, want %q", steps(f), want)
 	}
 	if _, err := os.Stat(o.P.SystemdUnit); !os.IsNotExist(err) {
@@ -218,7 +218,7 @@ func TestEnableStartFailsRestartsBackground(t *testing.T) {
 	if strings.Contains(out, "Stopped the") || strings.Contains(out, "Service enabled") {
 		t.Errorf("reports a takeover:\n%s", out)
 	}
-	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl start splitdpi", "systemctl stop splitdpi", "systemctl disable splitdpi"}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "SIGTERM 999999999", "systemctl start splitdpi", "systemctl stop splitdpi", "systemctl disable splitdpi", "systemctl daemon-reload"}
 	if !slices.Equal(steps(f), want) {
 		t.Errorf("steps %q, want %q", steps(f), want)
 	}
