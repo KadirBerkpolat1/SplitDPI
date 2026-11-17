@@ -59,6 +59,7 @@ func Normalize(in string) (string, error) {
 }
 
 // Valid reports whether s is a normalized hostname with at least two labels and not an IP.
+// Labels are lowercase LDH only: blockcheck2 passes hostnames through shell eval as root.
 func Valid(s string) bool {
 	if addr, err := netip.ParseAddr(s); err == nil {
 		_ = addr
@@ -72,8 +73,13 @@ func Valid(s string) bool {
 		return false
 	}
 	for _, lab := range labels {
-		if lab == "" || len(lab) > 63 {
+		if lab == "" || len(lab) > 63 || lab[0] == '-' || lab[len(lab)-1] == '-' {
 			return false
+		}
+		for i := range len(lab) {
+			if c := lab[i]; (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
 		}
 	}
 	return true

@@ -3,6 +3,7 @@ package install_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -32,6 +34,19 @@ func runInstall(t *testing.T, env []string) (string, error) {
 	return string(out), err
 }
 
+// tlsServer serves h over https; install.sh only downloads over https, so the
+// returned env makes curl (and OpenSSL wget) trust the test certificate.
+func tlsServer(t *testing.T, h http.Handler) (*httptest.Server, []string) {
+	t.Helper()
+	srv := httptest.NewTLSServer(h)
+	t.Cleanup(srv.Close)
+	ca := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return srv, []string{"CURL_CA_BUNDLE=" + ca, "SSL_CERT_FILE=" + ca}
+}
+
 func TestInstallSuccess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("posix install.sh")
@@ -40,7 +55,7 @@ func TestInstallSuccess(t *testing.T) {
 	sum := sha256.Sum256(bin)
 	sums := fmt.Sprintf("%s  splitdpi-linux-amd64\n", hex.EncodeToString(sum[:]))
 	ver := "v0.1.0-test"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, trust := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/download/" + ver + "/splitdpi-linux-amd64":
 			_, _ = w.Write(bin)
@@ -50,14 +65,13 @@ func TestInstallSuccess(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(srv.Close)
 
 	prefix := t.TempDir()
-	out, err := runInstall(t, []string{
-		"SPLITDPI_VERSION=" + ver,
-		"SPLITDPI_BASE_URL=" + srv.URL,
-		"SPLITDPI_PREFIX=" + prefix,
-	})
+	out, err := runInstall(t, append(trust,
+		"SPLITDPI_VERSION="+ver,
+		"SPLITDPI_BASE_URL="+srv.URL,
+		"SPLITDPI_PREFIX="+prefix,
+	))
 	if err != nil {
 		t.Fatalf("install: %v\n%s", err, out)
 	}
@@ -84,11 +98,10 @@ func TestInstallNotWritableAsksForSudo(t *testing.T) {
 		t.Skip("root can write anywhere")
 	}
 	hits := 0
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, trust := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
 		http.NotFound(w, r)
 	}))
-	t.Cleanup(srv.Close)
 
 	for _, tc := range []struct {
 		name   string
@@ -110,11 +123,11 @@ func TestInstallNotWritableAsksForSudo(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { os.Chmod(locked, 0o755) })
-			out, err := runInstall(t, []string{
+			out, err := runInstall(t, append(trust,
 				"SPLITDPI_VERSION=v0.1.0-ro",
-				"SPLITDPI_BASE_URL=" + srv.URL,
-				"SPLITDPI_PREFIX=" + prefix,
-			})
+				"SPLITDPI_BASE_URL="+srv.URL,
+				"SPLITDPI_PREFIX="+prefix,
+			))
 			if err == nil {
 				t.Fatal("want install failure")
 			}
@@ -135,7 +148,7 @@ func TestInstallMissingChecksumLine(t *testing.T) {
 	bin := []byte("fake-binary")
 	sums := "0000000000000000000000000000000000000000000000000000000000000000  splitdpi-linux-arm64\n"
 	ver := "v0.1.0-noline"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, trust := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/download/" + ver + "/splitdpi-linux-amd64":
 			_, _ = w.Write(bin)
@@ -145,14 +158,13 @@ func TestInstallMissingChecksumLine(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(srv.Close)
 
 	prefix := t.TempDir()
-	out, err := runInstall(t, []string{
-		"SPLITDPI_VERSION=" + ver,
-		"SPLITDPI_BASE_URL=" + srv.URL,
-		"SPLITDPI_PREFIX=" + prefix,
-	})
+	out, err := runInstall(t, append(trust,
+		"SPLITDPI_VERSION="+ver,
+		"SPLITDPI_BASE_URL="+srv.URL,
+		"SPLITDPI_PREFIX="+prefix,
+	))
 	if err == nil {
 		t.Fatal("want install failure")
 	}
@@ -171,7 +183,7 @@ func TestInstallBadChecksum(t *testing.T) {
 	bin := []byte("fake-binary")
 	sums := "0000000000000000000000000000000000000000000000000000000000000000  splitdpi-linux-amd64\n"
 	ver := "v0.1.0-bad"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, trust := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/download/" + ver + "/splitdpi-linux-amd64":
 			_, _ = w.Write(bin)
@@ -181,18 +193,68 @@ func TestInstallBadChecksum(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(srv.Close)
 
 	prefix := t.TempDir()
-	_, err := runInstall(t, []string{
-		"SPLITDPI_VERSION=" + ver,
-		"SPLITDPI_BASE_URL=" + srv.URL,
-		"SPLITDPI_PREFIX=" + prefix,
-	})
+	_, err := runInstall(t, append(trust,
+		"SPLITDPI_VERSION="+ver,
+		"SPLITDPI_BASE_URL="+srv.URL,
+		"SPLITDPI_PREFIX="+prefix,
+	))
 	if err == nil {
 		t.Fatal("want install failure")
 	}
 	if _, err := os.Stat(filepath.Join(prefix, "bin", "splitdpi")); !os.IsNotExist(err) {
 		t.Fatal("binary installed after bad checksum")
+	}
+}
+
+// A release fetched over plain http, directly or after a redirect from https,
+// could be swapped together with its checksum by anyone on the path.
+func TestInstallRefusesPlainHTTP(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix install.sh")
+	}
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("install.sh enforces https through curl")
+	}
+	bin := []byte("#!/bin/sh\necho splitdpi-test\n")
+	sum := sha256.Sum256(bin)
+	sums := fmt.Sprintf("%s  splitdpi-linux-amd64\n", hex.EncodeToString(sum[:]))
+	ver := "v0.1.0-http"
+	var hits atomic.Int32
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		switch r.URL.Path {
+		case "/download/" + ver + "/splitdpi-linux-amd64":
+			_, _ = w.Write(bin)
+		case "/download/" + ver + "/sha256sums.txt":
+			_, _ = w.Write([]byte(sums))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(plain.Close)
+	redirect, trust := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+r.URL.Path, http.StatusFound)
+	}))
+
+	for name, base := range map[string]string{"direct": plain.URL, "redirect": redirect.URL} {
+		t.Run(name, func(t *testing.T) {
+			prefix := t.TempDir()
+			out, err := runInstall(t, append(trust,
+				"SPLITDPI_VERSION="+ver,
+				"SPLITDPI_BASE_URL="+base,
+				"SPLITDPI_PREFIX="+prefix,
+			))
+			if err == nil {
+				t.Fatalf("want install failure, got %q", out)
+			}
+			if _, err := os.Stat(filepath.Join(prefix, "bin", "splitdpi")); !os.IsNotExist(err) {
+				t.Fatal("binary installed over plain http")
+			}
+		})
+	}
+	if n := hits.Load(); n != 0 {
+		t.Errorf("plain http server got %d requests", n)
 	}
 }
