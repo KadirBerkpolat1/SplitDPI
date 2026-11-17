@@ -97,7 +97,7 @@ func TestEmbeddedApps(t *testing.T) {
 	if len(s.Warnings) != 0 {
 		t.Fatalf("warnings: %v", s.Warnings)
 	}
-	want := []string{"discord", "facebook", "instagram", "linkedin", "pastebin", "roblox", "signal", "telegram", "tiktok", "viber", "wattpad", "whatsapp", "x", "youtube"}
+	want := []string{"discord", "facebook", "grindr", "hornet", "instagram", "linkedin", "pastebin", "roblox", "scruff", "signal", "telegram", "tiktok", "viber", "vpn-sites", "wattpad", "whatsapp", "wikileaks", "x", "youtube"}
 	if got := slices.Sorted(maps.Keys(s.Apps)); !slices.Equal(got, want) {
 		t.Fatalf("apps %v, want %v", got, want)
 	}

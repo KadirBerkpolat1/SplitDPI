@@ -1,0 +1,6 @@
+schema = 1
+id = "vpn-sites"
+name = "VPN provider websites"
+hosts = ["cyberghostvpn.com", "expressvpn.com", "hide.me", "mullvad.net", "nordaccount.com", "nordcdn.com", "nordvpn.com", "privateinternetaccess.com", "protonvpn.com", "psiphon.ca", "purevpn.com", "surfshark.com"]
+probe = ["https://nordvpn.com/robots.txt", "https://protonvpn.com/robots.txt"]
+note = "Only the providers' websites, accounts and downloads are covered, not the VPN connections themselves: they do not use TLS hostnames."
