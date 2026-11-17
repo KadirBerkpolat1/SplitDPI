@@ -489,7 +489,7 @@ func TestEnableRegisterFailsStopsNothing(t *testing.T) {
 	if err == nil || errors.As(err, &TakeoverError{}) {
 		t.Fatalf("err %v, want the enable error", err)
 	}
-	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi"}; !slices.Equal(rec.service(), want) {
+	if want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "systemctl daemon-reload"}; !slices.Equal(rec.service(), want) {
 		t.Errorf("calls %q, want %q", rec.service(), want)
 	}
 	if _, err := os.Stat(o.P.SystemdUnit); !os.IsNotExist(err) {
@@ -530,7 +530,7 @@ func TestEnableStartFailsRestartsRun(t *testing.T) {
 			}
 			want := []string{
 				"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl start splitdpi",
-				"systemctl stop splitdpi", "systemctl disable splitdpi", "systemd-run", "restore signals",
+				"systemctl stop splitdpi", "systemctl disable splitdpi", "systemctl daemon-reload", "systemd-run", "restore signals",
 			}
 			if !slices.Equal(rec.service(), want) {
 				t.Errorf("calls %q, want %q", rec.service(), want)
@@ -595,7 +595,7 @@ func TestEnableRunExitsLate(t *testing.T) {
 	if !strings.Contains(err.Error(), "the background run was restarted in the background (pid 5151)") {
 		t.Errorf("message %q", err)
 	}
-	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "systemd-run", "restore signals"}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "systemctl daemon-reload", "systemd-run", "restore signals"}
 	if !slices.Equal(rec.service(), want) {
 		t.Errorf("calls %q, want %q", rec.service(), want)
 	}
@@ -615,7 +615,7 @@ func TestEnableRunStillStopping(t *testing.T) {
 	if !strings.Contains(err.Error(), "the background run is still stopping") {
 		t.Errorf("message %q", err)
 	}
-	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "restore signals"}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "systemctl daemon-reload", "restore signals"}
 	if !slices.Equal(rec.service(), want) {
 		t.Errorf("calls %q, want %q", rec.service(), want)
 	}
@@ -701,7 +701,7 @@ func TestEnableStopFails(t *testing.T) {
 	if e.Running != "background" || e.Restarted != 0 {
 		t.Errorf("error %+v, want the background run still running", e)
 	}
-	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "restore signals"}
+	want := []string{"systemctl daemon-reload", "systemctl enable splitdpi", "hold signals", "SIGTERM 4343", "systemctl disable splitdpi", "systemctl daemon-reload", "restore signals"}
 	if !slices.Equal(rec.service(), want) {
 		t.Errorf("calls %q, want %q", rec.service(), want)
 	}
@@ -801,8 +801,8 @@ func TestEnableReplacedBinary(t *testing.T) {
 	}
 }
 
-// BinPath, where install.sh puts splitdpi by default, is used as before,
-// whatever binary runs enable.
+// BinPath, where install.sh puts splitdpi by default, is used when the
+// binary that runs enable is not one only root can change.
 func TestEnableBinPathFirst(t *testing.T) {
 	host := selfAt("/home/berk/splitdpi")
 	o, _ := serviceOps(t, sysinfo.Systemd, host)
@@ -811,6 +811,20 @@ func TestEnableBinPathFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(o.P.SystemdUnit); !strings.Contains(string(b), "ExecStart="+o.P.BinPath+" run --service\n") {
+		t.Errorf("unit:\n%s", b)
+	}
+}
+
+// A copy left at BinPath does not replace the binary that runs enable when
+// only root can change that one: the service runs what was installed last.
+func TestEnablePrefersSafeSelf(t *testing.T) {
+	const bin = "/opt/splitdpi/bin/splitdpi"
+	o, _ := serviceOps(t, sysinfo.Systemd, selfAt(bin))
+	installBinPath(t, o)
+	if _, err := o.Enable(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(o.P.SystemdUnit); !strings.Contains(string(b), "ExecStart="+bin+" run --service\n") {
 		t.Errorf("unit:\n%s", b)
 	}
 }

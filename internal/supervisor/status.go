@@ -98,11 +98,38 @@ const lockWait = 2 * time.Second
 // means that a live run holds it; a flock held only shared, by LockInfo in
 // status, the TUI or enable, is waited out.
 func lock(p paths.Paths, mode string) (*os.File, error) {
+	deadline := time.Now().Add(lockWait)
+	for {
+		f, err := flockPath(p, deadline)
+		if err != nil {
+			return nil, err
+		}
+		// A file unlinked after we opened it, as revert clears RunDir, is
+		// locked for no run that opens the path: lock the one there now.
+		if !atPath(f, p.LockFile) {
+			f.Close()
+			continue
+		}
+		b, _ := json.Marshal(lockInfo{PID: os.Getpid(), Mode: mode})
+		if err := f.Truncate(0); err != nil {
+			f.Close()
+			return nil, err
+		}
+		if _, err := f.WriteAt(b, 0); err != nil {
+			f.Close()
+			return nil, err
+		}
+		return f, nil
+	}
+}
+
+// flockPath opens LockFile and takes its exclusive flock, waiting out shared
+// ones until deadline.
+func flockPath(p paths.Paths, deadline time.Time) (*os.File, error) {
 	f, err := os.OpenFile(p.LockFile, os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return nil, err
 	}
-	deadline := time.Now().Add(lockWait)
 	for delay := time.Millisecond; ; delay = min(2*delay, 50*time.Millisecond) {
 		err = syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
 		if !errors.Is(err, syscall.EWOULDBLOCK) {
@@ -122,14 +149,15 @@ func lock(p paths.Paths, mode string) (*os.File, error) {
 		f.Close()
 		return nil, fmt.Errorf("%s: %w", p.LockFile, err)
 	}
-	b, _ := json.Marshal(lockInfo{PID: os.Getpid(), Mode: mode})
-	if err := f.Truncate(0); err != nil {
-		f.Close()
-		return nil, err
-	}
-	if _, err := f.WriteAt(b, 0); err != nil {
-		f.Close()
-		return nil, err
-	}
 	return f, nil
+}
+
+// atPath reports whether f is the file at path.
+func atPath(f *os.File, path string) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	cur, err := os.Stat(path)
+	return err == nil && os.SameFile(fi, cur)
 }

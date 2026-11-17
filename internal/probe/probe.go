@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
 const DefaultTimeout = 8 * time.Second
@@ -41,6 +43,19 @@ func (p Prober) client() *http.Client {
 
 // SiteURL is the probe URL of a user site's normalized domain.
 func SiteURL(domain string) string { return "https://" + domain + "/" }
+
+// AppURLs are the probe URLs of a. An app without any, like one the user
+// made, is probed at each of its hosts.
+func AppURLs(a presets.App) []string {
+	if len(a.Probe) > 0 {
+		return a.Probe
+	}
+	urls := make([]string, len(a.Hosts))
+	for i, h := range a.Hosts {
+		urls[i] = SiteURL(h)
+	}
+	return urls
+}
 
 // Probe GETs each URL. OK means TLS verified and any HTTP status arrived within Timeout.
 func (p Prober) Probe(ctx context.Context, urls []string) []Result {

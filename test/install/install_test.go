@@ -88,6 +88,48 @@ func TestInstallSuccess(t *testing.T) {
 	}
 }
 
+// enable runs the binary as root only if no group or other may write to it
+// or a directory above it. A caller's umask that lets the group write, as
+// sudo may keep, must not leave the new prefix like that.
+func TestInstallPrefixTrustedByEnable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix install.sh")
+	}
+	bin := []byte("#!/bin/sh\necho splitdpi-test\n")
+	sum := sha256.Sum256(bin)
+	sums := fmt.Sprintf("%s  splitdpi-linux-amd64\n", hex.EncodeToString(sum[:]))
+	ver := "v0.1.0-umask"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/download/" + ver + "/splitdpi-linux-amd64":
+			_, _ = w.Write(bin)
+		case "/download/" + ver + "/sha256sums.txt":
+			_, _ = w.Write([]byte(sums))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	parent := t.TempDir()
+	prefix := filepath.Join(parent, "opt", "splitdpi")
+	cmd := exec.Command("sh", "-c", "umask 002 && exec sh install.sh")
+	cmd.Dir = repoRoot(t)
+	cmd.Env = append(os.Environ(), "SPLITDPI_VERSION="+ver, "SPLITDPI_BASE_URL="+srv.URL, "SPLITDPI_PREFIX="+prefix)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("install: %v\n%s", err, out)
+	}
+	for _, p := range []string{filepath.Join(parent, "opt"), prefix, filepath.Join(prefix, "bin"), filepath.Join(prefix, "bin", "splitdpi")} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if perm := fi.Mode().Perm(); perm&0o022 != 0 {
+			t.Errorf("%s: mode %o, a group or others may write", p, perm)
+		}
+	}
+}
+
 // /usr/local/bin usually exists, so a non-root run must be stopped by the
 // writability check, not by a raw permission error from install.
 func TestInstallNotWritableAsksForSudo(t *testing.T) {

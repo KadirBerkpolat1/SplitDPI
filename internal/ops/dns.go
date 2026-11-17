@@ -130,7 +130,8 @@ func (o *Ops) dnsClient(c config.Config) *dns.Client {
 	return &dns.Client{Upstreams: dns.Upstreams(provider, proto), HTTP: o.HTTP}
 }
 
-// ProbeDNS checks enabled apps' probe hostnames for poisoning.
+// ProbeDNS checks enabled apps' probe hostnames for poisoning; an app without
+// a probe URL, like one the user made, is checked at its hosts.
 func (o *Ops) ProbeDNS(ctx context.Context, apps []string) []probe.DNSResult {
 	hosts := probeHosts(o.PresetsList(), apps)
 	if len(hosts) == 0 {
@@ -170,7 +171,7 @@ func probeHosts(set presets.Set, apps []string) []string {
 		if !ok {
 			continue
 		}
-		for _, raw := range a.Probe {
+		for _, raw := range probe.AppURLs(a) {
 			u, err := url.Parse(raw)
 			if err != nil || u.Hostname() == "" {
 				continue

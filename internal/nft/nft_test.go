@@ -133,6 +133,22 @@ func TestDNSSkipsIfaces(t *testing.T) {
 	}
 }
 
+// Without an IPv6 loopback the forwarder listens on 127.0.0.1 only, so IPv6
+// DNS must not be redirected to [::1], where nothing answers.
+func TestDNSRedirectIPv4Only(t *testing.T) {
+	in := input()
+	in.DNSRedirectPort = 5453
+	rules := dnsChain(t, ruleset(t, in))
+	if last := rules[len(rules)-1]; strings.Contains(last, "nfproto") {
+		t.Errorf("redirect limited to one family by default: %q", last)
+	}
+	in.DNSIPv4Only = true
+	rules = dnsChain(t, ruleset(t, in))
+	if last, want := rules[len(rules)-1], "meta nfproto ipv4 meta l4proto { tcp, udp } th dport 53 counter redirect to :5453"; last != want {
+		t.Errorf("redirect %q, want %q", last, want)
+	}
+}
+
 func TestNoDNSRedirectByDefault(t *testing.T) {
 	if s := ruleset(t, input()); strings.Contains(s, "redirect") || strings.Contains(s, "type nat") {
 		t.Errorf("redirect without DNSRedirectPort:\n%s", s)

@@ -170,7 +170,7 @@ func startLocal(t *testing.T, up *httptest.Server, local *dns.Local) *dns.Forwar
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}, Local: local}
+	f := &dns.Forwarder{DNS: &dns.Client{Upstreams: dohUpstreams(t, up.URL), HTTP: up.Client()}, Local: local, IPv4Only: !dns.IPv6Loopback()}
 	if err := f.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

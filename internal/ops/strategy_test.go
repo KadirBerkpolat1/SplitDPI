@@ -75,6 +75,27 @@ func TestStrategySetASNWithoutScan(t *testing.T) {
 	}
 }
 
+// A network scanned in another country (AS12389, RU) keeps no ASN when a
+// Turkish ISP's strategy is chosen: that ISP's ASN selects TR's excludes.
+func TestStrategySetOtherISPUpdatesCountry(t *testing.T) {
+	o := strategyOps(t)
+	c := config.Default()
+	c.Strategy = &config.Strategy{ID: "blockcheck", Source: "blockcheck2", TCPTLS: "--x", ASN: 12389}
+	if err := config.Save(o.P, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := o.StrategySet("tt-multidisorder"); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := config.Load(o.P)
+	if got.Strategy == nil || got.Strategy.ASN != 9121 {
+		t.Fatalf("saved %+v, want ASN 9121", got.Strategy)
+	}
+	if cc := countryFor(o.PresetsList(), got.Strategy); cc != "TR" {
+		t.Errorf("country %q, want TR", cc)
+	}
+}
+
 func TestStrategySetUnknownLeavesConfig(t *testing.T) {
 	o := strategyOps(t)
 	c := config.Default()

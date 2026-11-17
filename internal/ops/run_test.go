@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
@@ -191,6 +192,9 @@ func TestPrepareDNS(t *testing.T) {
 	}
 	if j.sup.StartDNS == nil || j.sup.FlushDNS == nil || !strings.Contains(j.ruleset, "redirect to :5453") {
 		t.Errorf("dns = true: StartDNS %v, FlushDNS %v, ruleset:\n%s", j.sup.StartDNS != nil, j.sup.FlushDNS != nil, j.ruleset)
+	}
+	if v4 := strings.Contains(j.ruleset, "meta nfproto ipv4 "); v4 != !dns.IPv6Loopback() {
+		t.Errorf("IPv4-only redirect %v on a host where IPv6 loopback is %v:\n%s", v4, dns.IPv6Loopback(), j.ruleset)
 	}
 }
 

@@ -2,11 +2,16 @@ package probe
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/netip"
 	"slices"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 )
 
-// DNSResult compares system resolver answers with DoH.
+// DNSResult compares system resolver answers with DoH. Err is the lookup
+// that failed, with nothing compared.
 type DNSResult struct {
 	Domain   string
 	System   []netip.Addr
@@ -14,23 +19,26 @@ type DNSResult struct {
 	Poisoned bool
 	Mismatch bool
 	Reason   string
+	Err      error
 }
 
 // CheckDNS resolves each domain through sys and doh and classifies poisoning.
+// An answer that the name has no address is an answer, not a failure: an
+// ISP may block a name with NXDOMAIN or an empty answer.
 func CheckDNS(ctx context.Context, domains []string, sys func(context.Context, string) ([]netip.Addr, error), doh func(context.Context, string) ([]netip.Addr, error)) []DNSResult {
 	out := make([]DNSResult, len(domains))
 	for i, d := range domains {
 		r := DNSResult{Domain: d}
 		var err error
 		r.System, err = sys(ctx, d)
-		if err != nil {
-			r.Reason = err.Error()
+		if err != nil && !noAddressAnswer(err) {
+			r.Reason, r.Err = err.Error(), err
 			out[i] = r
 			continue
 		}
 		r.DoH, err = doh(ctx, d)
-		if err != nil {
-			r.Reason = err.Error()
+		if err != nil && !noAddressAnswer(err) {
+			r.Reason, r.Err = err.Error(), err
 			out[i] = r
 			continue
 		}
@@ -40,10 +48,22 @@ func CheckDNS(ctx context.Context, domains []string, sys func(context.Context, s
 	return out
 }
 
+// noAddressAnswer reports whether err is a resolver's answer that the name
+// has no address: the system resolver's not-found, or dns.ErrNoAddress.
+func noAddressAnswer(err error) bool {
+	var dnsErr *net.DNSError
+	return errors.As(err, &dnsErr) && dnsErr.IsNotFound || errors.Is(err, dns.ErrNoAddress)
+}
+
 func classifyDNS(r *DNSResult) {
 	if containsKnownBlock(r.System) {
 		r.Poisoned = true
 		r.Reason = "known block page"
+		return
+	}
+	if len(r.System) == 0 && anyPublic(r.DoH) {
+		r.Poisoned = true
+		r.Reason = "system resolver returned no address"
 		return
 	}
 	if systemNonPublicDoHPublic(r.System, r.DoH) {

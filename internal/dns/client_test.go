@@ -221,6 +221,26 @@ func TestResolveNoAddress(t *testing.T) {
 	}
 }
 
+// An AAAA question lost on the way keeps the A answer: the name has an
+// address, and the poisoning check must still compare it.
+func TestResolveKeepsAOnAAAAError(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var q dnsmessage.Message
+		if err := q.Unpack(body); err != nil || len(q.Questions) != 1 || q.Questions[0].Type == dnsmessage.TypeAAAA {
+			http.Error(w, "down", http.StatusBadGateway)
+			return
+		}
+		w.Write(reply(t, body))
+	}))
+	defer srv.Close()
+	c := &dns.Client{Upstreams: dohUpstreams(t, srv.URL), HTTP: srv.Client()}
+	got, err := c.Resolve(context.Background(), "discord.com")
+	if err != nil || !slices.Equal(got, []netip.Addr{wantA}) {
+		t.Fatalf("got %v, %v; want %v", got, err, wantA)
+	}
+}
+
 func TestUpstreamURL(t *testing.T) {
 	for addr, want := range map[string]string{
 		"1.1.1.1:443":    "https://1.1.1.1/dns-query",

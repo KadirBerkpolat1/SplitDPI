@@ -25,16 +25,7 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 		return usageError(i18n.T("probe.usage"))
 	}
 	if dnsApps, _ := appsForProbe(o, apps); len(dnsApps) > 0 {
-		for _, r := range o.ProbeDNS(ctx, dnsApps) {
-			switch {
-			case r.Poisoned:
-				fmt.Fprintf(w, "dns  %s  ✗  (%s)\n", r.Domain, r.Reason)
-			case r.Mismatch:
-				fmt.Fprintf(w, "dns  %s  ~  (%s)\n", r.Domain, i18n.T("probe.dns.mismatch"))
-			default:
-				fmt.Fprintf(w, "dns  %s  ✓\n", r.Domain)
-			}
-		}
+		printDNSChecks(w, o.ProbeDNS(ctx, dnsApps))
 	}
 	results, err := o.Probe(ctx, apps)
 	if err != nil {
@@ -49,6 +40,21 @@ func runProbe(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error
 		return err
 	}
 	return printProbe(w, results, verbose)
+}
+
+// printDNSChecks lists each domain's DNS check. A lookup that failed is no
+// clean answer either, so it is marked like poisoning.
+func printDNSChecks(w io.Writer, rs []probe.DNSResult) {
+	for _, r := range rs {
+		switch {
+		case r.Poisoned, r.Err != nil:
+			fmt.Fprintf(w, "dns  %s  ✗  (%s)\n", r.Domain, r.Reason)
+		case r.Mismatch:
+			fmt.Fprintf(w, "dns  %s  ~  (%s)\n", r.Domain, i18n.T("probe.dns.mismatch"))
+		default:
+			fmt.Fprintf(w, "dns  %s  ✓\n", r.Domain)
+		}
+	}
 }
 
 // printProbe lists each result and counts the apps and sites that open, are

@@ -52,6 +52,7 @@ help = "Проверить доступность по HTTPS адресов вк
 [probe]
 usage = "Использование: splitdpi probe [--apps id,id] [-v]"
 no_apps = "Нет включённых приложений и добавленных сайтов. Выполните: sudo splitdpi apps enable discord  или: sudo splitdpi sites add ДОМЕН"
+no_hosts = "У включённых приложений нет адресов, и сайты не добавлены. Выполните: sudo splitdpi apps add-host ID ДОМЕН  или: sudo splitdpi sites add ДОМЕН"
 failed = "Одна или несколько проверок не прошли."
 dns.mismatch = "системный DNS и DoH отвечают по-разному"
 
