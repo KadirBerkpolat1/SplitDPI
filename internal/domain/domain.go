@@ -58,14 +58,15 @@ func Normalize(in string) (string, error) {
 	return ascii, nil
 }
 
-// Valid reports whether s is a normalized hostname with at least two labels and not an IP.
+// Valid reports whether s is a normalized hostname of at most 253 bytes with
+// at least two labels and not an IP.
 // Labels are lowercase LDH only: blockcheck2 passes hostnames through shell eval as root.
 func Valid(s string) bool {
 	if addr, err := netip.ParseAddr(s); err == nil {
 		_ = addr
 		return false
 	}
-	if strings.Contains(s, "..") {
+	if len(s) > 253 || strings.Contains(s, "..") {
 		return false
 	}
 	labels := strings.Split(s, ".")
