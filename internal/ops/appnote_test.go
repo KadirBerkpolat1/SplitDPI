@@ -39,3 +39,15 @@ func TestEmbeddedAppNotesTranslated(t *testing.T) {
 		}
 	}
 }
+
+// An app's data note shows wherever no appnote message matches its id, so it
+// says what the English message says.
+func TestEmbeddedAppNotesMatchEnglish(t *testing.T) {
+	defer i18n.Init("en")
+	i18n.Init("en")
+	for id, a := range presets.Load(presets.Embedded()).Apps {
+		if got := AppNote(a); got != a.Note {
+			t.Errorf("%s: data note %q, appnote.%s %q", id, a.Note, id, got)
+		}
+	}
+}
