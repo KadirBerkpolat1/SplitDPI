@@ -97,7 +97,7 @@ func TestEmbeddedApps(t *testing.T) {
 	if len(s.Warnings) != 0 {
 		t.Fatalf("warnings: %v", s.Warnings)
 	}
-	want := []string{"discord", "facebook", "grindr", "hornet", "instagram", "linkedin", "pastebin", "roblox", "scruff", "signal", "telegram", "tiktok", "viber", "vpn-sites", "wattpad", "whatsapp", "wikileaks", "x", "youtube"}
+	want := []string{"discord", "facebook", "grindr", "hornet", "instagram", "linkedin", "pastebin", "roblox", "scruff", "signal", "telegram", "threads", "tiktok", "viber", "vpn-sites", "wattpad", "whatsapp", "wikileaks", "x", "youtube"}
 	if got := slices.Sorted(maps.Keys(s.Apps)); !slices.Equal(got, want) {
 		t.Fatalf("apps %v, want %v", got, want)
 	}
@@ -121,7 +121,7 @@ func TestEmbeddedApps(t *testing.T) {
 			quic = append(quic, id)
 		}
 	}
-	if wantQUIC := []string{"facebook", "instagram", "linkedin", "whatsapp", "youtube"}; !slices.Equal(quic, wantQUIC) {
+	if wantQUIC := []string{"facebook", "instagram", "linkedin", "threads", "whatsapp", "youtube"}; !slices.Equal(quic, wantQUIC) {
 		t.Errorf("quic apps %v, want %v", quic, wantQUIC)
 	}
 }
