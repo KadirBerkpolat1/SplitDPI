@@ -284,8 +284,12 @@ func TestCleanStop(t *testing.T) {
 		t.Errorf("last nft call %q", last)
 	}
 	ents, _ := os.ReadDir(p.RunDir)
-	if len(ents) != 1 || ents[0].Name() != "status.json" {
-		t.Errorf("run dir left %v", ents)
+	var left []string
+	for _, e := range ents {
+		left = append(left, e.Name())
+	}
+	if !slices.Equal(left, []string{"lock", "status.json"}) {
+		t.Errorf("run dir left %q", left)
 	}
 	if st, _ := supervisor.ReadStatus(p); st.State != "stopped" {
 		t.Errorf("state %q", st.State)
@@ -314,6 +318,63 @@ func TestAlreadyRunning(t *testing.T) {
 	}
 	if len(second.cmds()) != 0 {
 		t.Errorf("second Run touched nft: %v", second.cmds())
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The lock file stays through the cleanup: unlinked while still locked, a
+// run starting meanwhile would lock a new file and run next to this one.
+func TestFinishKeepsHeldLock(t *testing.T) {
+	p := setup(t)
+	h := newHarness(t, p, false)
+	second := newHarness(t, p, false)
+	stopping := make(chan struct{})
+	var duringCleanup error
+	record := h.s.Exec
+	h.s.Exec = func(ctx context.Context, stdin, name string, args ...string) ([]byte, error) {
+		select {
+		case <-stopping:
+			duringCleanup = second.s.Run(context.Background(), out, rules, supervisor.Status{Mode: "service"})
+		default:
+		}
+		return record(ctx, stdin, name, args...)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- h.s.Run(ctx, out, rules, meta()) }()
+	<-h.spawned
+	held, err := os.Stat(p.LockFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(stopping)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var already supervisor.ErrAlreadyRunning
+	if !errors.As(duringCleanup, &already) {
+		t.Errorf("run started during the cleanup: %v", duringCleanup)
+	}
+	after, err := os.Stat(p.LockFile)
+	if err != nil {
+		t.Fatalf("lock file gone after the run: %v", err)
+	}
+	if !os.SameFile(held, after) {
+		t.Error("lock file replaced")
+	}
+
+	ctx, cancel = context.WithCancel(context.Background())
+	go func() { done <- second.s.Run(ctx, out, rules, meta()) }()
+	<-second.spawned
+	if _, _, locked := supervisor.LockInfo(p); !locked {
+		t.Error("next run does not hold the lock")
+	}
+	if next, err := os.Stat(p.LockFile); err != nil || !os.SameFile(held, next) {
+		t.Errorf("next run locked another file: %v", err)
 	}
 	cancel()
 	if err := <-done; err != nil {
