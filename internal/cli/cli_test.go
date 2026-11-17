@@ -87,3 +87,13 @@ func TestLangFromConfig(t *testing.T) {
 	Main([]string{"--lang", "en", "doctor"}, &out, &out, o)
 	has(t, out.String(), "needs root")
 }
+
+// --help and the --lang error name every language i18n supports.
+func TestHelpHidesInternalAndListsRu(t *testing.T) {
+	out, code := run(t, 1000, "--help")
+	eq(t, code, 0)
+	has(t, out, "--lang en|tr|ru")
+	out, code = run(t, 1000, "--lang")
+	eq(t, code, 2)
+	has(t, out, "en, tr or ru")
+}

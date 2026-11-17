@@ -1,13 +1,13 @@
 # Türkçe. Ürün, uygulama ve sağlayıcı adları, komutlar, bayraklar ve dosya yolları çevrilmez.
 
 [usage]
-header = "Kullanım: splitdpi [--lang en|tr] <komut> [argümanlar]"
+header = "Kullanım: splitdpi [--lang en|tr|ru] <komut> [argümanlar]"
 commands = "Komutlar:"
 
 [err]
 need_root = "Bu komut root yetkisi ister. Şunu çalıştırın: %s"
 unknown_command = "Bilinmeyen komut: %s"
-lang_value = "--lang bir değer ister: en veya tr"
+lang_value = "--lang bir değer ister: en, tr veya ru"
 
 [cmd.version]
 help = "Sürümü gösterir."

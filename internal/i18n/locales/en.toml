@@ -1,13 +1,13 @@
 # English is the source locale. Keys may use dotted names or [tables].
 
 [usage]
-header = "Usage: splitdpi [--lang en|tr] <command> [args]"
+header = "Usage: splitdpi [--lang en|tr|ru] <command> [args]"
 commands = "Commands:"
 
 [err]
 need_root = "This command needs root. Run: %s"
 unknown_command = "Unknown command: %s"
-lang_value = "--lang needs a value: en or tr"
+lang_value = "--lang needs a value: en, tr or ru"
 
 [cmd.version]
 help = "Print the version."
