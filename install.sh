@@ -5,6 +5,14 @@ SPLITDPI_VERSION=${SPLITDPI_VERSION:-latest}
 SPLITDPI_BASE_URL=${SPLITDPI_BASE_URL:-https://github.com/KadirBerkpolat1/SplitDPI/releases}
 SPLITDPI_PREFIX=${SPLITDPI_PREFIX:-/usr/local}
 
+case $SPLITDPI_BASE_URL in
+https://*) ;;
+*)
+	echo "SPLITDPI_BASE_URL must start with https://: $SPLITDPI_BASE_URL" >&2
+	exit 1
+	;;
+esac
+
 arch=$(uname -m)
 case "$arch" in
 x86_64) goarch=amd64 ;;
@@ -21,6 +29,12 @@ elif command -v shasum >/dev/null 2>&1; then
 	checksum_cmd=shasum
 else
 	echo "need sha256sum or shasum to verify downloads" >&2
+	exit 1
+fi
+
+# wget, GNU or BusyBox, follows a redirect from https to plain http.
+if ! command -v curl >/dev/null 2>&1; then
+	echo "curl is required (wget cannot refuse plain http): install curl with your package manager, then rerun" >&2
 	exit 1
 fi
 
@@ -51,16 +65,7 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT INT HUP TERM
 
 fetch() {
-	url=$1
-	dest=$2
-	if [ -n "$(command -v curl)" ]; then
-		curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$dest" "$url"
-	elif [ -n "$(command -v wget)" ]; then
-		wget -qO "$dest" "$url"
-	else
-		echo "need wget or curl" >&2
-		exit 1
-	fi
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$2" "$1"
 }
 
 fetch "$base/$asset" "$tmpdir/$asset"

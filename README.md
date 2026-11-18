@@ -385,8 +385,8 @@ stream profile).
 - **Installer:** `install.sh` downloads from GitHub over https only (curl
   refuses plain http, also on redirects, and needs TLS 1.2 or newer) and
   installs the binary only if it matches its line in the release's
-  `sha256sums.txt`. Directories are created with umask 022. Without curl it
-  falls back to wget, which does not enforce https.
+  `sha256sums.txt`. Directories are created with umask 022. It needs curl:
+  wget follows a redirect from https to plain http.
 - **Downloads:** the zapret2 engine is a pinned release checked against its
   SHA-256; a preset update is refused unless its `presets.tar.gz.sha256`
   matches.
