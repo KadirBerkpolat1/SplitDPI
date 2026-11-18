@@ -331,7 +331,7 @@ func TestSettingsEngineInstall(t *testing.T) {
 	f.engineErr = engine.ErrChecksum
 	m = press(t, m, "enter")
 	v := flat(fullList(m))
-	has(t, v, flat(installErrText(engine.ErrChecksum)))
+	has(t, v, flat(ops.EngineInstallText(engine.ErrChecksum)))
 	has(t, v, "not installed")
 
 	f.engineErr = nil

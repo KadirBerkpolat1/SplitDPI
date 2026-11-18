@@ -36,8 +36,8 @@ func TestParseSiteIPv4Only(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != tlsSimple || res.QUIC != "" {
-		t.Errorf("TCPTLS %q QUIC %q, want the first working TLS strategy", res.TCPTLS, res.QUIC)
+	if got := bestTLS(res); got != tlsSimple || res.QUIC != "" {
+		t.Errorf("best TLS %q QUIC %q, want the first working TLS strategy", got, res.QUIC)
 	}
 }
 
@@ -54,8 +54,8 @@ func TestParseSitePrefersBothIPVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != tlsDisord {
-		t.Errorf("TCPTLS %q, want %q (works on IPv4 and IPv6)", res.TCPTLS, tlsDisord)
+	if got := bestTLS(res); got != tlsDisord {
+		t.Errorf("best TLS %q, want %q (works on IPv4 and IPv6)", got, tlsDisord)
 	}
 	if res.QUIC != quicSimple {
 		t.Errorf("QUIC %q, want %q", res.QUIC, quicSimple)
@@ -70,8 +70,8 @@ func TestParseSiteNothingCommonFallsBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != tlsSimple {
-		t.Errorf("TCPTLS %q, want the first working one %q", res.TCPTLS, tlsSimple)
+	if got := bestTLS(res); got != tlsSimple {
+		t.Errorf("best TLS %q, want the first working one %q", got, tlsSimple)
 	}
 }
 
@@ -83,7 +83,7 @@ func TestParseSiteNoneWorking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != "" {
-		t.Errorf("TCPTLS %q, want none", res.TCPTLS)
+	if got := bestTLS(res); got != "" {
+		t.Errorf("best TLS %q, want none", got)
 	}
 }

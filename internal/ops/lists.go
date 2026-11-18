@@ -174,7 +174,7 @@ func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, er
 	}
 	sc := bufio.NewScanner(r)
 	for n := 1; sc.Scan(); n++ {
-		text, d := config.ListEntry(sc.Text())
+		text, d := domain.ListEntry(sc.Text())
 		if text == "" {
 			continue
 		}

@@ -570,7 +570,7 @@ func errText(err error) string {
 	case errors.As(err, &nobin):
 		return i18n.T("service.no_binary", nobin.Path, nobin.Path)
 	case errors.As(err, &unsafe):
-		return unsafeText(unsafe)
+		return unsafe.Text()
 	case errors.Is(err, ops.ErrStopTimeout):
 		return i18n.T("stop.timeout")
 	case errors.As(err, &already):

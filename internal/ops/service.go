@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/render"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
@@ -51,6 +52,16 @@ const (
 
 func (e UnsafeBinaryError) Error() string {
 	return fmt.Sprintf("%s is not safe to run as the service (%s: %s)", e.Path, e.At, e.Reason)
+}
+
+// Text words e for the user: what is wrong, and either where to install
+// splitdpi instead or, for the default place, what to fix.
+func (e UnsafeBinaryError) Text() string {
+	reason := i18n.T("service.unsafe_"+e.Reason, e.At)
+	if e.Path == e.Install {
+		return i18n.T("service.unsafe_default", e.Path, reason)
+	}
+	return i18n.T("service.unsafe", e.Path, reason, e.Path, e.Install)
 }
 
 // StopRunError means Enable could not stop the run the service was to replace.

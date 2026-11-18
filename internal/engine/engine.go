@@ -25,10 +25,16 @@ const (
 )
 
 var (
-	ErrChecksum   = errors.New("engine archive SHA-256 mismatch")
-	ErrUnsafePath = safetar.ErrUnsafePath
-	ErrArch       = errors.New("unsupported architecture")
+	ErrChecksum = errors.New("engine archive SHA-256 mismatch")
+	ErrArch     = errors.New("unsupported architecture")
 )
+
+// ArchError is Install's error for an architecture zapret2 has no binaries
+// for; it matches ErrArch.
+type ArchError struct{ GOARCH string }
+
+func (e ArchError) Error() string { return ErrArch.Error() + ": " + e.GOARCH }
+func (e ArchError) Unwrap() error { return ErrArch }
 
 // limits caps what the archive may unpack to. zapret2 v1.0.7 holds 306 files,
 // 19.1 MB in total and 3.3 MB at most; keep both limits at least twice that.
@@ -65,7 +71,7 @@ func (e Engine) LuaDir() string      { return filepath.Join(e.Dir, "lua") }
 func Install(p paths.Paths, tarball io.Reader, wantSHA256, goarch string) (Engine, error) {
 	arch, ok := archDirs[goarch]
 	if !ok {
-		return Engine{}, fmt.Errorf("%w: %s", ErrArch, goarch)
+		return Engine{}, ArchError{goarch}
 	}
 	if err := os.MkdirAll(p.EngineDir, 0o755); err != nil {
 		return Engine{}, err

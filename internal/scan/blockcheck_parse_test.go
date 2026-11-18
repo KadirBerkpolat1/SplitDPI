@@ -25,6 +25,14 @@ func readFixture(t *testing.T, name string) string {
 	return string(b)
 }
 
+// bestTLS is the TLS strategy a scan picks from res: its first candidate.
+func bestTLS(res scan.BlockcheckResult) string {
+	if len(res.TLSCandidates) == 0 {
+		return ""
+	}
+	return res.TLSCandidates[0]
+}
+
 // bc-real-tr.log is `splitdpi scan --site discord.com` on a Türk Telekom
 // line (AS9121), 2026-10-29, IPVS=46, no HTTP3: discord.com has no AAAA record,
 // so the ipv6 test aborts and the first ipv4 TLS line wins.
@@ -34,14 +42,11 @@ func TestParseReal(t *testing.T) {
 		t.Fatal(err)
 	}
 	const wantTLS = "--payload=tls_client_hello --lua-desync=tcpseg:pos=0,1:ip_id=rnd:repeats=1"
-	if res.TCPTLS != wantTLS {
-		t.Fatalf("TCPTLS = %q, want %q", res.TCPTLS, wantTLS)
+	if got := bestTLS(res); got != wantTLS {
+		t.Fatalf("best TLS = %q, want %q", got, wantTLS)
 	}
 	if res.QUIC != "" {
 		t.Fatalf("QUIC = %q, want empty (HTTP3 was not tested)", res.QUIC)
-	}
-	if len(res.Coverage) != 0 {
-		t.Fatalf("want no COVERAGE for one domain, got %d rows", len(res.Coverage))
 	}
 }
 
@@ -50,11 +55,8 @@ func TestParseSimulate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Summary) == 0 {
-		t.Fatal("want SUMMARY lines")
-	}
-	if res.TCPTLS != wantSimulateTLS {
-		t.Fatalf("TCPTLS = %q, want %q", res.TCPTLS, wantSimulateTLS)
+	if got := bestTLS(res); got != wantSimulateTLS {
+		t.Fatalf("best TLS = %q, want %q", got, wantSimulateTLS)
 	}
 	if res.QUIC != wantSimulateQUIC {
 		t.Fatalf("QUIC = %q, want %q", res.QUIC, wantSimulateQUIC)
@@ -90,8 +92,8 @@ func TestParseSkipsInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != good {
-		t.Fatalf("TCPTLS = %q, want %q", res.TCPTLS, good)
+	if got := bestTLS(res); got != good {
+		t.Fatalf("best TLS = %q, want %q", got, good)
 	}
 
 	allBad := strings.Join([]string{
@@ -104,7 +106,7 @@ func TestParseSkipsInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.TCPTLS != "" {
-		t.Fatalf("TCPTLS = %q, want empty", res.TCPTLS)
+	if got := bestTLS(res); got != "" {
+		t.Fatalf("best TLS = %q, want empty", got)
 	}
 }

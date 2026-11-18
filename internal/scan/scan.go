@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 	"time"
 
@@ -115,7 +114,7 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 
 	hosts := []string{opt.Site}
 	if opt.Site == "" {
-		if hosts, err = probeHosts(env.Set, opt.Apps, opt.Sites); err != nil {
+		if hosts, err = probe.Hosts(env.Set, opt.Apps, opt.Sites); err != nil {
 			return rep, err
 		}
 	}
@@ -228,34 +227,6 @@ func probeURLs(set presets.Set, apps, sites []string) []string {
 		urls = append(urls, probe.SiteURL(d))
 	}
 	return urls
-}
-
-func probeHosts(set presets.Set, apps, sites []string) ([]string, error) {
-	seen := map[string]bool{}
-	var hosts []string
-	add := func(h string) {
-		if !seen[h] {
-			seen[h] = true
-			hosts = append(hosts, h)
-		}
-	}
-	for _, id := range apps {
-		a, ok := set.Apps[id]
-		if !ok {
-			return nil, fmt.Errorf("unknown app %q", id)
-		}
-		for _, raw := range probe.AppURLs(a) {
-			u, err := url.Parse(raw)
-			if err != nil || u.Hostname() == "" {
-				return nil, fmt.Errorf("bad probe url %q", raw)
-			}
-			add(u.Hostname())
-		}
-	}
-	for _, d := range sites {
-		add(d)
-	}
-	return hosts, nil
 }
 
 func anyQUIC(set presets.Set, apps []string) bool {

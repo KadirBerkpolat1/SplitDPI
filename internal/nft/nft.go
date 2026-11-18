@@ -157,8 +157,13 @@ func Apply(ctx context.Context, run execx.Runner, table, ruleset string) error {
 
 // Delete removes our table. A missing table is not an error.
 func Delete(ctx context.Context, run execx.Runner, table string) error {
-	if _, err := run(ctx, "", "nft", "delete", "table", "inet", table); err != nil && !missing(err) {
-		return fmt.Errorf("delete nft table %s: %w", table, err)
+	return DeleteTable(ctx, run, "inet", table)
+}
+
+// DeleteTable removes table of family. A missing table is not an error.
+func DeleteTable(ctx context.Context, run execx.Runner, family, table string) error {
+	if _, err := run(ctx, "", "nft", "delete", "table", family, table); err != nil && !missing(err) {
+		return fmt.Errorf("delete nft table %s %s: %w", family, table, err)
 	}
 	return nil
 }

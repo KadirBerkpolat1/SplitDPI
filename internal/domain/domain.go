@@ -22,6 +22,20 @@ func (e InvalidError) Error() string {
 	return i18n.T("domain.invalid", e.Input)
 }
 
+// ListEntry reads one line of a domain list, which users also edit by hand:
+// a UTF-8 BOM, text after "#" and surrounding space go, and *.example.com or
+// .example.com mean example.com. text is what is left, "" for a blank or
+// comment line; d is text as a normalized domain, "" when it is not one.
+func ListEntry(line string) (text, d string) {
+	text, _, _ = strings.Cut(strings.TrimPrefix(line, "\ufeff"), "#")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", ""
+	}
+	d, _ = Normalize(strings.TrimPrefix(text, "."))
+	return text, d
+}
+
 // Normalize strips a URL-like prefix, wildcard, port and trailing dot, lowercases,
 // punycodes IDNs, and validates the result.
 func Normalize(in string) (string, error) {

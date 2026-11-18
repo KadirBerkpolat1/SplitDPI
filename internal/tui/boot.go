@@ -225,15 +225,6 @@ func firstLine(err error) string {
 	return ops.TrimPeriod(first)
 }
 
-// unsafeText words an UnsafeBinaryError as the CLI does.
-func unsafeText(e ops.UnsafeBinaryError) string {
-	reason := i18n.T("service.unsafe_"+e.Reason, e.At)
-	if e.Path == e.Install {
-		return i18n.T("service.unsafe_default", e.Path, reason)
-	}
-	return i18n.T("service.unsafe", e.Path, reason, e.Path, e.Install)
-}
-
 // confirmDisable asks before the service is removed for run mode mode.
 func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
 	if m.svcOp != nil {

@@ -45,13 +45,7 @@ func engineInstall(ctx context.Context, o *ops.Ops, w io.Writer, from string) er
 	}
 	e, err := o.EngineInstall(ctx, from)
 	if err != nil {
-		msg := i18n.T("engine.err.install", err)
-		switch {
-		case errors.Is(err, engine.ErrChecksum):
-			msg = i18n.T("engine.err.checksum", engine.Version)
-		case errors.Is(err, engine.ErrArch):
-			msg = i18n.T("engine.err.arch", o.GOARCH)
-		}
+		msg := ops.EngineInstallText(err)
 		if from == "" {
 			msg += "\n" + i18n.T("engine.download_hint", engine.URL)
 		}

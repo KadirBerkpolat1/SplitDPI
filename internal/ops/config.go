@@ -118,6 +118,20 @@ func (o *Ops) PresetsUpdate(ctx context.Context) (version string, apps int, err 
 	return set.Version, len(set.Apps), nil
 }
 
+// PresetsUpdateError words a checksum that failed the presets release: why
+// nothing was changed and what to do. Other errors stay as they are.
+func PresetsUpdateError(err error) error {
+	switch {
+	case errors.Is(err, presets.ErrNoChecksum):
+		return errors.New(i18n.T("presets.update.no_checksum"))
+	case errors.Is(err, presets.ErrBadChecksum):
+		return errors.New(i18n.T("presets.update.bad_checksum"))
+	case errors.Is(err, presets.ErrChecksumMismatch):
+		return errors.New(i18n.T("presets.update.mismatch"))
+	}
+	return err
+}
+
 // Running reports whether SplitDPI runs now, so a saved setting waits for a restart.
 func (o *Ops) Running() bool {
 	_, _, held := supervisor.LockInfo(o.P)

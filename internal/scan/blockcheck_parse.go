@@ -17,16 +17,8 @@ type BCLine struct {
 	Args   string // nfqws2 strategy tail (--… tokens only)
 }
 
-type BCCoverage struct {
-	Count, Total int
-	Args         string
-}
-
 type BlockcheckResult struct {
-	Summary       []BCLine
-	Coverage      []BCCoverage
 	TLSCandidates []string // distinct valid TLS strategies, best first
-	TCPTLS        string   // TLSCandidates[0]
 	QUIC          string
 }
 
@@ -84,14 +76,10 @@ func ParseBlockcheck(log string) (BlockcheckResult, error) {
 		return BlockcheckResult{}, BlockcheckError{Tail: lastNonEmpty(lines, 5)}
 	}
 
-	res := BlockcheckResult{Summary: summary}
-	for _, c := range coverage {
-		res.Coverage = append(res.Coverage, BCCoverage{Count: c.Count, Total: c.Total, Args: c.Args})
-	}
-	res.TLSCandidates = candidates(summary, coverage, "https")
-	res.TCPTLS = first(res.TLSCandidates)
-	res.QUIC = first(candidates(summary, coverage, "http3"))
-	return res, nil
+	return BlockcheckResult{
+		TLSCandidates: candidates(summary, coverage, "https"),
+		QUIC:          first(candidates(summary, coverage, "http3")),
+	}, nil
 }
 
 type covRow struct {

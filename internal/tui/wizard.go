@@ -7,7 +7,6 @@ import (
 	"io"
 	"maps"
 	"net/url"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -235,17 +234,6 @@ func (m *Model) installEngine() tea.Cmd {
 // installFromCLI, then a file name, installs the engine from an archive
 // fetched another way.
 const installFromCLI = "sudo splitdpi engine install --from "
-
-// installErrText words an engine install error as `engine install` does.
-func installErrText(err error) string {
-	switch {
-	case errors.Is(err, engine.ErrChecksum):
-		return i18n.T("engine.err.checksum", engine.Version)
-	case errors.Is(err, engine.ErrArch):
-		return i18n.T("engine.err.arch", runtime.GOARCH)
-	}
-	return i18n.T("engine.err.install", err)
-}
 
 func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 	w := &m.wiz
@@ -759,7 +747,7 @@ func (m Model) wizardView(width, h int) string {
 			case w.installing:
 				head = append(head, "", i18n.T("scan_page.installing", engine.Version))
 			case w.installErr != nil:
-				head = append(head, "", badStyle.Render(installErrText(w.installErr)), i18n.T("engine.download_hint", engine.URL),
+				head = append(head, "", badStyle.Render(ops.EngineInstallText(w.installErr)), i18n.T("engine.download_hint", engine.URL),
 					"    "+mutedStyle.Render("$ ")+commandStyle.Render(installFromCLI+i18n.T("scan_page.file")))
 			default:
 				head = append(head, "", i18n.T("scan_page.install_offer", engine.Version))

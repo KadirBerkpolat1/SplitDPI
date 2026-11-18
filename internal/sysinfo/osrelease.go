@@ -9,11 +9,8 @@ import (
 )
 
 type OSRelease struct {
-	ID         string
-	IDLike     []string
-	VariantID  string
-	VersionID  string
-	PrettyName string
+	ID     string
+	IDLike []string
 }
 
 func ParseOSRelease(r io.Reader) (OSRelease, error) {
@@ -34,12 +31,6 @@ func ParseOSRelease(r io.Reader) (OSRelease, error) {
 			o.ID = val
 		case "ID_LIKE":
 			o.IDLike = splitLike(val)
-		case "VARIANT_ID":
-			o.VariantID = val
-		case "VERSION_ID":
-			o.VersionID = val
-		case "PRETTY_NAME":
-			o.PrettyName = val
 		}
 	}
 	return o, s.Err()

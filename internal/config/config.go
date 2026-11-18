@@ -167,20 +167,6 @@ func Save(p paths.Paths, c Config) error {
 	return os.Rename(name, p.ConfigFile)
 }
 
-// ListEntry reads one line of a domain list, which users also edit by hand:
-// a UTF-8 BOM, text after "#" and surrounding space go, and *.example.com or
-// .example.com mean example.com. text is what is left, "" for a blank or
-// comment line; d is text as a normalized domain, "" when it is not one.
-func ListEntry(line string) (text, d string) {
-	text, _, _ = strings.Cut(strings.TrimPrefix(line, "\ufeff"), "#")
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return "", ""
-	}
-	d, _ = domain.Normalize(strings.TrimPrefix(text, "."))
-	return text, d
-}
-
 // ReadList returns the normalized domains of the list at path, skipping lines
 // that hold none.
 func ReadList(path string) ([]string, error) {
@@ -195,7 +181,7 @@ func ReadList(path string) ([]string, error) {
 	var out []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		if _, d := ListEntry(sc.Text()); d != "" {
+		if _, d := domain.ListEntry(sc.Text()); d != "" {
 			out = append(out, d)
 		}
 	}
@@ -261,7 +247,7 @@ func RemoveFromList(path string, d string) error {
 	sc := bufio.NewScanner(strings.NewReader(string(b)))
 	for sc.Scan() {
 		line := sc.Text()
-		if _, e := ListEntry(line); e != "" && e == d {
+		if _, e := domain.ListEntry(line); e != "" && e == d {
 			removed = true
 			continue
 		}

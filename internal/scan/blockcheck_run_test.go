@@ -165,11 +165,16 @@ func TestRunBlockcheckKeepsStdoutAndStderr(t *testing.T) {
 }
 
 func TestRunBlockcheckCancel(t *testing.T) {
-	dir, err := filepath.Abs("testdata/fake-engine")
+	src, err := os.ReadFile("testdata/fake-engine/blockcheck2.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
-	mark := filepath.Join(t.TempDir(), "mark")
+	// The fake engine keeps its mark files in its own directory.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "blockcheck2.sh"), src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mark := filepath.Join(dir, "mark")
 	e := engine.Engine{Dir: dir, ArchDir: "linux-x86_64"}
 
 	rec := &nftRecorder{}
@@ -185,6 +190,9 @@ func TestRunBlockcheckCancel(t *testing.T) {
 		lines++
 		if lines == 1 {
 			cancel()
+			// SIGINT does not always reach the shell under go test; the
+			// cancel file ends the fake engine then.
+			_ = os.WriteFile(mark+".cancel", nil, 0o644)
 		}
 		mu.Unlock()
 		_ = line
@@ -192,9 +200,8 @@ func TestRunBlockcheckCancel(t *testing.T) {
 
 	start := time.Now()
 	log, runErr := scan.RunBlockcheck(ctx, e, run, scan.BlockcheckParams{
-		Domains:  []string{"discord.com"},
-		IPVS:     "4",
-		MarkFile: mark,
+		Domains: []string{"discord.com"},
+		IPVS:    "4",
 	}, progress)
 	elapsed := time.Since(start)
 

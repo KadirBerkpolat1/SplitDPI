@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -17,16 +16,16 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/nft"
 )
 
 const blockcheckIntWait = 15 * time.Second
 
 // BlockcheckParams configures a blockcheck2 batch run.
 type BlockcheckParams struct {
-	Domains  []string
-	IPVS     string // "4" or "46"
-	HTTP3    bool
-	MarkFile string // optional; fake engine writes on SIGINT (tests)
+	Domains []string
+	IPVS    string // "4" or "46"
+	HTTP3   bool
 	// DoH makes blockcheck2 resolve through these DoH URLs instead of the
 	// system resolver; empty leaves it to blockcheck2's own spoofing check.
 	DoH []string
@@ -90,9 +89,6 @@ func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) ([]string, error) {
 		"MDIG=" + e.Mdig(),
 	}
 	env = append(env, bc...)
-	if p.MarkFile != "" {
-		env = append(env, "MARK_FILE="+p.MarkFile)
-	}
 	if os.Getenv("SPLITDPI_BLOCKCHECK_SIMULATE") == "1" && os.Getenv("SPLITDPI_ROOT") != "" {
 		env = append(env, "SIMULATE=1")
 	}
@@ -160,7 +156,6 @@ func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p Blo
 	select {
 	case <-ctx.Done():
 		runErr = ctx.Err()
-		signalBlockcheckCancel(p.MarkFile)
 		interruptBlockcheck(cmd.Process, pgid)
 		select {
 		case err := <-done:
@@ -182,20 +177,12 @@ func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p Blo
 func cleanupBlockcheckNFT(ctx context.Context, run execx.Runner, pid int) error {
 	var first error
 	for _, spec := range BlockcheckNFTables(pid) {
-		if err := deleteNFTTable(ctx, run, spec); err != nil && first == nil {
+		family, name, _ := strings.Cut(spec, " ")
+		if err := nft.DeleteTable(ctx, run, family, name); err != nil && first == nil {
 			first = err
 		}
 	}
 	return first
-}
-
-// signalBlockcheckCancel lets the fake engine exit promptly when SIGINT does not
-// reach the shell (common under go test); production blockcheck2 relies on INT.
-func signalBlockcheckCancel(markFile string) {
-	if markFile == "" {
-		return
-	}
-	_ = os.WriteFile(markFile+".cancel", []byte("1"), 0o644)
 }
 
 func interruptBlockcheck(proc *os.Process, pgid int) {
@@ -211,16 +198,4 @@ func killBlockcheckPG(pgid int) {
 	if pgid > 0 {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}
-}
-
-func deleteNFTTable(ctx context.Context, run execx.Runner, spec string) error {
-	family, name, ok := strings.Cut(spec, " ")
-	if !ok {
-		return fmt.Errorf("bad table spec %q", spec)
-	}
-	_, err := run(ctx, "", "nft", "delete", "table", family, name)
-	if err != nil && strings.Contains(err.Error(), "No such file or directory") {
-		return nil
-	}
-	return err
 }
