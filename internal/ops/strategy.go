@@ -97,9 +97,10 @@ func (o *Ops) StrategySet(id string) (ch StrategyChoice, running bool, err error
 			Engine:  engine.Version,
 		}
 		// ASN and Country are the user's network as scan found it; Country
-		// selects the exclude list. An ISP's strategy implies that ISP when
-		// there is none, or when the network is not in the ISP's country.
-		if c.Strategy != nil && (ch.ASN == 0 || countryFor(set, c.Strategy) == ch.Country) {
+		// selects the exclude list. A generic strategy keeps them; one of a
+		// country or an ISP implies that network when there is none, or when
+		// the network is not in its country.
+		if c.Strategy != nil && (ch.Country == "" || countryFor(set, c.Strategy) == ch.Country) {
 			st.ASN, st.Country = c.Strategy.ASN, countryFor(set, c.Strategy)
 		}
 		if st.ASN == 0 {
