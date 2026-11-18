@@ -49,7 +49,7 @@ func testEnv(t *testing.T, set presets.Set, probeFn func(id string) []probe.Resu
 		Lookup: func(context.Context) (scan.ASNInfo, error) {
 			return scan.ASNInfo{ASN: 1, Country: "XX", Org: "test"}, nil
 		},
-		StartTrial: func(_ context.Context, st presets.Strategy) (func(), error) {
+		StartTrial: func(_ context.Context, st presets.Strategy, _ string) (func(), error) {
 			trials.Add(1)
 			current = st.ID
 			return func() {}, nil
@@ -74,7 +74,7 @@ func TestScanTrialErrorStops(t *testing.T) {
 		return nil
 	})
 	boom := errors.New("nfqws2 did not bind queue 200")
-	env.StartTrial = func(context.Context, presets.Strategy) (func(), error) { return nil, boom }
+	env.StartTrial = func(context.Context, presets.Strategy, string) (func(), error) { return nil, boom }
 	rep, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"roblox"}})
 	if !errors.Is(err, boom) || rep.Winner != nil {
 		t.Fatalf("got %v, winner %+v", err, rep.Winner)
@@ -234,7 +234,7 @@ func TestScanProbesSites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantURLs := []string{"https://www.roblox.com/", "https://pastebin.com/", "https://www.roblox.com/"}
+	wantURLs := []string{"https://www.roblox.com/", "https://pastebin.com/"}
 	if len(probed) != 3 || !slices.Equal(probed[0], wantURLs) || !slices.Equal(probed[2], wantURLs) {
 		t.Fatalf("probed %q, want each preset and blockcheck2 trial to probe %q", probed, wantURLs)
 	}
@@ -340,11 +340,29 @@ func TestScanUserAppWithoutProbe(t *testing.T) {
 		t.Errorf("blockcheck2 domains %q, want %q", params.Domains, want)
 	}
 
-	env.StartTrial = func(context.Context, presets.Strategy) (func(), error) {
+	env.StartTrial = func(context.Context, presets.Strategy, string) (func(), error) {
 		t.Fatal("trial started with nothing to test")
 		return nil, nil
 	}
 	if _, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"empty"}}); err == nil {
 		t.Error("an app without hosts scanned")
+	}
+}
+
+// Trials run with the network's country, which the winner keeps.
+func TestScanCountry(t *testing.T) {
+	env, _, _ := testEnv(t, testSet(), nil)
+	var countries []string
+	env.StartTrial = func(_ context.Context, _ presets.Strategy, country string) (func(), error) {
+		countries = append(countries, country)
+		return func() {}, nil
+	}
+	env.Probe = func(context.Context, []string) []probe.Result { return []probe.Result{{OK: len(countries) == 2}} }
+	rep, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"roblox"}, NoBlockcheck: true})
+	if err != nil || rep.Winner == nil {
+		t.Fatalf("err %v, winner %+v", err, rep.Winner)
+	}
+	if !slices.Equal(countries, []string{"XX", "XX"}) || rep.Winner.Country != "XX" {
+		t.Errorf("trial countries %q, winner %+v", countries, rep.Winner)
 	}
 }

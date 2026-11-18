@@ -60,12 +60,11 @@ func (o *Ops) SetDNS(provider string, proto dns.Protocol) (running bool, err err
 	if proto != dns.DoH && proto != dns.DoT {
 		return false, errors.New(i18n.T("dns2.unknown", string(proto)))
 	}
-	c, err := config.Load(o.P)
+	err = o.updateConfig(func(c *config.Config) error {
+		c.DNSProvider, c.DNSProtocol = provider, proto
+		return nil
+	})
 	if err != nil {
-		return false, err
-	}
-	c.DNSProvider, c.DNSProtocol = provider, proto
-	if err := config.Save(o.P, c); err != nil {
 		return false, err
 	}
 	_, _, held := supervisor.LockInfo(o.P)

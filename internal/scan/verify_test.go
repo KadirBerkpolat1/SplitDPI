@@ -61,7 +61,7 @@ func verifyEnv(t *testing.T, log string, passes func(tls string) bool) (scan.Env
 	env, _, _ := testEnv(t, testSet(), nil)
 	var tried []string
 	var current string
-	env.StartTrial = func(_ context.Context, st presets.Strategy) (func(), error) {
+	env.StartTrial = func(_ context.Context, st presets.Strategy, _ string) (func(), error) {
 		current = st.TCPTLS
 		tried = append(tried, st.TCPTLS)
 		return func() {}, nil

@@ -635,3 +635,36 @@ func TestExecSpawn(t *testing.T) {
 		t.Errorf("tail %q", tail)
 	}
 }
+
+// A scan holds the run lock around its trials; their supervisor runs under
+// it and leaves it to the scan.
+func TestLockedRunsUnderCallersLock(t *testing.T) {
+	p := setup(t)
+	lf, err := supervisor.Lock(p, "scan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lf.Close()
+	h := newHarness(t, p, false)
+	h.s.Locked = true
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- h.s.Run(ctx, out, rules, supervisor.Status{Mode: "scan"}) }()
+	select {
+	case <-h.spawned:
+	case err := <-done:
+		t.Fatalf("Run under the caller's lock: %v", err)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if pid, mode, held := supervisor.LockInfo(p); !held || pid != os.Getpid() || mode != "scan" {
+		t.Errorf("after the trial LockInfo = %d %q %v, want the scan's lock", pid, mode, held)
+	}
+	second := newHarness(t, p, false)
+	err = second.s.Run(context.Background(), out, rules, supervisor.Status{Mode: "service"})
+	if already := (supervisor.ErrAlreadyRunning{}); !errors.As(err, &already) || already.Mode != "scan" {
+		t.Errorf("run during the scan: %v", err)
+	}
+}

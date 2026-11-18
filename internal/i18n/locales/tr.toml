@@ -304,6 +304,7 @@ unsafe_location = "%s geçici bir dizinde ya da bir ev dizininde"
 running = "çalışıyor"
 stopped = "durdu"
 failed = "hata verdi"
+restarting = "yeniden başlatılıyor"
 
 [mode]
 foreground = "ön plan"
@@ -977,3 +978,7 @@ app_deleted = "%s silindi."
 method = "Artık %s için hazır yöntem kullanılıyor."
 dns_on = "Şifreli DNS açık: %s (%s)."
 dns_off = "Şifreli DNS kapalı."
+
+[fix_cekirdek]
+scan_running = "Bir tarama sürüyor. Bitmesini bekleyin ya da çalıştığı yerde durdurun."
+stop_here = "SplitDPI bu süreçte çalışıyor: burada durdurun."

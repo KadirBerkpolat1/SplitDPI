@@ -34,7 +34,7 @@ func TestLockWaitsOutLockInfo(t *testing.T) {
 	}
 	defer func() { close(stop); wg.Wait() }()
 	for i := range 2000 {
-		f, err := lock(p, "service")
+		f, err := Lock(p, "service")
 		if err != nil {
 			t.Fatalf("attempt %d with no run holding the lock: %v", i, err)
 		}
@@ -48,13 +48,13 @@ func TestLockReportsLiveRun(t *testing.T) {
 	if err := os.MkdirAll(p.RunDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	held, err := lock(p, "background")
+	held, err := Lock(p, "background")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer held.Close()
 	start := time.Now()
-	_, err = lock(p, "service")
+	_, err = Lock(p, "service")
 	var already ErrAlreadyRunning
 	if !errors.As(err, &already) || already.Mode != "background" {
 		t.Fatalf("got %v, want already running (background)", err)

@@ -19,6 +19,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/nft"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
@@ -41,6 +42,18 @@ var (
 	ErrNotRunning    = errors.New("not running")
 	ErrStopTimeout   = errors.New("splitdpi did not stop within 10 s")
 )
+
+// StopScanError refuses to stop a scan by signal: its trials end with the
+// scan, where it runs.
+type StopScanError struct{}
+
+func (StopScanError) Error() string { return i18n.T("fix_cekirdek.scan_running") }
+
+// StopHereError refuses to signal this very process: the run it holds the
+// lock for is stopped where it runs.
+type StopHereError struct{}
+
+func (StopHereError) Error() string { return i18n.T("fix_cekirdek.stop_here") }
 
 // Run is `splitdpi run`: refuse on conflicting tools, then supervise nfqws2
 // until ctx is done.
@@ -217,11 +230,14 @@ func nfqwsUser() (name string, uid, gid int) {
 	return "1:1", 1, 1
 }
 
-// countryFor finds the country of the ISP preset matching the strategy's ASN,
-// which selects exclude/<cc>.txt. Config has no country of its own.
+// countryFor is the strategy's country, which selects exclude/<cc>.txt: the
+// one saved with it, else that of the ISP preset matching its ASN.
 func countryFor(set presets.Set, st *config.Strategy) string {
 	if st == nil {
 		return ""
+	}
+	if st.Country != "" {
+		return st.Country
 	}
 	for _, isp := range set.ISPs {
 		if slices.Contains(isp.ASN, st.ASN) {
@@ -236,13 +252,16 @@ var trialReadyTimeout = 5 * time.Second
 // startTrial runs the supervisor with one candidate strategy, the same way as
 // `run`, and returns once nfqws2 has bound its queue. Probing earlier would
 // pass traffic through the fail-open queue and test no bypass at all.
-// stop tears everything down: child gone, table deleted, lock released.
-func (o *Ops) startTrial(ctx context.Context, cfg config.Config, st presets.Strategy, extraHosts []string) (stop func(), err error) {
-	cfg.Strategy = &config.Strategy{ID: st.ID, TCPTLS: st.TCPTLS, TCPHTTP: st.TCPHTTP, QUIC: st.QUIC}
+// country picks the exclude list, as it will for the strategy once saved.
+// The caller holds the run lock (supervisor.Lock) until the trial has stopped.
+// stop tears everything down: child gone, table deleted.
+func (o *Ops) startTrial(ctx context.Context, cfg config.Config, st presets.Strategy, country string, extraHosts []string) (stop func(), err error) {
+	cfg.Strategy = &config.Strategy{ID: st.ID, TCPTLS: st.TCPTLS, TCPHTTP: st.TCPHTTP, QUIC: st.QUIC, Country: country}
 	j, err := o.prepare(cfg, "scan", io.Discard, extraHosts)
 	if err != nil {
 		return nil, err
 	}
+	j.sup.Locked = true
 	spawned := make(chan struct{})
 	var once sync.Once
 	spawn := j.sup.Spawn
@@ -307,13 +326,16 @@ func (o *Ops) queueBound(qnum int) bool {
 
 // Stop stops the running instance and waits up to 10 s for the lock to be
 // released. A service is stopped through its manager, so it is not restarted;
-// a foreground or background run gets SIGTERM.
+// a foreground or background run gets SIGTERM. A scan and a run in this
+// process get no signal: StopScanError and StopHereError.
 func (o *Ops) Stop() error {
 	pid, mode, held := supervisor.LockInfo(o.P)
-	if !held {
+	switch {
+	case !held:
 		return ErrNotRunning
-	}
-	if mode == "service" {
+	case mode == "scan":
+		return StopScanError{}
+	case mode == "service":
 		m, err := o.manager()
 		if err != nil {
 			return err
@@ -321,8 +343,12 @@ func (o *Ops) Stop() error {
 		if err := m.Stop(context.Background()); err != nil {
 			return err
 		}
-	} else if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		return err
+	case pid == os.Getpid():
+		return StopHereError{}
+	default:
+		if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+			return err
+		}
 	}
 	if !o.waitReleased() {
 		return ErrStopTimeout
@@ -337,7 +363,7 @@ func (o *Ops) Status() (supervisor.Status, config.Config, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		st, err = supervisor.Status{State: "stopped"}, nil
 	}
-	if _, _, held := supervisor.LockInfo(o.P); !held && st.State == "running" {
+	if _, _, held := supervisor.LockInfo(o.P); !held && st.On() {
 		st.State = "stopped"
 	}
 	cfg, cerr := config.Load(o.P)

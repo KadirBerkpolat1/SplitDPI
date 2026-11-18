@@ -299,6 +299,7 @@ unsafe_location = "%s is in a temporary or home directory"
 running = "running"
 stopped = "stopped"
 failed = "failed"
+restarting = "restarting"
 
 [mode]
 foreground = "foreground"
@@ -977,3 +978,7 @@ app_deleted = "Deleted %s."
 method = "Now using the method for %s."
 dns_on = "Encrypted DNS is on: %s (%s)."
 dns_off = "Encrypted DNS is off."
+
+[fix_cekirdek]
+scan_running = "A scan is running. Wait until it ends, or stop it where it runs."
+stop_here = "SplitDPI runs in this process: stop it here."

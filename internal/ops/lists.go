@@ -43,6 +43,8 @@ func (o *Ops) AppsEnable(id string) error {
 	if _, ok := set.Apps[id]; !ok {
 		return UnknownAppError{ID: id, Valid: slices.Sorted(maps.Keys(set.Apps))}
 	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err
@@ -55,6 +57,8 @@ func (o *Ops) AppsEnable(id string) error {
 }
 
 func (o *Ops) AppsDisable(id string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err
@@ -71,6 +75,8 @@ func (o *Ops) AppsDisable(id string) error {
 
 // AcceptDisclaimer records that the first-start notice was accepted.
 func (o *Ops) AcceptDisclaimer() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err
@@ -90,6 +96,8 @@ func (o *Ops) ExcludeAdd(d string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if err := os.MkdirAll(o.P.ConfigDir, 0o755); err != nil {
 		return "", err
 	}
@@ -104,6 +112,8 @@ func (o *Ops) ExcludeRemove(d string) error {
 	if err != nil {
 		return err
 	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	return config.RemoveFromList(o.P.UserExclude, n)
 }
 
@@ -122,7 +132,10 @@ func (o *Ops) SitesAdd(d string) (string, error) {
 	if err := os.MkdirAll(o.P.ConfigDir, 0o755); err != nil {
 		return "", err
 	}
-	if err := config.AddToList(o.P.UserHosts, n); err != nil {
+	o.mu.Lock()
+	err = config.AddToList(o.P.UserHosts, n)
+	o.mu.Unlock()
+	if err != nil {
 		return n, err
 	}
 	o.flushRunningDNS()
@@ -134,6 +147,8 @@ func (o *Ops) SitesRemove(d string) error {
 	if err != nil {
 		return err
 	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err
@@ -164,6 +179,17 @@ func (o *Ops) SitesImport(path string) (added []string, skipped []ImportSkip, er
 }
 
 func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, err error) {
+	added, skipped, err = o.addImported(r)
+	if err == nil && len(added) > 0 {
+		o.flushRunningDNS()
+	}
+	return added, skipped, err
+}
+
+// addImported is importSites without the DNS cache flush, which must not hold mu.
+func (o *Ops) addImported(r io.Reader) (added []string, skipped []ImportSkip, err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	have, err := config.ReadList(o.P.UserHosts)
 	if err != nil {
 		return nil, nil, err
@@ -199,6 +225,5 @@ func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, er
 	if err := config.AddToList(o.P.UserHosts, added...); err != nil {
 		return nil, nil, err
 	}
-	o.flushRunningDNS()
 	return added, skipped, nil
 }

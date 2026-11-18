@@ -154,6 +154,8 @@ func (o *Ops) RestartCommand() string {
 
 // updateConfig saves the config after f changes it; an error from f saves nothing.
 func (o *Ops) updateConfig(f func(*config.Config) error) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err

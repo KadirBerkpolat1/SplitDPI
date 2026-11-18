@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -192,7 +193,7 @@ func parseScanArgs(args []string) (opt scan.Options, verbose bool, dnsFlag strin
 			}
 			for _, a := range strings.Split(args[i+1], ",") {
 				a = strings.TrimSpace(a)
-				if a != "" {
+				if a != "" && !slices.Contains(opt.Apps, a) {
 					opt.Apps = append(opt.Apps, a)
 				}
 			}
