@@ -991,3 +991,11 @@ pending_foreground = "Changes you saved are not in use yet: restart the bypass i
 restart_foreground = "Restart the bypass in the terminal it runs in to apply it."
 cancelled_not_restarted = "Scan cancelled, but the bypass it stopped did not start again."
 takeover_done_running = "Done. The other tool is off."
+
+[fix2_arayuz]
+scan_wait = "A scan is running; wait until it ends."
+restart_wait = "A restart is under way; wait until it ends."
+restart_scan = "The bypass stopped for the restart, but a scan started meanwhile: start it with r once the scan ends."
+start_wait = "SplitDPI is starting or the boot service is being changed; scan once that is done."
+bg_wait = "Starting in the background. Please wait: SplitDPI quits once that is done."
+how_restart = "It stops and starts again with the changes you saved."

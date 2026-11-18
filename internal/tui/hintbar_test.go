@@ -273,7 +273,9 @@ func TestPillClick(t *testing.T) {
 			f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
 		}
 		m = newModel(t, f)
-		m.bgStarting = starting
+		if starting {
+			m.bgStart = &bgStart{job: newJob()}
+		}
 		m, cmd = click(t, m, m.width-1, 0)
 		if settle(t, m, cmd); len(f.calls) != 0 {
 			t.Errorf("click on the pill, starting %v: calls %q", starting, f.calls)

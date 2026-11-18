@@ -38,8 +38,13 @@ type serviceOp struct {
 	err error
 }
 
-// changeService runs change as the service change under way.
+// changeService runs change as the service change under way; with one under
+// way already, it changes nothing.
 func (m *Model) changeService(change func() (tea.Msg, error)) tea.Cmd {
+	if m.svcOp != nil {
+		m.note = i18n.T("tui.service_busy")
+		return nil
+	}
 	op := &serviceOp{job: newJob()}
 	m.svcOp = op
 	return func() tea.Msg {
@@ -124,6 +129,9 @@ func (m *Model) confirmEnable() tea.Cmd {
 		m.note = i18n.T("tui.boot_unsupported")
 		return nil
 	}
+	if m.waitHeld() {
+		return nil
+	}
 	if m.svcOp != nil {
 		m.note = i18n.T("tui.service_busy")
 		return nil
@@ -165,8 +173,10 @@ func (m *Model) enable() tea.Cmd {
 	})
 }
 
-// enabled takes Enable's result.
+// enabled takes Enable's result, which ends a restart that started the
+// service again.
 func (m Model) enabled(err error) (Model, tea.Cmd) {
+	m.restarting = false
 	if err != nil {
 		m.note = errText(err)
 		return m, m.refresh()
@@ -223,6 +233,9 @@ func firstLine(err error) string {
 
 // confirmDisable asks before the service is removed for run mode mode.
 func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
+	if m.waitHeld() {
+		return nil
+	}
 	if m.svcOp != nil {
 		m.note = i18n.T("tui.service_busy")
 		return nil

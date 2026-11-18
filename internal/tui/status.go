@@ -58,14 +58,38 @@ func (m Model) bypassOn() bool { return m.running || m.stateOn() }
 // whose engine crashed and starts again, with the run still held.
 func (m Model) stateOn() bool { return m.st.State == "running" || m.st.State == "restarting" }
 
-// canStart is whether the bypass can be started here: it is off and no
-// background start is under way.
-func (m Model) canStart() bool { return !m.bypassOn() && !m.bgStarting }
+// canStart is whether the bypass can be started here: it is off, and no
+// start, restart or service change is under way.
+func (m Model) canStart() bool {
+	return !m.bypassOn() && !m.bgStarting() && m.svcOp == nil && !m.restarting
+}
+
+// canRestart is whether the bypass running now can be restarted here: nothing
+// holds it, no start or service change is under way, and it does not run in
+// another terminal, which restarts it where it can be seen.
+func (m Model) canRestart() bool {
+	return m.bypassOn() && !m.held() && m.svcOp == nil && !m.bgStarting() && !m.otherTerminal()
+}
 
 // held is whether starting, stopping and restarting wait: a setup scan
 // stopped the bypass or runs its trials, which nothing may stop or run
 // beside, or a restart is under way.
 func (m Model) held() bool { return m.wiz.scanning || m.restarting }
+
+// waitHeld is whether the service and the bypass must not change now, and
+// then says why: a setup scan starts again what it stopped, the way it ran,
+// once it ends, and a restart starts it again the way it ran.
+func (m *Model) waitHeld() bool {
+	switch {
+	case m.wiz.scanning:
+		m.note = i18n.T("fix2_arayuz.scan_wait")
+	case m.restarting:
+		m.note = i18n.T("fix2_arayuz.restart_wait")
+	default:
+		return false
+	}
+	return true
+}
 
 // Actions offer the setup first while there is no strategy to run with.
 func (statusPage) Actions(m Model) []action {
@@ -158,7 +182,7 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		next, cmd := m.enabled(msg.err)
 		return next, cmd, true
 	case bgDoneMsg:
-		m.bgStarting = false
+		m.bgStart, m.restarting = nil, false
 		if msg.err != nil {
 			// A failed move to the background stays, so that the failure is seen.
 			m.note, m.quitting = errText(msg.err), false
@@ -177,12 +201,15 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, m.refresh(), true
 	case restartStoppedMsg:
-		m.restarting = false
 		if msg.err != nil {
-			m.note = errText(msg.err)
+			m.restarting, m.note = false, errText(msg.err)
 			return m, m.refresh(), true
 		}
 		m.st.State, m.pending = "stopped", false
+		if m.wiz.scanning {
+			m.restarting, m.note = false, i18n.T("fix2_arayuz.restart_scan")
+			return m, m.refresh(), true
+		}
 		var cmd tea.Cmd
 		switch msg.mode {
 		case "service":
@@ -190,8 +217,11 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		case "background":
 			cmd = m.runBackground()
 		default:
+			m.restarting = false
 			cmd = m.startAction().Do(&m)
 		}
+		// The restart holds until the start it began ends.
+		m.restarting = m.svcOp != nil || m.bgStarting()
 		return m, batch(cmd, m.refresh()), true
 	case probeMsg:
 		m.probe, m.probeNames, m.note = msg.res, msg.names, ""
@@ -220,18 +250,50 @@ func (m *Model) runNow() tea.Cmd {
 	}
 }
 
+// bgStart is a background start under way. Quitting waits for it, and so
+// does Run when the program ends otherwise; a signal or a lost terminal does
+// not cut it short, which could leave systemd-run halfway.
+type bgStart struct {
+	*job
+	pid int // the result, once done is closed
+	err error
+}
+
+func (m Model) bgStarting() bool { return m.bgStart != nil }
+
 // runBackground starts the bypass as its own process, like `splitdpi run
 // --background`: it outlives the TUI and its terminal, until reboot.
 func (m *Model) runBackground() tea.Cmd {
-	if m.bgStarting {
+	if m.bgStarting() {
 		return nil
 	}
-	m.bgStarting, m.note, m.pending = true, i18n.T("background_tui.starting"), false
-	b, ctx := m.b, m.ctx
+	op := &bgStart{job: newJob()}
+	m.bgStart, m.note, m.pending = op, i18n.T("background_tui.starting"), false
+	b, ctx := m.b, context.WithoutCancel(m.ctx)
 	return func() tea.Msg {
-		pid, err := b.Background(ctx)
-		return bgDoneMsg{pid, err}
+		if !op.run(func() { op.pid, op.err = b.Background(ctx) }) {
+			return nil
+		}
+		return bgDoneMsg{op.pid, op.err}
 	}
+}
+
+// waitBackground waits for the background start the program ended in the
+// middle of, by a signal or a lost terminal, and says how it ended.
+func (m *Model) waitBackground(w io.Writer) {
+	op := m.bgStart
+	if op == nil {
+		return
+	}
+	if !op.ended() && op.claimed.Load() {
+		fmt.Fprintln(w, i18n.T("fix2_arayuz.bg_wait"))
+	}
+	op.wait()
+	if op.err != nil {
+		fmt.Fprintln(w, errText(op.err))
+		return
+	}
+	m.bgPID = op.pid
 }
 
 // printBackground tells, once the screen is back to normal, that the bypass
@@ -458,7 +520,9 @@ func (m Model) headline() (string, string) {
 	switch {
 	case m.wiz.scanning:
 		return big.Foreground(warn).Render(m.g.dot + " " + i18n.T("fix_arayuz.pill_scanning")), i18n.T("tui.how.scan")
-	case !m.running && m.st.State == "restarting":
+	case m.restarting:
+		return big.Foreground(warn).Render(m.g.dot + " " + i18n.T("fix_arayuz.pill_restarting")), i18n.T("fix2_arayuz.how_restart")
+	case m.st.State == "restarting":
 		return big.Foreground(warn).Render(m.g.dot + " " + i18n.T("fix_arayuz.pill_restarting")), i18n.T("fix_arayuz.how_restarting")
 	case m.bypassOn():
 		how := i18n.T("tui.how." + m.st.Mode)
@@ -470,7 +534,7 @@ func (m Model) headline() (string, string) {
 		return big.Foreground(bad).Render(m.g.dot + " " + i18n.T("tui.state_failed")), i18n.T("tui.how.failed")
 	case m.cfg.Strategy == nil:
 		return big.Render(m.g.dotOff + " " + i18n.T("tui.state_new")), i18n.T("tui.how.setup")
-	case m.bgStarting:
+	case m.bgStarting():
 		return big.Render(m.g.dotOff + " " + i18n.T("shell.pill.stopped")), i18n.T("background_tui.starting")
 	}
 	return big.Render(m.g.dotOff + " " + i18n.T("shell.pill.stopped")), i18n.T("tui.how.start_" + string(m.runMode()))

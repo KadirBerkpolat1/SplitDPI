@@ -57,7 +57,7 @@ func TestSettingsRunModePicker(t *testing.T) {
 			t.Errorf("choosing started something: calls %q", f.calls)
 		}
 	}
-	if m.running || m.bgStarting || f.runCtx != nil {
+	if m.running || m.bgStarting() || f.runCtx != nil {
 		t.Error("choosing started a run")
 	}
 	v = flat(m.View())
