@@ -125,7 +125,7 @@ func (m Model) otherRun() bool {
 // which bypass running now it replaces.
 func (m *Model) confirmEnable() tea.Cmd {
 	if !m.svc.Supported {
-		m.note = i18n.T("service.unsupported")
+		m.note = i18n.T("tui.boot_unsupported")
 		return nil
 	}
 	if m.svcOp != nil {

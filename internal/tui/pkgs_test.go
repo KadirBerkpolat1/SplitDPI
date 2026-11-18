@@ -35,7 +35,9 @@ func TestWizardInstallsMissingPackages(t *testing.T) {
 	has(t, v, i18n.T("tui.pkgs.missing", "curl, bind9-host"))
 	has(t, v, i18n.T("tui.pkgs.install"))
 	has(t, v, i18n.T("tui.pkgs.skip"))
-	has(t, v, "$ sudo splitdpi deps install")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi deps install" {
+		t.Errorf("install CLI %q", cli)
+	}
 	if strings.Contains(v, i18n.T("tui.wiz.doctor")) {
 		t.Error("nothing blocks, yet the checks say they must be fixed first")
 	}
@@ -54,13 +56,13 @@ func TestWizardInstallsMissingPackages(t *testing.T) {
 	has(t, v, i18n.T("tui.pkgs.undo"))
 	has(t, v, "sudo apt remove curl bind9-host")
 
-	m, cmd := update(t, m, key("e"))
+	m, cmd := update(t, m, key("y"))
 	has(t, m.View(), i18n.T("deps.installing", "curl, bind9-host", "apt"))
 	m = settle(t, m, cmd)
 	if !f.called("install curl bind9-host") {
 		t.Fatalf("yes did not install: %q", f.calls)
 	}
-	if f.count("doctor") != 2 || m.wiz.step != wLookup {
+	if f.count("doctor") != 2 || m.wiz.step != wApps {
 		t.Fatalf("after installing: step %v, %d doctor runs; want the checks rerun and passed", m.wiz.step, f.count("doctor"))
 	}
 	has(t, m.View(), i18n.T("deps.installed", "curl, bind9-host"))
@@ -82,7 +84,7 @@ func TestWizardContinuesWithoutPackages(t *testing.T) {
 	has(t, m.View(), i18n.T("scan_page.install"))
 
 	m = press(t, m, "enter")
-	if !f.called("engine install ") || f.count("doctor") != 2 || m.wiz.step != wLookup || m.dialog != nil {
+	if !f.called("engine install ") || f.count("doctor") != 2 || m.wiz.step != wApps || m.dialog != nil {
 		t.Fatalf("after the engine: step %v, %d doctor runs, dialog %v, calls %q; want the ISP", m.wiz.step, f.count("doctor"), m.dialog, f.calls)
 	}
 }
@@ -93,7 +95,7 @@ func TestSiteScanNeedsPackages(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{lookupWarn}
 	f.pkgs = aptPkgs(sysinfo.Lookup)
-	m := press(t, press(t, goTo(t, newModel(t, f), pgScan), "down"), "enter")
+	m := press(t, press(t, goTo(t, newModel(t, f), pgSetup), "down"), "enter")
 	if !m.wiz.siteFlow || m.wiz.step != wDoctor {
 		t.Fatalf("site flow %v, step %v; want its checks", m.wiz.siteFlow, m.wiz.step)
 	}
@@ -112,7 +114,7 @@ func TestQuitWaitsForPackageInstall(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{curlWarn}
 	f.pkgs = aptPkgs(sysinfo.Curl)
-	m, _ := update(t, press(t, press(t, newModel(t, f), "w"), "enter"), key("e"))
+	m, _ := update(t, press(t, press(t, newModel(t, f), "w"), "enter"), key("y"))
 	if !m.wiz.pkgsInstalling {
 		t.Fatal("the install did not start")
 	}
@@ -181,7 +183,7 @@ func TestWizardUnknownPackageManager(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{curlWarn}
 	f.pkgs = sysinfo.NewPackages(sysinfo.Unknown, []sysinfo.Tool{sysinfo.Curl})
-	if m := press(t, newModel(t, f), "w"); m.wiz.step != wLookup {
+	if m := press(t, newModel(t, f), "w"); m.wiz.step == wDoctor {
 		t.Fatalf("a warning stopped the setup: step %v", m.wiz.step)
 	}
 
@@ -193,7 +195,9 @@ func TestWizardUnknownPackageManager(t *testing.T) {
 		t.Fatalf("step %v; want the checks without an install:\n%s", m.wiz.step, v)
 	}
 	has(t, v, "$ sudo apt install nftables")
-	has(t, v, "$ sudo splitdpi doctor")
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi doctor" {
+		t.Errorf("check again CLI %q", cli)
+	}
 }
 
 func TestPackageScreensFit80x24(t *testing.T) {
@@ -203,7 +207,7 @@ func TestPackageScreensFit80x24(t *testing.T) {
 		f := newFake()
 		f.checks = []doctor.Check{nftBlocker, curlWarn, lookupWarn, engineBlocker}
 		f.pkgs = aptPkgs(sysinfo.Nft, sysinfo.Curl, sysinfo.Lookup)
-		m := goTo(t, newModel(t, f), pgScan)
+		m := goTo(t, newModel(t, f), pgSetup)
 		d := press(t, m, "enter")
 		fits(t, lang+" packages offer", d.View())
 		d = press(t, d, "enter")

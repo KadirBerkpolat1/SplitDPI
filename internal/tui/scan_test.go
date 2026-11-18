@@ -27,29 +27,34 @@ import (
 
 var engineBlocker = doctor.Check{ID: "engine", Severity: doctor.Blocker, Msg: "the zapret2 engine is not installed", Fix: "sudo splitdpi engine install"}
 
-func TestScanPageOffersBothFlows(t *testing.T) {
+func TestSetupPageOffersThreeWays(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
-	m := goTo(t, newModel(t, f), pgScan)
+	m := goTo(t, newModel(t, f), pgSetup)
 	has(t, m.View(), "▸ "+i18n.T("tui.wiz.scan"))
 	has(t, m.View(), i18n.T("tui.wiz.scan_site"))
-	has(t, m.View(), "$ sudo splitdpi scan")
+	has(t, m.View(), i18n.T("tui.wiz.manual"))
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi scan" {
+		t.Errorf("enter CLI %q", cli)
+	}
 	m = press(t, m, "down")
 	has(t, m.View(), "▸ "+i18n.T("tui.wiz.scan_site"))
-	has(t, m.View(), "$ sudo splitdpi scan --site DOMAIN")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi scan --site DOMAIN" {
+		t.Errorf("enter CLI %q", cli)
+	}
 	if f.called("doctor") {
-		t.Fatal("moving between the flows started one")
+		t.Fatal("moving between the ways started one")
 	}
 
 	// The site flow goes from the ISP straight to the site: no apps step.
-	m = press(t, press(t, m, "enter"), "y")
+	m = press(t, m, "enter")
 	if m.wiz.step != wSite || !m.wiz.siteFlow {
 		t.Fatalf("site flow after the lookup: step %v siteFlow %v", m.wiz.step, m.wiz.siteFlow)
 	}
 	m = press(t, m, "esc")
-	if m.wiz.step != wIntro || m.page != pgScan || !m.inPage {
-		t.Fatalf("esc on the site: step %v page %d inPage %v; want the flows", m.wiz.step, m.page, m.inPage)
+	if m.wiz.step != wIntro || m.page != pgSetup {
+		t.Fatalf("esc on the site: step %v page %d; want the three ways", m.wiz.step, m.page)
 	}
 
 	var got scan.Options
@@ -57,17 +62,16 @@ func TestScanPageOffersBothFlows(t *testing.T) {
 		got = opt
 		return scan.Report{}, scan.ErrNoStrategy
 	}
-	m = press(t, press(t, m, "s"), "y")
+	m = press(t, m, "s")
 	m = typeText(t, m, "pastebin.com")
 	m = press(t, m, "enter")
 	if got.Site != "pastebin.com" || len(got.Apps) != 0 || f.called("apps enable discord") {
 		t.Fatalf("site flow scan %+v, calls %q; want the site with the configured apps untouched", got, f.calls)
 	}
 
-	// Back at the flows, the last scan is summed up.
-	m = press(t, m, "b")
-	if m.wiz.step != wIntro {
-		t.Fatalf("start over: step %v", m.wiz.step)
+	// Back at the three ways, the last scan is summed up.
+	if m = press(t, m, "esc"); m.wiz.step != wIntro {
+		t.Fatalf("esc after the scan: step %v", m.wiz.step)
 	}
 	has(t, m.View(), i18n.T("scan_page.last"))
 	has(t, m.View(), i18n.N("scan_page.last_none", 0))
@@ -77,7 +81,7 @@ func TestScanPageOffersBothFlows(t *testing.T) {
 func TestScanPageShowsSavedStrategy(t *testing.T) {
 	f := newFake()
 	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder", Source: "isp/tr/as9121-turk-telekom.toml"}
-	m := goTo(t, newModel(t, f), pgScan)
+	m := goTo(t, newModel(t, f), pgSetup)
 	has(t, m.View(), "tt-multidisorder")
 	if strings.Contains(m.View(), i18n.T("scan_page.last")) {
 		t.Error("a last scan shown before any scan ran")
@@ -89,7 +93,9 @@ func TestWizardInstallsMissingEngine(t *testing.T) {
 	f.checks = []doctor.Check{engineBlocker}
 	m := press(t, newModel(t, f), "w")
 	has(t, m.View(), i18n.T("scan_page.install"))
-	has(t, m.View(), "$ sudo splitdpi engine install")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi engine install" {
+		t.Errorf("install CLI %q", cli)
+	}
 	if f.called("engine install ") {
 		t.Fatal("installed before being asked")
 	}
@@ -99,7 +105,7 @@ func TestWizardInstallsMissingEngine(t *testing.T) {
 	if !f.called("engine install ") {
 		t.Fatalf("enter did not install the engine: %q", f.calls)
 	}
-	if f.count("doctor") != 2 || m.wiz.step != wLookup {
+	if f.count("doctor") != 2 || m.wiz.step != wApps {
 		t.Fatalf("after installing: step %v, %d doctor runs; want the checks rerun and passed", m.wiz.step, f.count("doctor"))
 	}
 	has(t, m.View(), i18n.T("engine.installed", engine.Version, "/opt/splitdpi/zapret2-"+engine.Version))
@@ -143,7 +149,9 @@ func TestWizardEngineInstalledOtherBlockerRemains(t *testing.T) {
 	if strings.Contains(m.View(), i18n.T("scan_page.install")) {
 		t.Error("install still offered with the engine in place")
 	}
-	has(t, m.View(), "$ sudo splitdpi doctor")
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi doctor" {
+		t.Errorf("check again CLI %q", cli)
+	}
 }
 
 func TestScanTrialFailureText(t *testing.T) {
@@ -203,7 +211,7 @@ func TestScanShareLinkAfterWinner(t *testing.T) {
 		u := ops.ShareURL(rep, "v0.1.0")
 		v := m.View()
 		has(t, v, i18n.T("scan_page.share")[:20])
-		for _, chunk := range strings.Split(ansi.Hardwrap(u, 60, false), "\n") {
+		for _, chunk := range strings.Split(ansi.Hardwrap(u, m.width-4, false), "\n") {
 			if !strings.Contains(v, chunk) {
 				t.Errorf("%s: link cut, missing %q:\n%s", lang, chunk, v)
 			}
@@ -232,7 +240,9 @@ func TestScanCopyLinkAndPrintOnExit(t *testing.T) {
 	if !slices.Contains(m.logs.Last(50), u) {
 		t.Errorf("the link is not one line of the log: %q", m.logs.String())
 	}
-	has(t, m.View(), "c "+i18n.T("scan_page.copy"))
+	if !slices.ContainsFunc(m.actions(), func(a action) bool { return a.Key == "c" && a.Label == i18n.T("scan_page.copy") }) {
+		t.Errorf("no copy key: %q", reproKeys(m))
+	}
 
 	m = press(t, m, "c")
 	if want := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(u)) + "\a"; out.String() != want {
@@ -295,19 +305,22 @@ func recv(t *testing.T, c chan string) string {
 func TestScanDNSQuestion(t *testing.T) {
 	for _, tc := range []struct {
 		name string
+		lang string
 		keys []string
 		want string
 	}{
-		{"recommended", []string{"enter"}, "cloudflare"},
-		{"yes key", []string{"y"}, "cloudflare"},
-		{"evet key", []string{"e"}, "cloudflare"},
-		{"hayır key", []string{"h"}, ""},
-		{"other provider", []string{"down", "enter", "down", "down", "down", "enter"}, "quad9"},
-		{"other then back", []string{"down", "enter", "esc", "down", "enter"}, ""},
-		{"no", []string{"n"}, ""},
-		{"esc", []string{"esc"}, ""},
+		{"recommended", "en", []string{"enter"}, "cloudflare"},
+		{"yes key", "en", []string{"y"}, "cloudflare"},
+		{"evet key", "tr", []string{"e"}, "cloudflare"},
+		{"hayır key", "tr", []string{"h"}, ""},
+		{"other provider", "en", []string{"down", "enter", "down", "down", "down", "enter"}, "quad9"},
+		{"other then back", "en", []string{"down", "enter", "esc", "down", "enter"}, ""},
+		{"no", "en", []string{"n"}, ""},
+		{"esc", "en", []string{"esc"}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			i18n.Init(tc.lang)
+			defer i18n.Init("en")
 			f := newFake()
 			m, done, answer := dnsScan(t, f)
 			m = waitAsk(t, m)
@@ -328,7 +341,7 @@ func TestScanDNSQuestion(t *testing.T) {
 			if got := recv(t, answer); got != tc.want {
 				t.Errorf("scan got %q, want %q", got, tc.want)
 			}
-			if !m.wiz.scanning || m.page != pgScan {
+			if !m.wiz.scanning || m.page != pgSetup {
 				t.Errorf("answering stopped the scan or left the page: scanning %v page %d", m.wiz.scanning, m.page)
 			}
 			m.cancelScan()
@@ -424,8 +437,16 @@ func TestScanDNSQuestionCancel(t *testing.T) {
 	})
 }
 
-// Durum's Setup while a scan runs (reached by clicking the menu) shows that
-// scan instead of starting over and orphaning it.
+// clickTab clicks the tab of page pg.
+func clickTab(t *testing.T, m Model, pg int) Model {
+	t.Helper()
+	_, spans := m.header()
+	m, _ = update(t, m, tea.MouseMsg{X: spans[pg].x0, Y: 0, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	return m
+}
+
+// Durum's Setup while a scan runs shows that scan instead of starting over
+// and orphaning it.
 func TestSetupDuringScanKeepsIt(t *testing.T) {
 	f := newFake()
 	started := make(chan context.Context, 1)
@@ -438,12 +459,11 @@ func TestSetupDuringScanKeepsIt(t *testing.T) {
 	done := make(chan tea.Msg, 1)
 	go func() { done <- cmd() }()
 	scanCtx := <-started
-	m, _ = update(t, m, tea.MouseMsg{X: 5, Y: menuTop + pgStatus, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	if m.page != pgStatus {
+	if m = clickTab(t, m, pgStatus); m.page != pgStatus {
 		t.Fatalf("click on Durum: page %d", m.page)
 	}
 	m, _ = update(t, m, key("w"))
-	if m.page != pgScan || !m.wiz.scanning || m.wiz.step != wScan || scanCtx.Err() != nil {
+	if m.page != pgSetup || !m.wiz.scanning || m.wiz.step != wScan || scanCtx.Err() != nil {
 		t.Fatalf("w during a scan: page %d scanning %v step %v cancelled %v", m.page, m.wiz.scanning, m.wiz.step, scanCtx.Err())
 	}
 	m, _ = update(t, m, key("esc"))
@@ -464,16 +484,16 @@ func TestSetupDuringEngineInstallKeepsIt(t *testing.T) {
 	if !m.wiz.installing || install == nil {
 		t.Fatalf("enter did not start the install: installing %v", m.wiz.installing)
 	}
-	m, _ = update(t, m, tea.MouseMsg{X: 5, Y: menuTop + pgStatus, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m = clickTab(t, m, pgStatus)
 	m = press(t, press(t, m, "w"), "enter")
-	if m.page != pgScan || !m.wiz.installing {
+	if m.page != pgSetup || !m.wiz.installing {
 		t.Fatalf("w during the install: page %d installing %v", m.page, m.wiz.installing)
 	}
 	m = settle(t, m, install)
 	if n := f.count("engine install "); n != 1 {
 		t.Errorf("%d engine installs, want 1: %q", n, f.calls)
 	}
-	if m.wiz.installing || m.wiz.step != wLookup {
+	if m.wiz.installing || m.wiz.step != wApps {
 		t.Errorf("after the install: installing %v step %v", m.wiz.installing, m.wiz.step)
 	}
 }
@@ -501,7 +521,7 @@ func TestScanScreensFit80x24(t *testing.T) {
 		i18n.Init(lang)
 		f := newFake()
 		f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder", Source: "isp/tr/as9121-turk-telekom.toml"}
-		m := goTo(t, newModel(t, f), pgScan)
+		m := goTo(t, newModel(t, f), pgSetup)
 		m.wiz.last = &lastScan{rep: scan.Report{Trials: make([]scan.Trial, 3), Winner: &config.Strategy{ID: "blockcheck"}}, site: "pastebin.com"}
 		fits(t, lang+" flows", m.View())
 

@@ -15,7 +15,12 @@ func TestAppEditor(t *testing.T) {
 	m := goTo(t, newModel(t, f), pgSites)
 	m = press(t, m, "o")
 	has(t, m.View(), "discord.media")
-	has(t, m.View(), "Voice and streams (UDP)")
+	if strings.Contains(m.View(), "UDP") {
+		t.Errorf("the editor offers the voice profile:\n%s", m.View())
+	}
+	if bar, _ := m.hintBar(); strings.Contains(bar, "v ") {
+		t.Errorf("hint bar %q offers v", bar)
+	}
 
 	m = press(t, press(t, m, "down"), "x")
 	if !f.called("apps remove-host discord discord.media") {
@@ -24,32 +29,29 @@ func TestAppEditor(t *testing.T) {
 	if app, _ := m.apps.edited(); slices.Contains(app.Hosts, "discord.media") {
 		t.Error("the removed address is still listed")
 	}
-	has(t, m.View(), "app, edited by you")
-	// The cursor stays on the second row, now the voice row.
-	has(t, m.View(), "decoy packets")
-	has(t, m.View(), "$ sudo splitdpi apps udp discord off")
-	m = press(t, m, "v")
-	if !f.called("apps udp discord off") || f.set.Apps["discord"].UDP != nil {
-		t.Fatalf("voice not turned off: calls %q", f.calls)
+	has(t, m.View(), "changed by you")
+	if app, _ := m.apps.edited(); app.UDP == nil {
+		t.Error("an address edit dropped the app's voice profile")
 	}
-	has(t, m.View(), "$ sudo splitdpi apps udp discord on")
 
 	m = press(t, m, "r")
 	if !f.called("apps reset discord") {
 		t.Fatalf("calls %q", f.calls)
 	}
 	has(t, m.View(), "discord.media")
-	if strings.Contains(m.View(), "edited by you") {
+	if strings.Contains(m.View(), "changed by you") {
 		t.Error("a reset app still shows as edited")
 	}
 	m = press(t, m, "esc")
-	if m.apps.edit != nil {
+	if m.apps.edit != nil || m.page != pgSites {
 		t.Fatal("esc did not close the editor")
 	}
 
 	m = press(t, m, "n")
 	m = typeText(t, m, "Steam Store")
-	has(t, m.View(), "$ sudo splitdpi apps new steam-store 'Steam Store'")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi apps new steam-store 'Steam Store'" {
+		t.Errorf("new app CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	if !f.called("apps new steam-store Steam Store") {
 		t.Fatalf("calls %q", f.calls)

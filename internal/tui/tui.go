@@ -468,7 +468,7 @@ func errText(err error) string {
 	case errors.As(err, &notStarted):
 		return i18n.T("background.not_started", notStarted.Log)
 	case errors.Is(err, initsys.ErrUnsupportedInit):
-		return i18n.T("service.unsupported")
+		return i18n.T("tui.boot_unsupported")
 	case errors.As(err, &nobin):
 		return i18n.T("service.no_binary", nobin.Path, nobin.Path)
 	case errors.As(err, &unsafe):
@@ -476,7 +476,7 @@ func errText(err error) string {
 	case errors.Is(err, ops.ErrStopTimeout):
 		return i18n.T("stop.timeout")
 	case errors.As(err, &already):
-		return i18n.T("run.already", i18n.Enum("mode", already.Mode))
+		return i18n.T("tui.already", i18n.Enum("mode", already.Mode))
 	case errors.As(err, &conflict):
 		msgs := []string{i18n.T("run.conflict")}
 		for _, c := range conflict.Checks {
@@ -484,9 +484,9 @@ func errText(err error) string {
 		}
 		return strings.Join(msgs, " ")
 	case errors.Is(err, render.ErrNoStrategy):
-		return i18n.T("run.no_strategy")
+		return i18n.T("tui.no_method")
 	case errors.Is(err, ops.ErrEngineMissing):
-		return i18n.T("engine.not_installed")
+		return i18n.T("tui.engine_missing")
 	}
 	// fitNote drops a note's first lines to fit, so a raw error stays on one
 	// line: its cause comes first, before the rule and caret lines nft adds.

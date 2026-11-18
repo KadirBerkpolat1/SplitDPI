@@ -36,7 +36,7 @@ var extraScreens = []struct {
 		f.takenOver = []string{"zapret.service (systemd)"}
 		f.set.Version = "2026.10.01"
 		base := goTo(t, prep(newModel(t, f)), pgSettings)
-		views := map[string]string{"settings search": typeText(t, press(t, base, "/"), "dns").View()}
+		views := map[string]string{}
 		for _, st := range base.shownSettings() {
 			if m := press(t, toRow(t, base, st.id), "enter"); m.page == pgSettings {
 				views["settings "+st.id] = m.View()

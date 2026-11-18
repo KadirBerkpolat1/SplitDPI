@@ -13,21 +13,34 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
-// pageText is the page pane of a full screen: its rows between the borders,
-// without the menu column.
+// pageText is the page in the frame of a full screen: its rows between the
+// side borders.
 func pageText(view string) string {
 	var out []string
 	for _, l := range strings.Split(ansi.Strip(view), "\n") {
 		r := []rune(l)
-		if len(r) >= minWidth {
-			out = append(out, string(r[menuWidth+2:minWidth-2]))
+		if len(r) >= minWidth && (r[0] == '│' || r[0] == '|') {
+			out = append(out, string(r[2:len(r)-2]))
 		}
 	}
 	return strings.Join(out, "\n")
 }
 
-// No app note or failure is cut: in tr and en, with Unicode and ASCII
-// glyphs, it wraps under its row on the 80x24 screen.
+// cursorOn moves the Sites cursor down to the app id.
+func cursorOn(t *testing.T, m Model, id string) Model {
+	t.Helper()
+	for range m.apps.rows() {
+		if k, i := m.apps.at(m.apps.cursor); k == rowApp && m.apps.apps[i].ID == id {
+			return m
+		}
+		m = press(t, m, "down")
+	}
+	t.Fatalf("no app %s", id)
+	return m
+}
+
+// No app note or what to do about a failure is cut: in tr and en, with
+// Unicode and ASCII glyphs, it wraps under the list on the 80x24 screen.
 func TestSitesNotesNotCut(t *testing.T) {
 	defer i18n.Init("en")
 	for _, lang := range []string{"tr", "en"} {
@@ -40,18 +53,19 @@ func TestSitesNotesNotCut(t *testing.T) {
 			f.probeRes = map[string][]probe.Result{"youtube": failedProbe()["discord"]}
 			m := newModel(t, f)
 			m.g = g
-			m = press(t, press(t, m, "p"), "down")
-			v := m.View()
+			m = goTo(t, press(t, m, "p"), pgSites)
+
+			v := cursorOn(t, m, "telegram").View()
 			fits(t, lang+" "+name+" sites", v)
-			text := flat(pageText(v))
-			note := ops.AppNote(f.set.Apps["telegram"])
-			if !strings.Contains(text, note) {
+			if note := ops.AppNote(f.set.Apps["telegram"]); !strings.Contains(flat(pageText(v)), note) {
 				t.Errorf("%s %s: note %q cut:\n%s", lang, name, note, v)
 			}
-			if what := probe.Classify(failedProbe()["discord"][0]).What(); !strings.Contains(text, what) {
-				t.Errorf("%s %s: failure %q cut:\n%s", lang, name, what, v)
+			v = cursorOn(t, m, "youtube").View()
+			text := flat(pageText(v))
+			if todo := probeTodo(probe.Reset); !strings.Contains(text, todo) {
+				t.Errorf("%s %s: what to do %q cut:\n%s", lang, name, todo, v)
 			}
-			// The rows after the wrapped one keep their places in the list.
+			// The rows after the selected one keep their places in the list.
 			has(t, text, "example.org")
 		}
 	}
@@ -74,29 +88,25 @@ func TestTakeoverConfirmBootUnknown(t *testing.T) {
 	}
 }
 
-// While the menu has focus its cursor is the only one; inside a page, the
-// page's list shows its own.
-func TestOneCursorWhileMenuFocused(t *testing.T) {
+// Each page with a list shows one cursor, at once: there is no stage of
+// entering the page first.
+func TestOneCursorPerPage(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	f.sites = []string{"pastebin.com"}
 	f.strategies = testStrategies()
-	lists := map[int]bool{pgSites: true, pgStrategy: true, pgScan: true, pgSettings: true}
+	lists := map[int]bool{pgSites: true, pgSetup: true, pgSettings: true}
 	for pg := range pages {
 		m := goTo(t, newModel(t, f), pg)
 		if pg == pgLogs {
 			m.stopAll()
 		}
-		in := strings.Count(m.View(), m.g.cursor)
-		m = press(t, m, "esc")
-		if n := strings.Count(m.View(), m.g.cursor); n != 0 {
-			t.Errorf("%s with the menu focused: %d list cursors, want 0:\n%s", pages[pg].Title(), n, m.View())
+		want := 0
+		if lists[pg] {
+			want = 1
 		}
-		if n := strings.Count(m.View(), m.g.menuMark); n != 1 {
-			t.Errorf("%s: %d menu marks, want 1:\n%s", pages[pg].Title(), n, m.View())
-		}
-		if lists[pg] && in != 1 {
-			t.Errorf("%s in the page: %d list cursors, want 1:\n%s", pages[pg].Title(), in, m.View())
+		if n := strings.Count(m.View(), m.g.cursor); n != want {
+			t.Errorf("%s: %d list cursors, want %d:\n%s", pages[pg].Title(), n, want, m.View())
 		}
 	}
 }

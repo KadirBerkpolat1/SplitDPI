@@ -32,12 +32,8 @@ func shownIDs(m Model) []string {
 func TestSettingsGroupsInOrder(t *testing.T) {
 	defer i18n.Init("en")
 	want := [][]string{
-		{"lang", "run_mode", "boot"},
-		{"mode", "exclude", "strategy"},
-		{"dns"},
-		{"skip_ifaces", "ipinfo_url"},
-		{"presets", "engine", "doctor", "uninstall"},
-		{"qnum"},
+		{"lang", "run_mode", "dns", "mode"},
+		{"skip_ifaces", "qnum", "engine", "presets", "doctor", "uninstall"},
 	}
 	for _, lang := range []string{"en", "tr"} {
 		i18n.Init(lang)
@@ -59,31 +55,39 @@ func TestSettingsGroupsInOrder(t *testing.T) {
 				at += r
 			}
 		}
-		if got := shownIDs(m); slices.Contains(got, "takeover") || slices.Contains(got, "revert") {
-			t.Errorf("%s: takeover or revert shown on a clean system: %q", lang, got)
+		if got := shownIDs(m); !slices.Equal(got, slices.Concat(want...)) {
+			t.Errorf("%s: rows %q on a clean system", lang, got)
 		}
 	}
 }
 
 func TestSettingsRowValues(t *testing.T) {
 	f := newFake()
-	f.excluded = []string{"bank.example", "gov.example"}
 	f.set.Version = "2026.10.01"
 	f.engineDir = "/opt/splitdpi/zapret2-" + engine.Version
 	m := goTo(t, newModel(t, f), pgSettings)
 	v := fullList(m)
-	for _, want := range []string{
-		"Scope                      Every site",
-		"Excluded sites             2 sites",
-		"Strategy                   none",
-		"Interfaces to leave alone  wg*, tun*, tailscale*",
-		"Provider lookup service    https://ipinfo.io/json",
-		"Update presets             version 2026.10.01",
-		"Install/update engine      zapret2 " + engine.Version,
-		"Check the system           not checked yet",
-		"Queue number               200",
+	for _, want := range [][2]string{
+		{"Language", "English"},
+		{"Start at boot", "No, in this window"},
+		{"Encrypted DNS", "Off"},
+		{"Scope", "Every site"},
+		{"Interfaces to leave alone", "wg*, tun*, tailscale*"},
+		{"Queue number", "200"},
+		{"Update the engine", "zapret2 " + engine.Version},
+		{"Update presets", "version 2026.10.01"},
+		{"Check the system", "not checked yet"},
 	} {
-		has(t, v, want)
+		has(t, v, fmt.Sprintf("%-27s%s", want[0], want[1]))
+	}
+	for _, gone := range []string{"Excluded sites", "Strategy", "Provider lookup", "ipinfo", "Starts at boot"} {
+		if strings.Contains(v, gone) {
+			t.Errorf("removed row %q shown:\n%s", gone, v)
+		}
+	}
+	// There is no search: / does nothing.
+	if s := press(t, m, "/"); s.typing() || s.page != pgSettings || fullList(s) != v {
+		t.Errorf("/ changed the page:\n%s", fullList(s))
 	}
 }
 
@@ -94,90 +98,6 @@ func clearInput(t *testing.T, m Model) Model {
 		m, _ = update(t, m, tea.KeyMsg{Type: tea.KeyBackspace})
 	}
 	return m
-}
-
-func TestSettingsSearch(t *testing.T) {
-	f := newFake()
-	m := press(t, goTo(t, newModel(t, f), pgSettings), "/")
-	if !m.settings.searching {
-		t.Fatal("/ did not open the search")
-	}
-	m = typeText(t, m, "dnsq")
-	if !slices.Equal(shownIDs(m), nil) {
-		t.Errorf("dnsq shows %q", shownIDs(m))
-	}
-	has(t, m.View(), "No setting matches.")
-	m, _ = update(t, m, tea.KeyMsg{Type: tea.KeyBackspace})
-	if got := shownIDs(m); !slices.Equal(got, []string{"dns"}) {
-		t.Fatalf("dns shows %q", got)
-	}
-	v := m.View()
-	has(t, v, "/ dns")
-	has(t, v, "Encrypted DNS")
-	if strings.Contains(v, "Language") {
-		t.Errorf("unmatched rows shown:\n%s", v)
-	}
-	// q is typed, not quit; a group name matches its rows; so does a value.
-	m = typeText(t, clearInput(t, m), "network")
-	if got := shownIDs(m); !slices.Equal(got, []string{"skip_ifaces", "ipinfo_url"}) || m.quitting {
-		t.Errorf("network shows %q, quitting %v", got, m.quitting)
-	}
-	m = typeText(t, clearInput(t, m), "TAILSCALE")
-	if got := shownIDs(m); !slices.Equal(got, []string{"skip_ifaces"}) {
-		t.Errorf("TAILSCALE shows %q", got)
-	}
-
-	// enter keeps the filter and gives the keys to the rows; esc clears it
-	// without leaving the page.
-	m = typeText(t, clearInput(t, m), "dns")
-	m = press(t, m, "enter")
-	if m.settings.searching || !slices.Equal(shownIDs(m), []string{"dns"}) {
-		t.Fatalf("enter: searching %v, rows %q", m.settings.searching, shownIDs(m))
-	}
-	has(t, m.View(), "Search: dns")
-	if cli := footerCLI(m); cli != "sudo splitdpi dns <id> [--dot]" {
-		t.Errorf("filtered row CLI %q", cli)
-	}
-	m = press(t, m, "esc")
-	if !m.inPage || m.settings.search.Value() != "" || len(shownIDs(m)) != len(settings)-2 {
-		t.Errorf("esc: in page %v, query %q, %d rows", m.inPage, m.settings.search.Value(), len(shownIDs(m)))
-	}
-
-	// esc in the box clears it too.
-	m = press(t, typeText(t, press(t, m, "/"), "lang"), "esc")
-	if m.settings.searching || m.settings.search.Value() != "" || !m.inPage {
-		t.Errorf("esc in the box: searching %v, query %q", m.settings.searching, m.settings.search.Value())
-	}
-
-	// / from the menu gives the keys to the box.
-	m = typeText(t, press(t, press(t, m, "esc"), "/"), "dns")
-	if !m.inPage || !slices.Equal(shownIDs(m), []string{"dns"}) {
-		t.Errorf("/ from the menu: in page %v, rows %q", m.inPage, shownIDs(m))
-	}
-}
-
-// i, ı, I and İ are one letter to the search, in any language.
-func TestSettingsSearchDotlessI(t *testing.T) {
-	defer i18n.Init("en")
-	i18n.Init("tr")
-	m := goTo(t, newModel(t, newFake()), pgSettings)
-	for q, want := range map[string]string{
-		"KALDIR":    "uninstall", // kaldır
-		"kaldir":    "uninstall",
-		"DİL":       "lang",
-		"dıl":       "lang",
-		"LAYICI":    "ipinfo_url", // Sağlayıcıyı
-		"sağlayıcı": "ipinfo_url",
-		"kuyruk":    "qnum",
-	} {
-		s := typeText(t, press(t, m, "/"), q)
-		if got := shownIDs(s); !slices.Contains(got, want) {
-			t.Errorf("%q shows %q, want %s", q, got, want)
-		}
-	}
-	if fold("İIıi") != "iiii" {
-		t.Errorf("fold(İIıi) = %q", fold("İIıi"))
-	}
 }
 
 func TestSettingsModePicker(t *testing.T) {
@@ -209,7 +129,7 @@ func TestSettingsModePicker(t *testing.T) {
 	f.st.State = "running"
 	m = settle(t, m, m.refresh())
 	m = press(t, press(t, press(t, m, "enter"), "up"), "enter")
-	has(t, flat(m.View()), "Saved. Scope: Every site. "+i18n.T("settings_dns.on_restart"))
+	has(t, flat(m.View()), "Saved. Scope: Every site. "+i18n.T("tui.restart_hint", restartKey))
 }
 
 func TestSettingsModeAppsRefused(t *testing.T) {
@@ -240,6 +160,7 @@ func TestSettingsLangPicker(t *testing.T) {
 		t.Fatalf("picker %+v", p)
 	}
 	has(t, m.View(), "Türkçe")
+	has(t, m.View(), "Русский")
 	m = press(t, m, "down")
 	if cli := footerCLI(m); cli != "sudo splitdpi config set lang tr" {
 		t.Errorf("CLI %q", cli)
@@ -284,33 +205,6 @@ func TestSettingsQNumEditor(t *testing.T) {
 	v = flat(m.View())
 	has(t, v, "Saved. Queue number: 300.")
 	has(t, v, "Queue number 300")
-}
-
-func TestSettingsIPInfoEditor(t *testing.T) {
-	f := newFake()
-	m := press(t, toSetting(t, f, "ipinfo_url"), "enter")
-	has(t, m.View(), "https://ipinfo.io/json")
-	m = press(t, typeText(t, clearInput(t, m), "http://example.com"), "enter")
-	if !f.called("ipinfo_url http://example.com") || m.settings.text == nil {
-		t.Fatalf("calls %q, editor %v", f.calls, m.settings.text)
-	}
-	has(t, m.View(), "not an https URL: http://example.com")
-
-	m = typeText(t, clearInput(t, m), "https://api.example.com/json")
-	m = press(t, m, "esc")
-	if m.settings.text != nil || f.called("ipinfo_url https://api.example.com/json") {
-		t.Fatalf("esc saved: %q", f.calls)
-	}
-
-	m = clearInput(t, press(t, m, "enter"))
-	if cli := footerCLI(m); cli != "sudo splitdpi config reset ipinfo_url" {
-		t.Errorf("empty CLI %q", cli)
-	}
-	m = press(t, m, "enter")
-	if !f.called("ipinfo_url ") || m.settings.text != nil {
-		t.Fatalf("calls %q", f.calls)
-	}
-	has(t, flat(m.View()), "Saved. Provider lookup service: https://ipinfo.io/json.")
 }
 
 func TestSettingsIfaceEditor(t *testing.T) {
@@ -382,30 +276,6 @@ func TestShellArg(t *testing.T) {
 	}
 }
 
-func TestSettingsShortcuts(t *testing.T) {
-	f := newFake()
-	f.set = trSet()
-	f.sites = []string{"pastebin.com"}
-	f.excluded = []string{"bank.example"}
-	f.strategies = testStrategies()
-	m := toSetting(t, f, "exclude")
-	if cli := footerCLI(m); cli != "sudo splitdpi exclude list" {
-		t.Errorf("CLI %q", cli)
-	}
-	m = press(t, m, "enter")
-	if m.page != pgSites || !m.inPage {
-		t.Fatalf("on page %d, in page %v", m.page, m.inPage)
-	}
-	v := m.View()
-	has(t, v, "bank.example")
-	has(t, flat(v), i18n.T("settings_exclude.jumped"))
-
-	m = press(t, toSetting(t, f, "strategy"), "enter")
-	if m.page != pgStrategy || !m.inPage || len(m.strat.list) == 0 {
-		t.Fatalf("on page %d, in page %v, %d strategies", m.page, m.inPage, len(m.strat.list))
-	}
-}
-
 func TestSettingsPresetsUpdate(t *testing.T) {
 	f := newFake()
 	m := toSetting(t, f, "presets")
@@ -470,7 +340,7 @@ func TestSettingsEngineInstall(t *testing.T) {
 		t.Fatalf("calls %q", f.calls)
 	}
 	v = flat(fullList(m))
-	has(t, v, "Install/update engine zapret2 "+engine.Version)
+	has(t, v, "Update the engine zapret2 "+engine.Version)
 	has(t, v, "Installed zapret2 "+engine.Version)
 	has(t, m.View(), "Enter Reinstall")
 }
@@ -503,7 +373,7 @@ func TestSettingsDoctor(t *testing.T) {
 	if f.count("doctor") != 2 {
 		t.Errorf("r did not check again: %q", f.calls)
 	}
-	m = press(t, press(t, m, "q"), "esc")
+	m = press(t, m, "esc")
 	if m.settings.doctorOpen || m.quitting {
 		t.Fatalf("esc: open %v, quitting %v", m.settings.doctorOpen, m.quitting)
 	}
@@ -573,6 +443,7 @@ func TestSettingsTakeoverAndRevert(t *testing.T) {
 func TestSettingsRevertStopsOwnRun(t *testing.T) {
 	f := newFake()
 	f.takenOver = []string{"zapret2 (systemd)"}
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
 	m := newModel(t, f)
 	m, cmd := update(t, m, key("r"))
 	go cmd()
@@ -637,11 +508,6 @@ func TestSettingsStatesFit80x24(t *testing.T) {
 			views[name] = m.View()
 			shows(t, name, views[name], i18n.T("settings_help."+st.id))
 		}
-		s := press(t, base, "/")
-		views[lang+" search empty"] = s.View()
-		views[lang+" search dns"] = typeText(t, s, "dns").View()
-		views[lang+" search none"] = typeText(t, s, "zzzz").View()
-		views[lang+" search kept"] = press(t, typeText(t, s, "a"), "enter").View()
 
 		for _, id := range []string{"lang", "run_mode", "mode"} {
 			p := press(t, toRow(t, base, id), "enter")
@@ -667,11 +533,6 @@ func TestSettingsStatesFit80x24(t *testing.T) {
 		q = press(t, typeText(t, clearInput(t, q), "99999"), "enter")
 		views[lang+" qnum refused"] = q.View()
 		shows(t, lang+" qnum refused", q.View(), i18n.T("settings_qnum.warn"))
-
-		u := press(t, toRow(t, base, "ipinfo_url"), "enter")
-		u = press(t, typeText(t, clearInput(t, u), "http://"+strings.Repeat("long.", 20)+"example/json"), "enter")
-		views[lang+" ipinfo refused"] = u.View()
-		shows(t, lang+" ipinfo refused", u.View(), i18n.T("settings_ipinfo.default", config.Default().IPInfoURL))
 
 		e := press(t, toRow(t, base, "skip_ifaces"), "enter")
 		views[lang+" ifaces"] = e.View()

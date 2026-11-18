@@ -243,7 +243,6 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		m, cmd := m.pkgsDone(msg)
 		return m, cmd, true
 	case detectMsg:
-		m.note = ""
 		if msg.err != nil {
 			m.note = errText(msg.err)
 			w.step, w.cursor, m.focus = wPick, 0, 0

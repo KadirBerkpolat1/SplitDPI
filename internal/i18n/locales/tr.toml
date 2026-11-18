@@ -257,7 +257,6 @@ help = "splitdpi çalışırken DNS'i (53. port) şifreler: off | auto | cloudfl
 [dns]
 usage = "Kullanım: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS yönlendirmesi kapatıldı. Bir sonraki başlatmada geçerli olur."
-restart = "splitdpi çalışıyor; uygulamak için yeniden başlatın: sudo splitdpi stop && sudo splitdpi run"
 cache_flushed = "%s DNS önbelleği temizlendi."
 cache_flush_failed = "Bir DNS önbelleği temizlenemedi: %v"
 
@@ -317,6 +316,10 @@ scan = "tarama"
 background = "arka plan"
 
 [tui]
+no_method = "Henüz bir engel aşma yöntemi yok: Kurulum sayfasından bulun."
+engine_missing = "Motor kurulu değil: Kurulum sayfası onu kurar."
+already = "SplitDPI zaten çalışıyor (%s). Önce Durum sayfasında s ile durdurun."
+boot_unsupported = "Bu sistem SplitDPI'yi açılışta başlatamıyor: Durum sayfasında r ile başlatın."
 process = "%s, pid %d"
 state = "Durum"
 strategy = "Strateji"
@@ -447,7 +450,7 @@ no = "Vazgeç"
 title = "SplitDPI açılışta başlasın mı?"
 service = "Bu sistemin init'i (systemd, OpenRC ya da runit) için splitdpi servisi kurulur."
 boot = "Engel aşma hemen ve her yeniden başlatmadan sonra başlar."
-rules = "Çalıştığı sürece, eşleşen trafiği nfqws2'ye gönderen güvenlik duvarı (nftables) kuralları eklenir."
+rules = "Çalıştığı sürece, eşleşen trafiği engel aşma motoruna gönderen güvenlik duvarı (nftables) kuralları eklenir."
 move_here = "Bu pencerede çalışan engel aşma durdurulur, yerine servis çalıştırır: genellikle bir saniyeden kısa bir süre engel aşılmaz. Servis başlamazsa SplitDPI engel aşmayı arka planda yeniden başlatır."
 move = "Çalışan engel aşma (%s, pid %d) durdurulur, yerine servis çalıştırır: genellikle bir saniyeden kısa bir süre engel aşılmaz. Servis başlamazsa SplitDPI engel aşmayı arka planda yeniden başlatır."
 
@@ -704,7 +707,6 @@ cli = "%d açılıyor, %d engelli, %d test edilmedi"
 open = "%d/%d site açılıyor"
 blocked = "%d engelli"
 untested = "%d test edilmedi"
-all = "tümü Siteler sayfasında"
 more = "%d site daha; tümü Siteler sayfasında"
 
 [probe_short]
@@ -820,7 +822,7 @@ strategy = "Engeli aşmak için paketlerin nasıl değiştirileceği. Seçenekle
 dns = "SplitDPI'nin DNS sorgularını şifreli gönderir; böylece sağlayıcı onlara engel sayfasıyla cevap veremez."
 skip_ifaces = "Engel aşmanın dokunmadığı ağ arayüzleri, örneğin VPN'ler. Sonu * olan bir ad, o adla başlayan bütün arayüzler demektir."
 ipinfo_url = "Hangi internet sağlayıcısını kullandığınızı bulan servis; sağlayıcınıza uygun hazır ayarlar bununla denenir."
-presets = "En yeni hazır stratejileri ve uygulama listelerini indirir."
+presets = "En yeni hazır yöntemleri ve uygulama listelerini indirir."
 engine = "Engeli asıl aşan zapret2'dir; bu, SplitDPI'nin denendiği sürümü indirip kurar."
 doctor = "SplitDPI'nin ihtiyaç duyduğu her şeyin yerinde olup olmadığını denetler, eksik olanın nasıl giderileceğini söyler."
 takeover = "Başka bir zapret kurulumu engel oluyor. SplitDPI onu durdurup sitelerini alarak yerine geçebilir."

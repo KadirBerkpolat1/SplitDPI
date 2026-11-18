@@ -18,34 +18,34 @@ var startCalls = []string{"background", "enable", "stop", "run ended"}
 func TestSettingsRunModePicker(t *testing.T) {
 	f := newFake()
 	m := toSetting(t, f, "run_mode")
-	has(t, m.View(), "Run mode")
-	has(t, m.View(), "In this window")
+	has(t, m.View(), "Start at boot")
+	has(t, m.View(), "No, in this window")
 	if cli := footerCLI(m); cli != "sudo splitdpi run" {
 		t.Errorf("row CLI %q", cli)
 	}
 
 	m = press(t, m, "enter")
-	if p := m.settings.pick; p == nil || p.id != "run_mode" || p.cursor != 0 {
+	if p := m.settings.pick; p == nil || p.id != "run_mode" || m.runModeChoices()[p.cursor] != config.RunWindow {
 		t.Fatalf("picker %+v, want open on window", p)
 	}
 	v := flat(pageText(m.View()))
-	has(t, v, "How should r on the Status page start the bypass?")
+	has(t, v, flat(i18n.T("run_mode.head")))
 	for _, mode := range runModes {
 		has(t, v, i18n.T("run_mode."+string(mode)))
 		has(t, v, i18n.T("run_mode."+string(mode)+"_note"))
 	}
-	for _, want := range []string{"sudo splitdpi run --background", "sudo splitdpi enable", "sudo splitdpi run"} {
+	for _, want := range []string{"sudo splitdpi enable", "sudo splitdpi run --background", "sudo splitdpi run"} {
 		m = press(t, m, "down")
 		if cli := footerCLI(m); cli != want {
 			t.Errorf("picker CLI %q, want %q", cli, want)
 		}
 	}
-	m = press(t, press(t, m, "q"), "esc")
-	if m.settings.pick != nil || m.quitting || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "run mode ") }) {
-		t.Fatalf("esc: picker %v, quitting %v, calls %q", m.settings.pick, m.quitting, f.calls)
+	m = press(t, m, "esc")
+	if m.settings.pick != nil || m.page != pgSettings || slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "run mode ") }) {
+		t.Fatalf("esc: picker %v, page %d, calls %q", m.settings.pick, m.page, f.calls)
 	}
 
-	m = press(t, press(t, press(t, m, "enter"), "down"), "enter")
+	m = pickRunMode(t, press(t, m, "enter"), config.RunBackground)
 	if m.settings.pick != nil || m.dialog != nil {
 		t.Fatalf("choosing left picker %v, dialog %v", m.settings.pick, m.dialog)
 	}
@@ -61,53 +61,46 @@ func TestSettingsRunModePicker(t *testing.T) {
 		t.Error("choosing started a run")
 	}
 	v = flat(m.View())
-	has(t, v, "Run mode: In the background. It applies the next time you press r on the Status page.")
-	has(t, v, "Run mode In the background")
+	has(t, v, "Start at boot: No, in the background. It applies the next time you press r on the Status page.")
+	has(t, v, "Start at boot No, in the background")
 	if cli := footerCLI(m); cli != "sudo splitdpi run --background" {
 		t.Errorf("row CLI after choosing %q", cli)
 	}
-	if m = press(t, m, "enter"); m.settings.pick.cursor != 1 {
+	if m = press(t, m, "enter"); m.runModeChoices()[m.settings.pick.cursor] != config.RunBackground {
 		t.Errorf("picker reopened on %d, want the saved background", m.settings.pick.cursor)
 	}
 }
 
-// statusIn opens the status page with mode saved and the footer focus on r.
+// statusIn opens the status page with a method and mode saved.
 func statusIn(t *testing.T, f *fake, mode config.RunMode) Model {
 	t.Helper()
 	f.cfg.RunMode = mode
-	m := press(t, press(t, newModel(t, f), "tab"), "right") // into the page, past w
-	if k := (statusPage{}).Actions(m)[m.focus].Key; k != "r" {
-		t.Fatalf("focus on %q, want r", k)
-	}
-	return m
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+	return newModel(t, f)
 }
 
+// One start key, r, starts the bypass the way the run mode says; the status
+// says how.
 func TestStatusRunFollowsMode(t *testing.T) {
 	for _, tc := range []struct {
-		mode  config.RunMode
-		label string
-		cli   string
-		b     bool
+		mode config.RunMode
+		cli  string
 	}{
-		{config.RunWindow, "r Run ", "sudo splitdpi run", true},
-		{config.RunBackground, "r Run (in background)", "sudo splitdpi run --background", false},
-		{config.RunBoot, "r Run (also at boot)", "sudo splitdpi enable", true},
+		{config.RunWindow, "sudo splitdpi run"},
+		{config.RunBackground, "sudo splitdpi run --background"},
+		{config.RunBoot, "sudo splitdpi enable"},
 	} {
 		t.Run(string(tc.mode), func(t *testing.T) {
 			m := statusIn(t, newFake(), tc.mode)
 			v := m.View()
-			has(t, v, tc.label)
-			if cli := footerCLI(m); cli != tc.cli {
+			has(t, v, "r Start")
+			if cli := cliFor(m, "r"); cli != tc.cli {
 				t.Errorf("CLI %q, want %q", cli, tc.cli)
 			}
-			if got := strings.Contains(v, "b Run in background"); got != tc.b {
-				t.Errorf("b offered %v, want %v:\n%s", got, tc.b, v)
+			has(t, flat(v), i18n.T("tui.how.start_"+string(tc.mode)))
+			if cliFor(m, "a") != "" {
+				t.Errorf("a second start key: %q", reproKeys(m))
 			}
-			hintKey := "b"
-			if !tc.b {
-				hintKey = "r"
-			}
-			has(t, flat(v), hintKey+" Keeps running when the terminal closes")
 		})
 	}
 }
@@ -150,15 +143,15 @@ func TestStatusRunBoot(t *testing.T) {
 	if f.count("enable") != 1 || m.running || f.called("background") {
 		t.Fatalf("calls %q, running %v", f.calls, m.running)
 	}
-	if m.page != pgStatus || !m.inPage {
-		t.Errorf("enabling moved away: page %d, in page %v", m.page, m.inPage)
+	if m.page != pgStatus {
+		t.Errorf("enabling moved away: page %d", m.page)
 	}
 	has(t, m.View(), i18n.T("service.enabled"))
 
 	// A running service is stopped by s, as before; nothing disables it.
 	f.st = supervisor.Status{State: "running", Mode: "service", PID: 77}
 	m = newModel(t, f)
-	if strings.Contains(m.View(), "r Run") {
+	if cliFor(m, "r") != "" {
 		t.Error("r offered while the service runs")
 	}
 	if m = press(t, m, "s"); !f.called("stop") {
@@ -166,8 +159,7 @@ func TestStatusRunBoot(t *testing.T) {
 	}
 }
 
-// The status page fits 80x24 in every mode, with r next to its label and
-// its mode's command shown.
+// The status page fits 80x24 in every mode, with r next to its label.
 func TestStatusRunModeFit80x24(t *testing.T) {
 	defer i18n.Init("en")
 	for _, lang := range []string{"en", "tr", "ru"} {
@@ -187,10 +179,10 @@ func TestStatusRunModeFit80x24(t *testing.T) {
 			if k := missingKey.FindString(v); k != "" {
 				t.Errorf("%s %s: missing key %s", lang, mode, k)
 			}
-			if label := (statusPage{}).Actions(m)[m.focus].Label; !strings.Contains(v, "r "+label) {
+			if label := i18n.T("tui.act.start"); !strings.Contains(v, "r "+label) {
 				t.Errorf("%s %s: r is not next to %q:\n%s", lang, mode, label, v)
 			}
-			if cli := footerCLI(m); cli != runModeCLI(mode) {
+			if cli := cliFor(m, "r"); cli != runModeCLI(mode) {
 				t.Errorf("%s %s: CLI %q", lang, mode, cli)
 			}
 		}

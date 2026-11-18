@@ -104,6 +104,9 @@ func (strategyPage) View(m Model, w, h int) string {
 	for _, ch := range s.list {
 		width = max(width, len(ch.Strategy.ID))
 	}
+	if s.custom {
+		nameW = max(nameW, lipgloss.Width(i18n.T("tui.strategy_screen.custom")))
+	}
 	blank := strings.Repeat(" ", lipgloss.Width(m.g.on))
 	lines := make([]string, len(s.list))
 	for i, ch := range s.list {

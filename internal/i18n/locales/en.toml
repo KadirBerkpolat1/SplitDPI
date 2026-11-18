@@ -252,7 +252,6 @@ help = "Encrypt DNS (port 53) while splitdpi runs: off | auto | cloudflare | goo
 [dns]
 usage = "Usage: splitdpi dns [off | auto | cloudflare | google | quad9 | adguard] [--dot]"
 off = "DNS redirect is off. It applies on the next start."
-restart = "splitdpi is running: restart it to apply: sudo splitdpi stop && sudo splitdpi run"
 cache_flushed = "Cleared the DNS cache of %s."
 cache_flush_failed = "Could not clear a DNS cache: %v"
 
@@ -312,6 +311,10 @@ scan = "scan"
 background = "background"
 
 [tui]
+no_method = "There is no bypass method yet: find one on the Setup page."
+engine_missing = "The engine is not installed: the Setup page installs it."
+already = "SplitDPI already runs (%s). Stop it with s on the Status page first."
+boot_unsupported = "This system cannot start SplitDPI at boot: start it with r on the Status page."
 process = "%s, pid %d"
 state = "State"
 strategy = "Strategy"
@@ -442,7 +445,7 @@ no = "Cancel"
 title = "Start SplitDPI at boot?"
 service = "Install the splitdpi service for this system's init (systemd, OpenRC or runit)."
 boot = "Start the bypass now and after every reboot."
-rules = "While it runs, add firewall (nftables) rules that send matching traffic through nfqws2."
+rules = "While it runs, add firewall (nftables) rules that send matching traffic through the bypass engine."
 move_here = "Stop the bypass running in this window and run it as the service instead: usually under a second without bypass. If the service does not start, SplitDPI starts the bypass again in the background."
 move = "Stop the %s run (pid %d) and run the bypass as the service instead: usually under a second without bypass. If the service does not start, SplitDPI starts the bypass again in the background."
 
@@ -704,7 +707,6 @@ cli = "%d reachable, %d blocked, %d not tested"
 open = "%d/%d sites open"
 blocked = "%d blocked"
 untested = "%d not tested"
-all = "all on the Sites page"
 more = "%d more; all on the Sites page"
 
 [probe_short]
@@ -820,7 +822,7 @@ strategy = "How packets are changed to get past the block. The Strategy page lis
 dns = "Sends SplitDPI's DNS queries encrypted, so that the provider cannot answer them with a block page."
 skip_ifaces = "Network interfaces the bypass leaves alone, such as VPNs. A name ending in * matches every interface whose name starts with it."
 ipinfo_url = "The service that tells which internet provider you use, so that the presets for it can be tried."
-presets = "Downloads the latest ready-made strategies and app lists."
+presets = "Downloads the latest ready-made methods and app lists."
 engine = "zapret2 does the actual bypass; this downloads and installs the version SplitDPI is tested with."
 doctor = "Checks that everything SplitDPI needs is in place, and says how to fix what is not."
 takeover = "Another zapret install is in the way. SplitDPI can stop it, keep its sites and take its place."

@@ -383,14 +383,22 @@ func (m Model) scrollMore(lines []string, first []int, cursor, room, width int) 
 			body = min(body, len(lines)-first[i])
 			start = first[i]
 		}
-		above, below = 0, 0
-		for _, l := range first {
-			switch {
-			case l < start:
-				above++
-			case l >= start+body:
-				below++
+		count := func() {
+			above, below = 0, 0
+			for _, l := range first {
+				switch {
+				case l < start:
+					above++
+				case l >= start+body:
+					below++
+				}
 			}
+		}
+		count()
+		// Only headings cut off above: show them instead of "↑ 0 more".
+		if above == 0 && start > 0 && at < room-1 {
+			start, body = 0, room-1
+			count()
 		}
 	}
 	more := func(arrow string, n int) string {

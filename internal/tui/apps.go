@@ -454,8 +454,11 @@ func (m Model) appsView(w, h int) string {
 			tail = append(tail, "")
 			tail = append(tail, strings.Split(mutedStyle.Width(w).Render(probeTodo(entries[i].fail)), "\n")...)
 		}
-		if sk := a.skippedView(w, max(h/3, 3)); len(sk) > 0 {
-			tail = append(append(tail, ""), sk...)
+		// The skipped lines take what the list leaves, so that their count stays.
+		if left := h - len(head) - min(5, len(lines)) - len(tail) - 1; left >= 2 {
+			if sk := a.skippedView(w, min(max(h/3, 3), left)); len(sk) > 0 {
+				tail = append(append(tail, ""), sk...)
+			}
 		}
 	}
 	lines = m.scrollMore(lines, first, a.cursor, h-len(tail), w)

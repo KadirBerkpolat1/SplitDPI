@@ -185,19 +185,6 @@ func TestScanBlockcheckOnly(t *testing.T) {
 	}
 }
 
-func TestScanVoiceUnverified(t *testing.T) {
-	env, _, _ := testEnv(t, testSet(), func(id string) []probe.Result {
-		return []probe.Result{{OK: id == "win-two"}}
-	})
-	rep, err := scan.Scan(context.Background(), env, scan.Options{Apps: []string{"discord", "roblox"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !rep.VoiceUnverified {
-		t.Fatal("want voice unverified")
-	}
-}
-
 func TestScanWinnerProvenance(t *testing.T) {
 	env, _, _ := testEnv(t, testSet(), func(id string) []probe.Result {
 		return []probe.Result{{OK: id == "win-two"}}

@@ -57,7 +57,7 @@ func (m Model) choicesFor(id string) choices {
 		offered := m.runModeChoices()
 		c := choices{head: i18n.T("run_mode.head"), inUse: slices.Index(offered, m.runMode())}
 		if !m.svc.Supported {
-			c.head += "\n" + i18n.T("service.unsupported")
+			c.head += "\n" + i18n.T("tui.boot_unsupported")
 		}
 		for _, r := range offered {
 			c.names, c.notes = append(c.names, runModeName(r)), append(c.notes, i18n.T("run_mode."+string(r)+"_note"))
