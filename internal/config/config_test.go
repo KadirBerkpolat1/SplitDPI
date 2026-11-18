@@ -199,6 +199,36 @@ func TestListFileNormalises(t *testing.T) {
 	}
 }
 
+func TestListDedupesNormalised(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.txt")
+	hand := "Example.com.\nother.org\n*.example.com\nexample.com # note\nOther.org\n"
+	if err := os.WriteFile(path, []byte(hand), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lines, err := config.ReadList(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"example.com", "other.org"}; !slices.Equal(lines, want) {
+		t.Fatalf("ReadList = %q, want %q", lines, want)
+	}
+}
+
+// Commands that run without root read lang from config.toml.
+func TestSaveWorldReadable(t *testing.T) {
+	p := paths.Under(t.TempDir())
+	if err := config.Save(p, config.Default()); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(p.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := fi.Mode().Perm(); m != 0o644 {
+		t.Fatalf("config.toml mode %o, want 644", m)
+	}
+}
+
 func TestListAddAfterLineWithoutNewline(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hosts.txt")
 	if err := os.WriteFile(path, []byte("foo.com"), 0o644); err != nil {

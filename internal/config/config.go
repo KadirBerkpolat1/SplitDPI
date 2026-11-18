@@ -157,6 +157,11 @@ func Save(p paths.Paths, c Config) error {
 	}
 	name := tmp.Name()
 	defer os.Remove(name)
+	// Commands that run without root read lang from it.
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return err
+	}
 	if _, err := tmp.WriteString(buf.String()); err != nil {
 		tmp.Close()
 		return err
@@ -167,8 +172,8 @@ func Save(p paths.Paths, c Config) error {
 	return os.Rename(name, p.ConfigFile)
 }
 
-// ReadList returns the normalized domains of the list at path, skipping lines
-// that hold none.
+// ReadList returns the distinct normalized domains of the list at path in
+// the order they first appear, skipping lines that hold none.
 func ReadList(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -179,9 +184,11 @@ func ReadList(path string) ([]string, error) {
 	}
 	defer f.Close()
 	var out []string
+	seen := map[string]bool{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		if _, d := domain.ListEntry(sc.Text()); d != "" {
+		if _, d := domain.ListEntry(sc.Text()); d != "" && !seen[d] {
+			seen[d] = true
 			out = append(out, d)
 		}
 	}
