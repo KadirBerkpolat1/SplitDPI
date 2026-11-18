@@ -140,6 +140,31 @@ func TestCurrent(t *testing.T) {
 	}
 }
 
+// A binary newer than the cached bundle runs its own presets.
+func TestCurrentPrefersNewerEmbedded(t *testing.T) {
+	embedded := presets.Load(presets.Embedded()).Version
+	for _, c := range []struct{ version, origin string }{
+		{"2026-01-01", "embedded"},
+		{embedded, "cache"},
+		{"2099-01-01", "cache"},
+	} {
+		p := paths.Under(t.TempDir())
+		if err := os.MkdirAll(filepath.Join(p.PresetCache, "apps"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		app := "schema = 1\nid = \"cached\"\nname = \"C\"\nhosts = [\"c.com\"]\n"
+		if err := os.WriteFile(filepath.Join(p.PresetCache, "apps", "cached.toml"), []byte(app), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p.PresetCache, "VERSION"), []byte(c.version+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if s := presets.Current(p); s.Origin != c.origin {
+			t.Errorf("cache %s, embedded %s: origin %q, want %q", c.version, embedded, s.Origin, c.origin)
+		}
+	}
+}
+
 func TestExcludeFor(t *testing.T) {
 	got := presets.Load(fixture()).ExcludeFor("TR")
 	want := []string{"microsoft.com", "steampowered.com", "ziraat.com.tr"}

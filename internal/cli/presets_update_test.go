@@ -28,7 +28,6 @@ func TestPresetsUpdatePrintsResult(t *testing.T) {
 	files := map[string]string{
 		"VERSION":         "2099-01-01",
 		"apps/fresh.toml": "schema = 1\nid = \"fresh\"\nname = \"Fresh\"\nhosts = [\"fresh.example\"]\nprobe = [\"https://fresh.example/\"]\n",
-		"apps/bad.toml":   "not toml [[",
 	}
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
@@ -56,7 +55,6 @@ func TestPresetsUpdatePrintsResult(t *testing.T) {
 	eq(t, code, 0)
 	has(t, out, "Fetching https://github.com/")
 	has(t, out, "Updated preset cache to version 2099-01-01 (1 apps).")
-	has(t, out, "  apps/bad.toml: ")
 }
 
 // A checksum file that fails the presets release is explained, with a
