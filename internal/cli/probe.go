@@ -110,7 +110,7 @@ func parseProbeArgs(args []string) (apps []string, verbose bool, err error) {
 			}
 			i++
 			for _, a := range strings.Split(args[i], ",") {
-				if a = strings.TrimSpace(a); a != "" {
+				if a = strings.TrimSpace(a); a != "" && !slices.Contains(apps, a) {
 					apps = append(apps, a)
 				}
 			}
