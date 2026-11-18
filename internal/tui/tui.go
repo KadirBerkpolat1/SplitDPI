@@ -599,13 +599,17 @@ func (m *Model) stopAll() {
 }
 
 // changed marks a saved change that the running bypass picks up only when
-// it restarts, and returns what to tell about it: press R. A stopped bypass
-// picks it up when it starts, so there is nothing to tell.
+// it restarts, and returns what to tell about it: press R, or restart the
+// run in the other terminal. A stopped bypass picks it up when it starts, so
+// there is nothing to tell.
 func (m *Model) changed() string {
 	if !m.bypassOn() {
 		return ""
 	}
 	m.pending = true
+	if m.otherTerminal() {
+		return i18n.T("fix_arayuz.restart_foreground")
+	}
 	return i18n.T("tui.restart_hint", restartKey)
 }
 

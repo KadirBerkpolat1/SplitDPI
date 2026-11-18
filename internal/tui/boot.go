@@ -109,9 +109,13 @@ func (m Model) waitService(w io.Writer) {
 // in the foreground: enabling the service stops that run. The bypass this
 // TUI runs is m.running.
 func (m Model) otherRun() bool {
-	return !m.running && m.st.State == "running" && m.st.PID != os.Getpid() &&
+	return !m.running && m.stateOn() && m.st.PID != os.Getpid() &&
 		(m.st.Mode == "background" || m.st.Mode == "foreground")
 }
+
+// otherTerminal is whether the bypass runs in the foreground of another
+// terminal (`splitdpi run`): only that terminal can start it again.
+func (m Model) otherTerminal() bool { return m.otherRun() && m.st.Mode == "foreground" }
 
 // confirmEnable asks before the service is installed and started, and says
 // which bypass running now it replaces.
@@ -224,7 +228,7 @@ func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
 		return nil
 	}
 	changes := []string{i18n.T("shell.disable.service")}
-	if m.st.State == "running" && m.st.Mode == "service" {
+	if m.stateOn() && m.st.Mode == "service" {
 		changes = append(changes, i18n.T("shell.disable.stops"))
 	}
 	m.dialog = &confirm{

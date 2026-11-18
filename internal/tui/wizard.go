@@ -121,6 +121,9 @@ type (
 		// runHere: the scan stopped the run in this TUI, to start again here.
 		runHere   bool
 		resumeErr error
+		// restarted: the service or background run the scan stopped runs
+		// again, with every change saved before.
+		restarted bool
 		// status is read once the bypass runs again, so that the done step
 		// never shows the stopped one a tick read during the scan.
 		status statusMsg
@@ -331,6 +334,9 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		if msg.resumeErr != nil {
 			m.note = errText(msg.resumeErr)
+		}
+		if msg.restarted {
+			m.pending = false
 		}
 		if msg.runHere && !m.quitting {
 			cmd := m.runNow()
@@ -648,7 +654,7 @@ func (m *Model) startScan() tea.Cmd {
 	}
 	save := m.saveApps()
 	runHere, mode := m.running, ""
-	if !runHere && m.st.State == "running" && (m.st.Mode == "service" || m.st.Mode == "background") {
+	if !runHere && m.stateOn() && (m.st.Mode == "service" || m.st.Mode == "background") {
 		mode = m.st.Mode
 	}
 	stopHere := m.stopOwnRun()
@@ -671,6 +677,7 @@ func (m *Model) startScan() tea.Cmd {
 			msg.applied = &a
 		}
 		msg.resumeErr = resume(context.WithoutCancel(ctx), b, mode)
+		msg.restarted = mode != "" && msg.resumeErr == nil
 		return msg
 	}
 	run := func() tea.Msg {

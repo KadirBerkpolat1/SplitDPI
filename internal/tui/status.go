@@ -52,11 +52,20 @@ func (statusPage) Key(m Model, _ tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m Model) bypassOn() bool { return m.running || m.st.State == "running" }
+func (m Model) bypassOn() bool { return m.running || m.stateOn() }
+
+// stateOn is whether the status has a bypass running: "restarting" is one
+// whose engine crashed and starts again, with the run still held.
+func (m Model) stateOn() bool { return m.st.State == "running" || m.st.State == "restarting" }
 
 // canStart is whether the bypass can be started here: it is off and no
 // background start is under way.
 func (m Model) canStart() bool { return !m.bypassOn() && !m.bgStarting }
+
+// held is whether starting, stopping and restarting wait: a setup scan
+// stopped the bypass or runs its trials, which nothing may stop or run
+// beside, or a restart is under way.
+func (m Model) held() bool { return m.wiz.scanning || m.restarting }
 
 // Actions offer the setup first while there is no strategy to run with.
 func (statusPage) Actions(m Model) []action {
@@ -70,6 +79,7 @@ func (statusPage) Actions(m Model) []action {
 		}})
 	}
 	switch {
+	case m.held():
 	case m.bypassOn():
 		acts = append(acts, m.stopAction())
 	case m.canStart() && m.cfg.Strategy != nil:
@@ -109,9 +119,10 @@ func (m Model) startAction() action {
 }
 
 // bootAction is b: start at boot, or no longer. It needs a service on this
-// init, and a strategy to start with.
+// init, and a strategy to start with; a setup scan holds it, as it holds
+// starting.
 func (m Model) bootAction() (action, bool) {
-	if !m.svc.Supported || m.cfg.Strategy == nil {
+	if !m.svc.Supported || m.cfg.Strategy == nil || m.wiz.scanning {
 		return action{}, false
 	}
 	if m.svc.Enabled {
@@ -166,6 +177,7 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, m.refresh(), true
 	case restartStoppedMsg:
+		m.restarting = false
 		if msg.err != nil {
 			m.note = errText(msg.err)
 			return m, m.refresh(), true
@@ -241,11 +253,11 @@ func (m *Model) stop() tea.Cmd {
 }
 
 // restart stops the bypass and starts it again the same way, so that it
-// picks up the changes saved since it started.
+// picks up the changes saved since it started. Until it runs again, R and r
+// wait.
 func (m *Model) restart() tea.Cmd {
-	m.note = i18n.T("tui.restarting")
+	m.note, m.restarting = i18n.T("tui.restarting"), true
 	if m.running {
-		m.restarting = true
 		m.runCancel() // runDoneMsg starts it again
 		return nil
 	}
@@ -439,10 +451,15 @@ func (statusPage) View(m Model, w, h int) string {
 }
 
 // headline is the bypass state in a word or two, and how it runs or how to
-// start it.
+// start it. A setup scan shows itself instead of the trial or the stopped
+// bypass its status has.
 func (m Model) headline() (string, string) {
 	big := lipgloss.NewStyle().Bold(true)
 	switch {
+	case m.wiz.scanning:
+		return big.Foreground(warn).Render(m.g.dot + " " + i18n.T("fix_arayuz.pill_scanning")), i18n.T("tui.how.scan")
+	case !m.running && m.st.State == "restarting":
+		return big.Foreground(warn).Render(m.g.dot + " " + i18n.T("fix_arayuz.pill_restarting")), i18n.T("fix_arayuz.how_restarting")
 	case m.bypassOn():
 		how := i18n.T("tui.how." + m.st.Mode)
 		if m.running {
@@ -474,8 +491,12 @@ func (m Model) statusView(w int, fit statusFit) string {
 	head, how := m.headline()
 	lines = append(lines, head)
 	lines = append(lines, strings.Split(wrap.Foreground(muted).Render(how), "\n")...)
-	if m.pending && m.bypassOn() {
-		lines = append(lines, strings.Split(wrap.Foreground(warn).Render(i18n.T("tui.pending", restartKey)), "\n")...)
+	if m.pending && m.bypassOn() && !m.wiz.scanning {
+		pending := i18n.T("tui.pending", restartKey)
+		if m.otherTerminal() {
+			pending = i18n.T("fix_arayuz.pending_foreground")
+		}
+		lines = append(lines, strings.Split(wrap.Foreground(warn).Render(pending), "\n")...)
 	}
 	lines = spacer(lines)
 

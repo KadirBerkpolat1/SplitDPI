@@ -977,3 +977,12 @@ app_deleted = "%s silindi."
 method = "Artık %s için hazır yöntem kullanılıyor."
 dns_on = "Şifreli DNS açık: %s (%s)."
 dns_off = "Şifreli DNS kapalı."
+
+[fix_arayuz]
+pill_scanning = "Taranıyor"
+pill_restarting = "Yeniden başlıyor"
+how_restarting = "Motor durdu; birazdan yeniden başlayacak."
+pending_foreground = "Kaydettiğiniz değişiklikler henüz kullanılmıyor: engel aşmayı çalıştığı terminalde yeniden başlatın."
+restart_foreground = "Geçerli olması için engel aşmayı çalıştığı terminalde yeniden başlatın."
+cancelled_not_restarted = "Tarama iptal edildi, ancak durdurduğu engel aşma yeniden başlamadı."
+takeover_done_running = "Tamam. Diğer araç kapatıldı."
