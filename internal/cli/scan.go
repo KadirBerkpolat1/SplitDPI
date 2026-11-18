@@ -28,12 +28,12 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 	if err != nil {
 		return usageError(i18n.T("scan.usage"))
 	}
-	opt.DNSCheck = func(_ context.Context, poisoned []probe.DNSResult) string {
-		return scanDNSChoice(o, w, dnsFlag, poisoned)
+	opt.DNSCheck = func(ctx context.Context, poisoned []probe.DNSResult) string {
+		return scanDNSChoice(ctx, o, w, dnsFlag, poisoned)
 	}
 	opt.DNSForce = dnsFlag != ""
-	opt.Packages = func(_ context.Context, p sysinfo.Packages) bool {
-		return scanPackages(w, p)
+	opt.Packages = func(ctx context.Context, p sysinfo.Packages) bool {
+		return scanPackages(ctx, w, p)
 	}
 	if opt.Site != "" {
 		if opt.Site, err = domain.Normalize(opt.Site); err != nil {
@@ -118,14 +118,19 @@ func suggestPresetsUpdate(w io.Writer, o *ops.Ops) {
 
 // scanPackages answers ops' question before blockcheck2 runs without curl or
 // nslookup/host. Without a terminal it says no, and ops prints the command
-// that installs them.
-func scanPackages(w io.Writer, p sysinfo.Packages) bool {
+// that installs them; so does a cancelled ctx, which ends the scan.
+func scanPackages(ctx context.Context, w io.Writer, p sysinfo.Packages) bool {
 	printPackages(w, p)
-	return promptTTY() && askYes(w, i18n.T("deps.ask"))
+	if !promptTTY() {
+		return false
+	}
+	yes, _ := askYes(ctx, w, i18n.T("deps.ask"))
+	return yes
 }
 
-// scanDNSChoice answers ops' DNS question: dnsFlag is --dns ("" when not given).
-func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) string {
+// scanDNSChoice answers ops' DNS question: dnsFlag is --dns ("" when not
+// given). A cancelled ctx, which ends the scan, keeps the system's DNS.
+func scanDNSChoice(ctx context.Context, o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) string {
 	for _, r := range poisoned {
 		fmt.Fprintln(w, i18n.T("dns2.scan_poisoned", r.Domain, joinAddrs(r.System), joinAddrs(r.DoH)))
 	}
@@ -133,7 +138,10 @@ func scanDNSChoice(o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNS
 	switch {
 	case dnsFlag != "":
 	case promptTTY():
-		if askYes(w, i18n.T("dns2.scan_ask")) {
+		switch yes, err := askYes(ctx, w, i18n.T("dns2.scan_ask")); {
+		case err != nil:
+			return ""
+		case yes:
 			choice = dns.Auto
 		}
 	default:

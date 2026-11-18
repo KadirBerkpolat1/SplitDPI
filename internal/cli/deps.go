@@ -50,7 +50,10 @@ func runDeps(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 			fmt.Fprintln(w, i18n.T("deps.confirm", "sudo splitdpi deps install --yes"))
 			return nil
 		}
-		if !askYes(w, i18n.T("deps.ask")) {
+		switch yes, err := askYes(ctx, w, i18n.T("deps.ask")); {
+		case err != nil:
+			return err
+		case !yes:
 			fmt.Fprintln(w, i18n.T("deps.declined"))
 			return nil
 		}

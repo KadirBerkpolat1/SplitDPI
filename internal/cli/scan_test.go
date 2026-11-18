@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -175,7 +176,7 @@ func TestScanDNSChoice(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setPrompt(t, tc.tty, tc.input)
 			var w bytes.Buffer
-			got := scanDNSChoice(&ops.Ops{}, &w, tc.flag, poisoned)
+			got := scanDNSChoice(context.Background(), &ops.Ops{}, &w, tc.flag, poisoned)
 			eq(t, got, tc.want)
 			has(t, w.String(), "pastebin.com resolves to 195.175.254.2 here, but to 104.20.0.1")
 			has(t, w.String(), tc.out)

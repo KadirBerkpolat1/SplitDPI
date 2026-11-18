@@ -49,7 +49,13 @@ var commands = map[string]Command{
 // Main runs one command and returns the process exit code: 0 ok, 1 failure,
 // 2 usage; `run --service` also exits 3 after a crash loop and 4 when
 // splitdpi already runs, which the service definitions do not restart.
+//
+// SIGINT, SIGTERM and SIGHUP (the terminal closing) cancel the command's
+// context, so that it stops and removes what it set up. They stay caught
+// until Main returns: a second one cannot cut that cleanup short.
 func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	defer stop()
 	lang, rest, ok := splitLang(args)
 	if lang == "" {
 		if c, err := config.Load(o.P); err == nil {
@@ -62,7 +68,7 @@ func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 		return 2
 	}
 	if len(rest) == 0 {
-		return openTUI(args, stdout, stderr, o)
+		return openTUI(ctx, args, stdout, stderr, o)
 	}
 	if rest[0] == "--help" {
 		usage(stdout)
@@ -78,7 +84,7 @@ func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 		fmt.Fprintln(stderr, i18n.T("err.need_root", "sudo splitdpi "+strings.Join(args, " ")))
 		return 1
 	}
-	if err := c.Run(context.Background(), o, stdout, rest[1:]); err != nil {
+	if err := c.Run(ctx, o, stdout, rest[1:]); err != nil {
 		fmt.Fprintln(stderr, err)
 		if _, ok := err.(usageError); ok {
 			return 2
@@ -93,7 +99,7 @@ func Main(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 
 // openTUI is `splitdpi` with no command: the TUI, as root like every other
 // command. Without a terminal there is nothing to draw on, so it prints usage.
-func openTUI(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
+func openTUI(ctx context.Context, args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 	if o.Euid() != 0 {
 		fmt.Fprintln(stderr, i18n.T("err.need_root", strings.TrimSpace("sudo splitdpi "+strings.Join(args, " "))))
 		return 1
@@ -102,8 +108,6 @@ func openTUI(args []string, stdout, stderr io.Writer, o *ops.Ops) int {
 		usage(stderr)
 		return 2
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM)
-	defer stop()
 	if err := tui.Run(ctx, o, Version); err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
