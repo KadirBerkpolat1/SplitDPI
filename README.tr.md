@@ -398,8 +398,8 @@ ses ya da yayın profili yok).
 - **Kurulum betiği:** `install.sh` GitHub'dan yalnız https ile indirir (curl
   düz http'yi yönlendirmede de reddeder ve TLS 1.2 ya da yenisini ister) ve
   ikiliyi ancak yayının `sha256sums.txt` dosyasındaki satırıyla tutarsa kurar.
-  Dizinler umask 022 ile oluşturulur. curl yoksa wget'e düşer; wget https'i
-  zorlamaz.
+  Dizinler umask 022 ile oluşturulur. curl gerekir: wget, https'ten düz
+  http'ye yönlendirmeyi izler.
 - **İndirmeler:** zapret2 motoru, SHA-256'sı denetlenen sabit bir sürümdür;
   hazır ayar güncellemesi `presets.tar.gz.sha256` tutmazsa reddedilir.
 - **Root servisi yalnız root'un değiştirebildiği bir ikiliyi çalıştırır:**

@@ -12,7 +12,12 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir "$tmp/tree"
 
-curl -fsSL -o "$tmp/presets.tar.gz" "$url"
+fetch() {
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$2" "$1"
+}
+fetch "$url" "$tmp/presets.tar.gz"
+fetch "$url.sha256" "$tmp/presets.tar.gz.sha256"
+(cd "$tmp" && sha256sum --strict -c presets.tar.gz.sha256)
 tar -xzf "$tmp/presets.tar.gz" -C "$tmp/tree" --no-same-owner --no-same-permissions
 (cd "$root" && go run ./cmd/splitdpi presets check "$tmp/tree")
 

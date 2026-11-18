@@ -21,14 +21,16 @@ func testSet() presets.Set {
 		Apps: map[string]presets.App{
 			"roblox": {
 				ID:    "roblox",
+				Hosts: []string{"roblox.com"},
 				Probe: []string{"https://www.roblox.com/"},
 			},
 			"discord": {
 				ID:    "discord",
+				Hosts: []string{"discord.com"},
 				Probe: []string{"https://discord.com/api/v9/gateway"},
 				UDP:   &presets.UDP{Ports: "50000-50100"},
 			},
-			"youtube": {ID: "youtube", Probe: []string{"https://www.youtube.com/"}, QUIC: true},
+			"youtube": {ID: "youtube", Hosts: []string{"youtube.com"}, Probe: []string{"https://www.youtube.com/"}, QUIC: true},
 		},
 		Generic: []presets.Strategy{
 			{ID: "fail-one", TCPTLS: "--payload=tls_client_hello --lua-desync=drop"},

@@ -139,10 +139,8 @@ func TestUpdateValid(t *testing.T) {
 	}
 }
 
-func TestUpdateBadBundleKeepsCache(t *testing.T) {
-	body := presetTar(t, map[string]string{
-		"apps/bad.toml": "not valid toml [[",
-	})
+func TestUpdateNoAppsKeepsCache(t *testing.T) {
+	body := presetTar(t, map[string]string{"VERSION": "2099-01-01"})
 	c, url := release(t, body)
 
 	p := paths.Under(t.TempDir())
@@ -151,9 +149,29 @@ func TestUpdateBadBundleKeepsCache(t *testing.T) {
 	if !errors.Is(err, errNoApps) {
 		t.Fatalf("err = %v", err)
 	}
-	cur := Current(p)
-	if cur.Apps["old"].Name != "Old" {
-		t.Fatalf("cache changed: %+v", cur.Apps)
+	checkCache(t, p)
+}
+
+// A bundle that presets check refuses is refused whole, even with usable apps.
+func TestUpdateRefusesInvalidBundle(t *testing.T) {
+	for name, bad := range map[string]string{
+		"apps/bad.toml": "not valid toml [[",
+		"generic.toml":  "schema = 999\n",
+	} {
+		body := presetTar(t, map[string]string{
+			"apps/fresh.toml": validApp,
+			name:              bad,
+			"VERSION":         "2099-01-01",
+		})
+		c, url := release(t, body)
+
+		p := paths.Under(t.TempDir())
+		seedCache(t, p)
+		_, err := Update(context.Background(), c, p, url)
+		if err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s: err = %v, want one naming it", name, err)
+		}
+		checkCache(t, p)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 
@@ -161,17 +162,34 @@ func Load(fsys fs.FS) Set {
 		}
 		s.Exclude[strings.TrimSuffix(path.Base(f), ".txt")] = list
 	}
-	if b, err := fs.ReadFile(fsys, "VERSION"); err == nil {
-		s.Version = strings.TrimSpace(string(b))
-	}
+	s.Version = version(fsys)
 	return s
 }
 
+func version(fsys fs.FS) string {
+	b, _ := fs.ReadFile(fsys, "VERSION")
+	return strings.TrimSpace(string(b))
+}
+
+// newer reports whether release date a is after b. A date that is not
+// YYYY-MM-DD is after nothing and nothing is after it.
+func newer(a, b string) bool {
+	const layout = "2006-01-02"
+	ta, errA := time.Parse(layout, a)
+	tb, errB := time.Parse(layout, b)
+	return errA == nil && errB == nil && ta.After(tb)
+}
+
 // Current returns the fetched snapshot in PresetCache if it has at least one
-// app, otherwise the embedded seed, with the user's apps laid over it.
+// app and the embedded seed is not newer, otherwise the embedded seed, with
+// the user's apps laid over it.
 func Current(p paths.Paths) Set {
-	s := Load(os.DirFS(p.PresetCache))
-	s.Origin = "cache"
+	cache := os.DirFS(p.PresetCache)
+	var s Set
+	if !newer(version(Embedded()), version(cache)) {
+		s = Load(cache)
+		s.Origin = "cache"
+	}
 	if len(s.Apps) == 0 {
 		s = Load(Embedded())
 		s.Origin = "embedded"

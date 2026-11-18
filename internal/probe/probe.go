@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,17 +48,35 @@ func (p Prober) client() *http.Client {
 // SiteURL is the probe URL of a user site's normalized domain.
 func SiteURL(domain string) string { return "https://" + domain + "/" }
 
-// AppURLs are the probe URLs of a. An app without any, like one the user
-// made, is probed at each of its hosts.
+// AppURLs are the probe URLs of a whose host is one of a's hosts or under
+// one: in apps mode the engine leaves any other host alone. An app without
+// such a URL, like one the user made or one whose probed host the user
+// removed, is probed at each of its hosts.
 func AppURLs(a presets.App) []string {
-	if len(a.Probe) > 0 {
-		return a.Probe
+	var urls []string
+	for _, raw := range a.Probe {
+		if u, err := url.Parse(raw); err == nil && covered(strings.ToLower(u.Hostname()), a.Hosts) {
+			urls = append(urls, raw)
+		}
 	}
-	urls := make([]string, len(a.Hosts))
+	if len(urls) > 0 {
+		return urls
+	}
+	urls = make([]string, len(a.Hosts))
 	for i, h := range a.Hosts {
 		urls[i] = SiteURL(h)
 	}
 	return urls
+}
+
+// covered reports whether host is one of hosts or a subdomain of one.
+func covered(host string, hosts []string) bool {
+	for _, h := range hosts {
+		if host == h || strings.HasSuffix(host, "."+h) {
+			return true
+		}
+	}
+	return false
 }
 
 // Hosts are the distinct hostnames of the probe URLs of apps, then sites.
@@ -90,8 +109,13 @@ func Hosts(set presets.Set, apps, sites []string) ([]string, error) {
 	return hosts, nil
 }
 
-// maxParallel bounds the probes in flight: imported site lists can be long.
+// maxParallel bounds the probes and lookups in flight: imported site lists
+// can be long.
 const maxParallel = 8
+
+// maxBody bounds the body a probe reads: the status already answered, and a
+// stream or large page would hold the probe until Timeout.
+const maxBody = 16 << 10
 
 // Probe GETs each URL, up to maxParallel at once, so that blocked URLs cost
 // one Timeout together rather than one each; the results keep the order of
@@ -111,6 +135,27 @@ func (p Prober) Probe(ctx context.Context, urls []string) []Result {
 	return out
 }
 
+// each runs f(0) … f(n-1), up to maxParallel at once, and starts none once
+// ctx is done.
+func each(ctx context.Context, n int, f func(i int)) {
+	sem := make(chan struct{}, maxParallel)
+	var wg sync.WaitGroup
+	for i := range n {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			f(i)
+		})
+	}
+	wg.Wait()
+}
+
 func (p Prober) probeOne(ctx context.Context, rawURL string) Result {
 	start := time.Now()
 	r := Result{URL: rawURL}
@@ -127,13 +172,14 @@ func (p Prober) probeOne(ctx context.Context, rawURL string) Result {
 
 	c := p.client()
 	resp, err := c.Do(req)
-	r.Elapsed = time.Since(start)
 	if err != nil {
 		r.Err, r.Cause = err.Error(), err
+		r.Elapsed = time.Since(start)
 		return r
 	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	_, _ = io.CopyN(io.Discard, resp.Body, maxBody)
+	resp.Body.Close()
+	r.Elapsed = time.Since(start)
 	r.OK = true
 	return r
 }

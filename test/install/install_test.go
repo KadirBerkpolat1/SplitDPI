@@ -299,3 +299,51 @@ func TestInstallRefusesPlainHTTP(t *testing.T) {
 		t.Errorf("plain http server got %d requests", n)
 	}
 }
+
+func TestInstallRefusesHTTPBaseURL(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix install.sh")
+	}
+	prefix := t.TempDir()
+	out, err := runInstall(t, []string{
+		"SPLITDPI_BASE_URL=http://127.0.0.1:9/releases",
+		"SPLITDPI_PREFIX=" + prefix,
+	})
+	if err == nil || !strings.Contains(out, "SPLITDPI_BASE_URL must start with https://") {
+		t.Fatalf("err %v, output %q", err, out)
+	}
+}
+
+// wget, GNU or BusyBox, follows a redirect from https to plain http, so
+// without curl nothing is downloaded at all.
+func TestInstallWithoutCurlRefuses(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("posix install.sh")
+	}
+	bin := t.TempDir()
+	for _, tool := range []string{"uname", "sha256sum", "shasum", "id", "dirname", "mkdir", "mktemp", "rm", "grep", "install"} {
+		if p, err := exec.LookPath(tool); err == nil {
+			if err := os.Symlink(p, filepath.Join(bin, tool)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	ran := filepath.Join(t.TempDir(), "wget-ran")
+	wget := "#!/bin/sh\n: >" + ran + "\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(bin, "wget"), []byte(wget), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	prefix := t.TempDir()
+	out, err := runInstall(t, []string{
+		"PATH=" + bin,
+		"SPLITDPI_VERSION=v0.1.0-nocurl",
+		"SPLITDPI_PREFIX=" + prefix,
+	})
+	if err == nil || !strings.Contains(out, "curl is required") {
+		t.Fatalf("err %v, output %q", err, out)
+	}
+	if _, err := os.Stat(ran); err == nil {
+		t.Error("install.sh ran wget")
+	}
+}

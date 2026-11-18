@@ -22,30 +22,40 @@ type DNSResult struct {
 	Err      error
 }
 
-// CheckDNS resolves each domain through sys and doh and classifies poisoning.
-// An answer that the name has no address is an answer, not a failure: an
-// ISP may block a name with NXDOMAIN or an empty answer.
+// CheckDNS resolves each domain through sys and doh, up to maxParallel
+// domains at once, and classifies poisoning. An answer that the name has no
+// address is an answer, not a failure: an ISP may block a name with NXDOMAIN
+// or an empty answer. Once ctx is done the domains not yet resolved fail
+// with its error.
 func CheckDNS(ctx context.Context, domains []string, sys func(context.Context, string) ([]netip.Addr, error), doh func(context.Context, string) ([]netip.Addr, error)) []DNSResult {
 	out := make([]DNSResult, len(domains))
+	each(ctx, len(domains), func(i int) {
+		out[i] = checkDomain(ctx, domains[i], sys, doh)
+	})
 	for i, d := range domains {
-		r := DNSResult{Domain: d}
-		var err error
-		r.System, err = sys(ctx, d)
-		if err != nil && !noAddressAnswer(err) {
-			r.Reason, r.Err = err.Error(), err
-			out[i] = r
-			continue
+		if out[i].Domain == "" {
+			err := ctx.Err()
+			out[i] = DNSResult{Domain: d, Reason: err.Error(), Err: err}
 		}
-		r.DoH, err = doh(ctx, d)
-		if err != nil && !noAddressAnswer(err) {
-			r.Reason, r.Err = err.Error(), err
-			out[i] = r
-			continue
-		}
-		classifyDNS(&r)
-		out[i] = r
 	}
 	return out
+}
+
+func checkDomain(ctx context.Context, d string, sys, doh func(context.Context, string) ([]netip.Addr, error)) DNSResult {
+	r := DNSResult{Domain: d}
+	var err error
+	r.System, err = sys(ctx, d)
+	if err != nil && !noAddressAnswer(err) {
+		r.Reason, r.Err = err.Error(), err
+		return r
+	}
+	r.DoH, err = doh(ctx, d)
+	if err != nil && !noAddressAnswer(err) {
+		r.Reason, r.Err = err.Error(), err
+		return r
+	}
+	classifyDNS(&r)
+	return r
 }
 
 // noAddressAnswer reports whether err is a resolver's answer that the name

@@ -32,6 +32,9 @@ var bundleLimits = safetar.Limits{File: 1 << 20, Total: 4 << 20}
 
 var errNoApps = errors.New("preset bundle has no usable apps")
 
+// errInvalidBundle is a bundle with a file that presets check refuses.
+var errInvalidBundle = errors.New("preset bundle has invalid files")
+
 // Update's error wraps one of these when the release's checksum file fails
 // the bundle: there is none, it is not one sha256sum line, or the bundle does
 // not match it.
@@ -91,6 +94,10 @@ func Update(ctx context.Context, c *http.Client, p paths.Paths, url string) (Set
 		return Set{}, err
 	}
 	set := Load(os.DirFS(tmp))
+	if len(set.Warnings) > 0 {
+		_ = os.RemoveAll(tmp)
+		return Set{}, fmt.Errorf("%w: %s", errInvalidBundle, strings.Join(set.Warnings, "; "))
+	}
 	if len(set.Apps) == 0 {
 		_ = os.RemoveAll(tmp)
 		return Set{}, errNoApps
