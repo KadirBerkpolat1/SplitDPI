@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -171,6 +172,30 @@ func TestListAddRemove(t *testing.T) {
 	lines, _ = config.ReadList(path)
 	if len(lines) != 1 || lines[0] != "bar.com" {
 		t.Fatalf("after remove foo: %v", lines)
+	}
+}
+
+// hosts.txt and exclude.txt are also edited by hand: a BOM, inline comments,
+// uppercase and a trailing dot read as the domain, and remove finds it.
+func TestListFileNormalises(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hosts.txt")
+	hand := "\ufeff# my sites\nExample.COM. # note\n*.Foo.com\n.bar.com\nnot a domain\n\n"
+	if err := os.WriteFile(path, []byte(hand), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lines, err := config.ReadList(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"example.com", "foo.com", "bar.com"}; !slices.Equal(lines, want) {
+		t.Fatalf("ReadList = %q, want %q", lines, want)
+	}
+	if err := config.RemoveFromList(path, "example.com"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(path)
+	if strings.Contains(string(raw), "Example") || !strings.Contains(string(raw), "# my sites") {
+		t.Fatalf("after remove example.com:\n%s", raw)
 	}
 }
 

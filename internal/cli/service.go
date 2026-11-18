@@ -44,20 +44,10 @@ func runEnable(ctx context.Context, o *ops.Ops, w io.Writer, args []string) erro
 	case errors.As(err, &nobin):
 		return errors.New(i18n.T("service.no_binary", nobin.Path, nobin.Path))
 	case errors.As(err, &unsafe):
-		return errors.New(unsafeText(unsafe))
+		return errors.New(unsafe.Text())
 	}
 	// The other checks are run's own: the service's run must be able to start.
 	return runError(w, err, false)
-}
-
-// unsafeText words an UnsafeBinaryError: what is wrong, and either where to
-// install splitdpi instead or, for the default place, what to fix.
-func unsafeText(e ops.UnsafeBinaryError) string {
-	reason := i18n.T("service.unsafe_"+e.Reason, e.At)
-	if e.Path == e.Install {
-		return i18n.T("service.unsafe_default", e.Path, reason)
-	}
-	return i18n.T("service.unsafe", e.Path, reason, e.Path, e.Install)
 }
 
 // startBackground is the command that starts the bypass in the background,

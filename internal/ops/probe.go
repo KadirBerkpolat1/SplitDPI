@@ -14,10 +14,16 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
-// NoAppsError means probe or scan was called with no enabled apps and no user sites.
-type NoAppsError struct{}
+// NoAppsError means probe or scan was called with nothing to test: no
+// enabled apps and no user sites, or with NoHosts, apps without addresses.
+type NoAppsError struct{ NoHosts bool }
 
-func (NoAppsError) Error() string { return i18n.T("probe.no_apps") }
+func (e NoAppsError) Error() string {
+	if e.NoHosts {
+		return i18n.T("probe.no_hosts")
+	}
+	return i18n.T("probe.no_apps")
+}
 
 // Probe runs HTTPS probes for the given app ids and every user site. An empty
 // slice uses config apps. Site results are keyed by the domain.
@@ -48,7 +54,7 @@ func (o *Ops) Probe(ctx context.Context, apps []string) (map[string][]probe.Resu
 		if !ok {
 			return nil, UnknownAppError{ID: id, Valid: slices.Sorted(maps.Keys(set.Apps))}
 		}
-		for _, u := range a.Probe {
+		for _, u := range probe.AppURLs(a) {
 			order = append(order, slot{id, u})
 			urls = append(urls, u)
 		}
@@ -57,6 +63,9 @@ func (o *Ops) Probe(ctx context.Context, apps []string) (map[string][]probe.Resu
 		u := probe.SiteURL(d)
 		order = append(order, slot{d, u})
 		urls = append(urls, u)
+	}
+	if len(urls) == 0 {
+		return nil, NoAppsError{NoHosts: true}
 	}
 	p := probe.Prober{Client: o.HTTP, Timeout: probe.DefaultTimeout}
 	results := p.Probe(ctx, urls)

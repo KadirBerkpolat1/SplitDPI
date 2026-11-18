@@ -140,14 +140,15 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 	}
 	var startDNS func(context.Context) error
 	var flushDNS func(context.Context, io.Writer)
-	dnsPort := 0
+	dnsPort, dns4Only := 0, false
 	if cfg.DNSOn() {
-		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Local: &dns.Local{Root: o.Root}, Port: dns.Port}
+		dns4Only = !dns.IPv6Loopback()
+		f := &dns.Forwarder{DNS: o.dnsClient(cfg), Local: &dns.Local{Root: o.Root}, Port: dns.Port, IPv4Only: dns4Only}
 		startDNS, flushDNS, dnsPort = f.Start, o.flushDNSCaches, dns.Port
 	}
 	ruleset, err := nft.Ruleset(nft.RulesetInput{
 		Table: o.P.NftTable, QNum: cfg.QNum, TCPPorts: out.TCPPorts, UDPPorts: out.UDPPorts,
-		SkipIfaces: cfg.SkipIfaces, DNSRedirectPort: dnsPort,
+		SkipIfaces: cfg.SkipIfaces, DNSRedirectPort: dnsPort, DNSIPv4Only: dns4Only,
 	})
 	if err != nil {
 		return job{}, ConfigError{File: o.P.ConfigFile, Err: err}

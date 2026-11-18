@@ -60,11 +60,22 @@ func (f *fake) dnsCalled() bool {
 	return false
 }
 
+// footerCLI is the command the help lists for the screen's first action
+// that has one.
 func footerCLI(m Model) string {
-	lines := strings.Split(m.View(), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.HasPrefix(lines[i], "$ ") {
-			return strings.TrimPrefix(lines[i], "$ ")
+	for _, a := range m.actions() {
+		if a.CLI != "" {
+			return a.CLI
+		}
+	}
+	return ""
+}
+
+// cliFor is the command the help lists for the action on key k.
+func cliFor(m Model, k string) string {
+	for _, a := range m.actions() {
+		if a.Key == k {
+			return a.CLI
 		}
 	}
 	return ""
@@ -135,9 +146,9 @@ func TestSettingsDNSConfirm(t *testing.T) {
 		t.Error("picker still open after setting")
 	}
 	v = m.View()
-	has(t, v, "Encrypted DNS is on: Cloudflare over DNS-over-HTTPS.")
+	has(t, v, "Encrypted DNS is on: Cloudflare (DNS-over-HTTPS).")
 	has(t, v, "Cloudflare (DNS-over-HTTPS)")
-	if strings.Contains(v, "restart it to apply") {
+	if strings.Contains(v, "restart") {
 		t.Error("restart note while stopped")
 	}
 }
@@ -192,7 +203,7 @@ func TestSettingsDNSDoTWhileRunning(t *testing.T) {
 		t.Fatal("no confirm")
 	}
 	ch := strings.Join(m.dialog.changes, "\n")
-	for _, want := range []string{"Quad9 over DNS-over-TLS", i18n.T("dns2.note_quad9"), i18n.T("settings_dns.on_restart")} {
+	for _, want := range []string{"Quad9 over DNS-over-TLS", i18n.T("dns2.note_quad9"), i18n.T("settings_dns.on_restart", restartKey)} {
 		if !strings.Contains(ch, want) {
 			t.Errorf("changes lack %q: %q", want, ch)
 		}
@@ -201,7 +212,7 @@ func TestSettingsDNSDoTWhileRunning(t *testing.T) {
 	if f.count("dns quad9 dot") != 1 {
 		t.Fatalf("calls %q", f.calls)
 	}
-	has(t, m.View(), "restart it to apply")
+	has(t, flat(m.View()), i18n.T("tui.restart_hint", restartKey))
 }
 
 func TestSettingsDNSOffWithoutConfirm(t *testing.T) {
@@ -219,7 +230,7 @@ func TestSettingsDNSOffWithoutConfirm(t *testing.T) {
 	if f.count("dns off doh") != 1 {
 		t.Fatalf("calls %q", f.calls)
 	}
-	has(t, m.View(), i18n.T("dns.off"))
+	has(t, m.View(), i18n.T("tui.note.dns_off"))
 }
 
 func uninstallFake() *fake {
@@ -316,7 +327,7 @@ func TestSettingsFit80x24(t *testing.T) {
 		views["run mode row"] = r.View()
 		r = press(t, r, "enter")
 		views["run mode picker"] = r.View()
-		views["run mode saved"] = press(t, press(t, r, "down"), "enter").View()
+		views["run mode saved"] = pickRunMode(t, r, config.RunBackground).View()
 		for _, mode := range runModes {
 			if !strings.Contains(flat(pageText(views["run mode picker"])), i18n.T("run_mode."+string(mode)+"_note")) {
 				t.Errorf("%s run mode picker: the %s note is cut off:\n%s", lang, mode, views["run mode picker"])
@@ -338,7 +349,7 @@ func TestSettingsFit80x24(t *testing.T) {
 		views["picker dot system"] = s.View()
 		views["dns confirm system"] = press(t, s, "enter").View()
 		for _, name := range []string{"picker system", "picker dot system"} {
-			if !strings.Contains(flat(pageText(views[name])), i18n.T("dns_system.bypass_only")) {
+			if nospace := func(s string) string { return strings.Join(strings.Fields(s), "") }; !strings.Contains(nospace(pageText(views[name])), nospace(i18n.T("dns_system.bypass_only"))) {
 				t.Errorf("%s %s: the system DNS note is cut off:\n%s", lang, name, views[name])
 			}
 		}

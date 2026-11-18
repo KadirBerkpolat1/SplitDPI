@@ -1,51 +1,21 @@
 # SplitDPI
 
-SplitDPI, internet sağlayıcınız Discord, YouTube, Roblox gibi uygulamaları
-derin paket incelemesiyle (DPI) engellediğinde bunları Linux'ta yeniden
-çalıştırır. Sağlayıcınızda çalışan bir [zapret2](https://github.com/bol-van/zapret2)
-stratejisi bulur, onu istediğinizde ya da servis olarak çalıştırır ve tek
-komutla geride iz bırakmadan kaldırır.
+SplitDPI, internet sağlayıcınız Discord, YouTube, Roblox gibi uygulamaları ve
+siteleri derin paket incelemesiyle (DPI) engellediğinde bunları Linux'ta
+yeniden çalıştırır. Engelin nasıl işlediğini öğrenmeden uygulamalarına
+kavuşmak isteyenler içindir.
 
-**Durum:** v0.2.7. v0.1.0 gerçek bir Türk Telekom bağlantısında ve Debian,
-Fedora, Alpine sanal makinelerinde denendi. v0.2.7'nin açılış servisi CachyOS'ta
-gerçek bir Türk Telekom bağlantısında, çalışan bir engel aşmadan kuruldu;
-yeniden başlatmada nasıl davrandığı bir Ubuntu 26.04 konteynerinde denendi.
-v0.2.0'dan bu yana gelen diğer özellikler otomatik testlerle ve yedi dağıtımda
-çalışan CI ile sınanıyor; gerçek bir bağlantıda ya da sanal makinelerde yeniden
-denenmedi. Ayrıntılar [yayın kontrol listesinde](docs/release-checklist.md).
+Sağlayıcınızda çalışan bir [zapret2](https://github.com/bol-van/zapret2)
+stratejisi bulur, onu istediğinizde ya da her açılışta çalıştırır ve tek
+komutla geride iz bırakmadan kaldırır. Güvenlik duvarı, DNS ve ağ yapılandırma
+dosyalarınıza hiç dokunmaz.
+
+**Durum:** son sürüm v0.2.7. Gerçek bir Türk Telekom bağlantısında (CachyOS)
+ve Debian, Fedora, Alpine, Ubuntu sanal makinelerinde ya da konteynerlerinde
+denendi; bkz. [Desteklenen sistemler](#desteklenen-sistemler) ve
+[yayın kontrol listesi](docs/release-checklist.md).
 
 [English](README.md)
-
-Bugün keift/zapret kullanıyorsanız SplitDPI onun yerini alır. Ömrünü
-tamamlamış zapret v1 yerine zapret2 çalıştırır, uzun bir blockcheck2
-taramasından önce sağlayıcı hazır ayarlarını dener, DNS ve güvenlik duvarı
-ayarlarınıza dokunmaz; değiştirilemez (immutable) dağıtımlarda ve SELinux
-zorlayıcı modda da çalışır. Kurulu bir zapret ya da zapret2'den geçmek için
-`splitdpi takeover` yeterli.
-
-## Desteklenen sistemler
-
-| Dağıtım | Init | Servis modu | İstendiğinde | Denendi |
-|---|---|---|---|---|
-| Debian | systemd | evet | evet | Sanal makinede 13.7: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
-| Ubuntu LTS, Linux Mint | systemd | evet | evet | Incus konteynerinde 26.04: entegrasyon testleri, yeniden başlatmalarda servis modu, çalışan engel aşmanın servise taşınması, servis başlayamayınca geri alma (2026-11-09) |
-| Fedora (Workstation, Cloud) | systemd | evet | evet | Sanal makinede 44 Cloud, SELinux zorlayıcı modda: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
-| Fedora Atomic (Silverblue, Bazzite) | systemd | evet | evet | henüz denenmedi |
-| CachyOS | systemd | evet | evet | Türk Telekom bağlantısında: `scan` (hazır ayarlar ve `--site`), Discord, Roblox, Pastebin ve diğerlerinde `probe`, `revert` (2026-10-29); arka plan çalışması açıkken `enable`, motorun v1.0.7'ye yükseltilmesi (2026-11-09) |
-| Arch, EndeavourOS | systemd | evet | evet | henüz denenmedi |
-| openSUSE Tumbleweed | systemd | evet | evet | henüz denenmedi |
-| Alpine | OpenRC | evet | evet | Sanal makinede 3.24.3: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
-| Gentoo | OpenRC | evet | evet | henüz denenmedi |
-| Void (glibc ve musl) | runit | evet | evet | henüz denenmedi |
-| Artix, antiX, dinit, s6 veya sysvinit dağıtımları | diğer | hayır: istendiğinde çalıştırın | evet | henüz denenmedi |
-
-SplitDPI, nftables destekli 5.4 veya daha yeni bir x86_64 ya da arm64 çekirdek
-ile `nft` ve `curl` komutlarını ister; blockcheck2 taraması ayrıca `nslookup`
-ya da `host` ister. Kurulum eksik paketleri dağıtımın paket yöneticisiyle
-kurmadan önce sorar; aynısını komut satırında `sudo splitdpi deps install`
-yapar (`--yes` sormadan kurar). `splitdpi doctor` bunların hepsini denetler ve
-paket yöneticinize uygun kurulum komutunu yazar. NixOS kullanıcıları
-zapret2-flake veya zapret2-nix'e bakmalı.
 
 ## Hızlı başlangıç
 
@@ -54,370 +24,127 @@ curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/insta
 sudo splitdpi
 ```
 
-Kurulum betiği indirdiği dosyanın sağlama toplamını doğrular ve programı
-`/usr/local/bin/splitdpi` olarak kurar. `sudo splitdpi` terminal arayüzünü
-açar; kurulumu başlatmak için `w` tuşuna basın. Kurulum sisteminizi denetler,
-eksik paketleri sorup kurar, zapret2 motorunu kendisi kurar, sağlayıcınızı
-bulur, hangi uygulamaların çalışması gerektiğini sorar, stratejileri dener ve
-SplitDPI'yi hemen ya da her açılışta çalıştırır.
+İlk satır sağlama toplamını doğrulayıp `/usr/local/bin/splitdpi`'yi kurar.
+İkincisi terminal arayüzünü açar: Kurulum sayfasında kurulumu başlatın.
+Kurulum sisteminizi denetler, eksik paketleri kurmayı önerir, zapret2
+motorunu kurar, sağlayıcınızı bulur, hangi uygulamaların çalışması gerektiğini
+sorar, stratejileri dener ve SplitDPI'yi başlatır.
 
-Başka bir yere kurmak için `SPLITDPI_PREFIX` verin (varsayılanı
-`/usr/local`); şu komut programı `/opt/splitdpi/bin/splitdpi` olarak kurar:
+- **Başka bir yere:** `sudo sh` yerine `sudo SPLITDPI_PREFIX=/opt/splitdpi sh`
+  `/opt/splitdpi/bin/splitdpi`'yi kurar (varsayılan önek `/usr/local`).
+- **Güncelleme:** kurulum satırını yeniden çalıştırın. Kurulu zapret2 motoru,
+  `sudo splitdpi engine install` yeni sürümün sabitlediği motoru kurana dek
+  kullanılmaya devam eder; `doctor` eski motoru bildirir. Eski motor dizinleri
+  artık kullanılmadığında silinir.
+- **Gereksinimler:** x86_64 ya da arm64, nftables destekli 5.4 veya daha yeni
+  çekirdek, `nft` ve `curl` komutları, blockcheck2 için `nslookup` ya da
+  `host`. Kurulum eksik paketleri kurmadan önce sorar; `sudo splitdpi deps
+  install` aynısını yapar. NixOS'ta zapret2-flake ya da zapret2-nix kullanın.
+
+## Günlük kullanım
+
+`sudo splitdpi` terminal arayüzünü beş sayfayla açar: **Durum**, **Siteler**,
+**Kurulum**, **Günlük** ve **Ayarlar**. Tab ile Shift+Tab ya da rakam
+tuşları sayfa değiştirir; ok tuşları sayfa içinde gezer, Enter seçileni
+yapar. Esc geri döner, `?` bütün tuşları gösterir, `q` çıkar.
+
+- **Durum** engel aşmanın çalışıp çalışmadığını, sağlayıcınızı, hangi
+  uygulamalar için çalıştığını ve açılıp açılmadıklarını gösterir. Burada
+  başlatıp durdurur, **Açılışta başlasın**'ı açıp kapatırsınız. Yeniden
+  başlatma isteyen bir değişiklikten sonra `R` yeniden başlatır; `d`
+  ayrıntıları (yöntem, motor, süreç) gösterir.
+- **Siteler** üç bölümdür: **Uygulamalar** (uygulama profillerini açıp
+  kapatın, adreslerini düzenleyin), **Eklediğim siteler** (kendi eklediğiniz
+  engelli siteler) ve **Dokunulmayan siteler** (engel aşmanın hiç dokunmadığı
+  siteler; `x` birini kaldırır).
+- **Kurulum** rehberli kurulumu ya da tek bir site için derin taramayı
+  çalıştırır; mevcut yöntem çalışmayı bırakınca hazır yöntemlerden birini elle
+  de seçebilirsiniz.
+- **Günlük** SplitDPI'nin günlüğünü canlı gösterir.
+- **Ayarlar**'da bir ana grup (Dil, Açılışta başlat, Şifreli DNS, Kapsam) ve
+  geri kalanı için **Gelişmiş** grubu vardır: dokunulmayacak ağ arayüzleri,
+  kuyruk numarası ve hazır ayarları güncelleme, sistemi denetleme, kaldırma
+  gibi bakım işleri.
+
+Sistemi değiştiren her işten önce bir pencere neyin değişeceğini ve nasıl
+geri alınacağını söyler; `e` ya da `h` ile yanıtlayın (İngilizcede `y`/`n`).
+Arayüz en az 80x24 ister; Linux konsolunda ya da UTF-8 olmayan yerel ayarda
+düz ASCII ile çizer.
+
+En çok kullanılan komutlar:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/KadirBerkpolat1/SplitDPI/main/install.sh | sudo SPLITDPI_PREFIX=/opt/splitdpi sh
+sudo splitdpi status                  # çalışıyor mu, hangi strateji ve motorla?
+sudo splitdpi probe                   # uygulamalarım ve sitelerim açılıyor mu, açılmıyorsa neden
+sudo splitdpi sites add pastebin.com  # engelli bir siteyi ekle
+sudo splitdpi exclude add https://www.ornek-banka.com.tr/   # bir siteye dokunma
+sudo splitdpi stop
+sudo splitdpi run --background        # yeniden başlat, bilgisayar yeniden başlayana kadar
 ```
 
-Servis, `/usr/local/bin/splitdpi` varsa onu, yoksa servisi kuran programı
-gerçek yoluyla çalıştırır. Servisi her açılışta root çalıştırdığı için
-`enable` bu programı, `/usr/local/bin/splitdpi` de dahil, ancak onu root'tan
-başkası değiştiremiyorsa kabul eder: programın kendisi ve `/` dizininden
-başlayıp sembolik bağlantıları izleyerek ona giden yoldaki her dizin root'a
-ait olmalı, grup ve diğer kullanıcılar için yazma izni taşımamalı; program
-`/tmp`, `/var/tmp`, `/dev/shm` ya da bir ev dizini (`/home`, `/var/home`,
-`/root`, `/var/roothome`) altında olmamalı, bir bağlantı üzerinden de oraya
-varmamalı. Hata mesajı sorunlu dosyayı ya da dizini söyler.
-`/usr/local/bin/splitdpi` için onu düzeltmenizi ister; başka bir program için
-onu `/usr/local/bin/splitdpi` olarak kuran `sudo install` komutunu verir.
+Çoğu değişiklik SplitDPI yeniden başlayınca geçerli olur. SplitDPI çalışırken
+bir şey değiştiren komut, onun çalışma biçimine uyan yeniden başlatma komutunu
+yazar; örneğin açılış servisi için
+`sudo splitdpi stop && sudo splitdpi enable`.
 
-SplitDPI'yi güncelledikten sonra kurulu zapret2 motoru,
-`sudo splitdpi engine install` yeni sürümün sabitlediği motoru kurana kadar
-kullanılmaya devam eder; `doctor` eski motoru bildirir ve yeniden tarama
-ister. Bir motor kurulunca eski zapret2 motor dizinleri de, onları kullanan
-kalmadığında silinir: SplitDPI ya da bir tarama çalışmıyorsa hemen, aksi
-halde SplitDPI bir sonraki başladığında.
+`--help`, `version` ve `presets list` dışındaki her komut root ister. Dil
+İngilizce, Türkçe ya da Rusça olabilir: `--lang en|tr|ru`, yoksa Ayarlar'da
+seçilen, o da yoksa `LANG`.
 
-Engel aşmayı açık tutmanın üç yolu var. Arayüz penceresinde (`r` ya da
-`splitdpi run`) çalışırsa pencere kapanınca durur. Arka planda (`b` ya da
-`sudo splitdpi run --background`) çalışırsa terminal kapansa da sürer,
-bilgisayar yeniden başlayınca kapanır. systemd'de geçici
-`splitdpi-background.service` birimi olarak çalışır: oturumu kapatsanız da
-sürer, bilgisayar kapanırken de kurallarını kaldırarak düzgünce durur. systemd
-ya da `systemd-run` yoksa veya `systemd-run` başarısız olursa onun yerine
-ayrık bir süreç olarak çalışır. Her açılışta (`sudo splitdpi enable`) servis
-olarak çalışır; `enable` arka planda ya da bir pencerede çalışan engel aşmayı
-durdurur ve yerine servis geçer. Servis onun yerine geçemezse `enable` servisi
-yeniden kaldırır, durdurduğu engel aşmayı arka planda yeniden başlatır ve
-mesaj bunu bildirir: "Önceki engel aşma arka planda yeniden başlatıldı
-(pid N)." Bu da olmazsa mesaj onu başlatacak komutu verir:
-`sudo splitdpi run --background`. Hangisi olursa olsun `sudo splitdpi stop`
-durdurur.
+## Uygulamalar
 
-Durum sayfasındaki `r` tuşunun bunlardan hangisini kullanacağı Ayarlar →
-Çalıştırma biçimi'nden seçilir. "Açılışta da başlasın" seçilirse önce sorulur,
-sonra servis hemen kurulur, etkinleştirilir ve başlatılır; o an çalışan engel
-aşma servise taşınır ve genellikle bir saniyeden kısa bir süre engel aşılmaz.
-Servis kuruluyken "Bu pencerede" ya da "Arka planda" seçilirse önce sorulur,
-sonra servis kaldırılır. Servis modu olmayan init sistemlerinde (bkz.
-[Desteklenen sistemler](#desteklenen-sistemler)) "Açılışta da başlasın"
-sunulmaz. SplitDPI'nin açılışta başlayıp başlamadığını, init sisteminin
-söylediğine göre, Ayarlar'daki "Açılışta başlar" ve Durum sayfasındaki
-"Açılışta" satırı gösterir. Çalıştırma biçimi "Açılışta da başlasın" olduğu
-halde servis kurulu değilse ikisi de uyarır; Ayarlar'daki o satırda Enter
-servisi kurar, Durum sayfasında `r` de (engel aşma çalışıyorsa `e`) aynı işi
-görür. Arayüz engel aşmayı kendisi çalıştırırken çıkarsanız onu arka plana,
-çalıştırma biçimi "Açılışta da başlasın" ise servise taşımayı önerir. Arayüz
-servisi kurarken ya da kaldırırken çıkmak bu işin bitmesini bekler: `q`
-"Açılış servisi değiştiriliyor. Lütfen bekleyin: bitince SplitDPI kapanacak."
-yazar ve iş bitince kapanır; iş başarısız olduysa arayüz nedenini göstermek
-için açık kalır.
+Uygulama profili, uygulamanın alan adlarının listesidir. İhtiyacınız olanları
+Siteler sayfasında ya da `sudo splitdpi apps enable ID` ile açın; açık
+uygulamalar ilk paketten itibaren işlenir.
 
-Komut satırında `enable`, servis çalışmaya başlayınca çalıştırma biçimini
-`boot` olarak kaydeder; `disable` ve `revert` ise yeniden `window` yapar.
-`sudo splitdpi config set run_mode` yalnızca seçimi kaydeder; servis seçimle
-uyuşmuyorsa (örneğin `boot` seçildiği halde servis kurulu değilse) uyarır.
-`sudo splitdpi status` SplitDPI'nin açılışta başlayıp başlamadığını da yazar.
-Servis başlarken SplitDPI zaten çalışıyorsa servis 4 koduyla çıkar ve yeniden
-başlatılmaz.
+| ID | Uygulama | Neyi kapsar |
+|---|---|---|
+| `discord` | Discord | Sohbet, web sitesi, ekler ve etkinlikler. Ses kanalları ve Go Live yayınları hariç. |
+| `facebook` | Facebook / Messenger | Web sitesi ve Messenger. Aramalar hariç. |
+| `grindr` | Grindr | Web sitesi. Yeni. |
+| `hornet` | Hornet | Web sitesi. Yeni. |
+| `instagram` | Instagram | Uygulama ve web sitesi. Aramalar hariç. |
+| `linkedin` | LinkedIn | Web sitesi. |
+| `pastebin` | Pastebin | Web sitesi. |
+| `roblox` | Roblox | Web sitesi, giriş ve geliştirici siteleri. Oyun sunucuları (UDP) hariç. |
+| `scruff` | Scruff | Web sitesi. Yeni. |
+| `signal` | Signal | Uygulama bağlantısı ve güncellemeler. Aramalar hariç. |
+| `telegram` | Telegram | Web, API ve Fragment gibi Telegram'ın kendi siteleri. Uygulamaların IP adreslerine doğrudan bağlantıları hariç. |
+| `threads` | Threads | Web sitesi ve görselleri. Yeni. |
+| `tiktok` | TikTok | Uygulama ve web sitesi. |
+| `viber` | Viber | Yalnız web sitesi ve indirmeler. |
+| `vpn-sites` | VPN sağlayıcı siteleri | NordVPN, Proton VPN, Mullvad, Surfshark, ExpressVPN, CyberGhost, Private Internet Access, PureVPN, hide.me ve Psiphon'un siteleri, hesapları ve indirmeleri. VPN bağlantılarının kendisi hariç. Yeni. |
+| `wattpad` | Wattpad | Web sitesi. |
+| `whatsapp` | WhatsApp | WhatsApp Web, medya ve web sitesi. Telefon uygulamasının sohbetleri ve aramaları hariç. |
+| `wikileaks` | WikiLeaks | Web sitesi. Yeni. |
+| `x` | X (Twitter) | Uygulama, web sitesi ve Periscope. |
+| `youtube` | YouTube | Web sitesi, uygulama ve videolar. |
 
-## Terminal arayüzü
+TLS ana makine adı taşımayan aramalar ve uygulama bağlantıları kapsanamaz;
+Siteler sayfası bunu her uygulamanın yanında belirtir.
 
-- **Üstte:** adı ve sürümü, sağda da engel aşmanın çalışıp çalışmadığını ya
-  da hata verip vermediğini gösteren durum etiketi. Etikete tıklamak engel
-  aşmayı Durum sayfasındaki gibi başlatır ya da durdurur.
-- **Solda:** menü: Durum, Siteler, Strateji, Tarama, Günlük ve Ayarlar. Ok
-  tuşlarıyla ya da fareyle tıklayarak seçin; Enter veya Tab sayfaya girer, Esc
-  menüye döner.
-- **Sağda:** seçilen sayfa. Ayarlar sayfası her ayarı değeriyle birlikte
-  gruplar halinde listeler: Genel (dil, çalıştırma biçimi, açılışta başlayıp
-  başlamadığı), Engel aşma (kapsam, hariç tutulan siteler, strateji), DNS, Ağ
-  (dokunulmayacak arayüzler, sağlayıcıyı bulan servis), Bakım (hazır ayarları
-  güncelleme, motoru kurma, sistemi denetleme, zapret'ten geçme ya da ona geri
-  dönme, kaldırma) ve Gelişmiş (kuyruk numarası). `/` listede arar; Esc
-  aramayı temizler.
-- **Altta:** son işin sonucu; altında sayfanın işleri, tuşlarıyla birlikte
-  düğmeler halinde (sağda `?` Yardım ve `q` Çık). Bir düğmeye tıklamak tuşuna
-  basmakla aynı işi yapar. En altta seçili işi yapan komut durur; arayüzde
-  yaptığınız her şeyi böylece bir betikle de yapabilirsiniz.
+**Discord ses kanallarına ve Go Live yayınlarına bilerek dokunulmaz.** Bunlar
+engellenen Discord alan adlarından geçmez ve Türkiye'de SplitDPI olmadan
+çalışır; trafiklerini değiştirmek yalnızca aramaları bozabilir. Discord
+profilinde ses ya da yayın adresi ve UDP kuralı yoktur; bir test bütün hazır
+uygulamaları böyle tutar. Sesin kendisinin engellendiği yerde SplitDPI bunda
+yardımcı olmaz.
 
-`?` tüm kısayolları listeler. Sistemi değiştiren her işten önce bir pencere
-neyin değişeceğini ve nasıl geri alınacağını söyler; `e` (evet) ya da `h`
-(hayır) ile yanıt verin, İngilizce arayüzde `y` ve `n`. Linux konsolunda ya da
-UTF-8 olmayan bir yerel ayarda arayüz düz ASCII karakterlerle çizilir. En az
-80x24 boyutunda bir terminal gerekir.
-
-## Komutlar
-
-| Komut | Ne yapar |
-|---|---|
-| `splitdpi` | Terminal arayüzünü açar. |
-| `splitdpi doctor` | Sistemi denetler ve SplitDPI'yi engelleyen her şeyi listeler. |
-| `splitdpi deps [install [--yes]]` | SplitDPI'nin istediği eksik paketleri listeler ya da sorduktan sonra paket yöneticisiyle kurar; `--yes` sormadan kurar. |
-| `splitdpi engine install [--from DOSYA]` / `engine status` | Sabitlenmiş zapret2 sürümünü SHA-256'sını doğrulayarak kurar ya da kurulu olanı gösterir. |
-| `splitdpi detect [--asn N] [--country ÜLKE]` | Sağlayıcınızı bulur ve onun hazır stratejilerini listeler. |
-| `splitdpi scan [--site ALAN] [--dns keep\|auto\|SAĞLAYICI] [--apps ID,ID] [--asn N] [--country ÜLKE] [--blockcheck-only\|--no-blockcheck] [-v]` | Çalışan bir strateji bulur ve kaydeder; bkz. [Strateji bulma](#strateji-bulma). |
-| `splitdpi probe [--apps ID,ID] [-v]` | Açık uygulamaların sitelerine ve kendi sitelerinize erişilip erişilemediğini dener; erişilemeyenin nedenini söyler. |
-| `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da tarama yapmadan birini seçer. |
-| `splitdpi run` | Bu terminalde çalışır; Ctrl-C durdurur ve kurallarını kaldırır. |
-| `splitdpi run --background` | Terminal kapansa da bilgisayar yeniden başlayana kadar çalışır; çıktısı `/var/log/splitdpi.log` dosyasına yazılır. |
-| `splitdpi enable` / `disable` | Servisi kurup başlatır (arka planda ya da bir pencerede çalışan engel aşmanın yerini alır) ya da durdurup kaldırır. |
-| `splitdpi stop` / `status` / `logs [-f]` | Durdurur, durumunu ve açılışta başlayıp başlamadığını ya da günlüğünü gösterir. |
-| `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
-| `splitdpi apps show ID\|new ID AD\|add-host ID ALAN\|remove-host ID ALAN\|udp ID on\|off\|reset ID` | Bir uygulamanın adreslerini ve ses ve yayın profilini düzenler ya da kendi uygulamanızı ekler; bkz. [Uygulamaları düzenleme](#uygulamaları-düzenleme). |
-| `splitdpi sites list\|add ALAN\|remove ALAN\|import DOSYA` | Engel aşmanın her zaman uygulandığı kendi engelli sitelerinizi yönetir. |
-| `splitdpi exclude list\|add ALAN\|remove ALAN` | Engel aşmanın hiç dokunmayacağı siteleri yönetir. |
-| `splitdpi takeover [--yes]` | Kurulu başka bir zapret ya da zapret2'yi bırakıp SplitDPI'ye geçer. |
-| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Şifreli DNS'i açar ya da kapatır; argüman verilmezse geçerli seçimi gösterir. |
-| `splitdpi config [get ANAHTAR\|set ANAHTAR DEĞER\|reset ANAHTAR]` | Ayarları varsayılanlarıyla listeler ya da birini gösterir, değiştirir veya varsayılana döndürür. |
-| `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da SHA-256'sını doğrulayarak günceller; bkz. [Hazır ayarlar nereden geliyor](#hazır-ayarlar-nereden-geliyor). |
-| `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır. |
-| `splitdpi uninstall [--yes]` | SplitDPI'yi, dosyalarını ve programını kaldırır. |
-| `splitdpi version` | Sürümü yazar. |
-
-`--help`, `version` ve `presets list` dışındaki tüm komutlar root ister. Dili
-seçmek için `--lang tr` ya da `--lang en` ekleyin; eklemezseniz SplitDPI
-terminal arayüzünde Ayarlar'dan seçilen dili, o da yoksa `LANG` değişkenini
-kullanır.
-
-`splitdpi config`, Ayarlar sayfasındaki ayarları kapsar: `lang`, `run_mode`
-(`window`, `background`, `boot`), `mode` (`broad` öğrendiği tüm engelli
-sitelere ve sizin sitelerinize, `apps` yalnızca açık uygulamalara ve sizin
-sitelerinize uygulanır), `skip_ifaces` (hiç dokunulmayacak arayüzler,
-`'wg*,tun*'` gibi virgüllü liste), `ipinfo_url` (sağlayıcınızı bulan https
-servisi) ve `qnum` (NFQUEUE numarası, 0-65535; başka bir program
-kullanmamalı). Çalışan SplitDPI `mode`, `skip_ifaces` ve `qnum`
-değişikliklerini yeniden başlayınca uygular. Şifreli DNS `splitdpi dns`
-altında kalır.
-
-## Kendi siteleriniz
-
-İhtiyacınız olan bir site engelliyse ve hiçbir uygulama profili onu
-kapsamıyorsa siteyi ekleyin. SplitDPI o siteyi ilk paketten itibaren işler;
-`probe` ve `scan` da onu dener:
+**Uygulamaları düzenleme.** Bir uygulamayı değiştirin ya da kendinizinkini
+ekleyin:
 
 ```sh
-sudo splitdpi sites add pastebin.com
-```
-
-Çok sayıda siteyi bir kerede eklemek için onları her satıra bir tane gelecek
-şekilde bir metin dosyasına yazın ve `sudo splitdpi sites import DOSYA`
-komutunu çalıştırın. `#` ile başlayan satırlar açıklama sayılır;
-`*.ornek.com` ve `.ornek.com`, `ornek.com` olarak eklenir. Alan adı olmayan
-satırlar atlanır ve listelenir. Terminal arayüzünün Siteler sayfasında
-uygulamaları açıp kapatabilir, site ekleyip çıkarabilirsiniz. Değişikliğin
-geçerli olması için SplitDPI'yi yeniden başlatın.
-
-## Uygulamaları düzenleme
-
-Bir uygulama profili bir adres listesidir; görüşme ve ekran paylaşımlarının
-önüne sahte paketler gönderen bir ses ve yayın (UDP) profili de taşıyabilir.
-Hazır uygulamaların hiçbirinde yoktur: SplitDPI Discord'un ses sunucularına,
-görüşmelerine ve yayınlarına dokunmaz. Bir uygulamayı değiştirebilir ya da
-kendi uygulamanızı ekleyebilirsiniz:
-
-```sh
-sudo splitdpi apps show discord                     # adresleri ve ses durumu
-sudo splitdpi apps remove-host discord klipy.com     # bir adres eksik
-sudo splitdpi apps udp uygulamam off                 # görüşme ve yayınlarına dokunma
-sudo splitdpi apps new steam Steam                   # yeni uygulama, açık gelir
+sudo splitdpi apps show discord                    # adresleri
+sudo splitdpi apps remove-host discord klipy.com    # bir adres eksik
+sudo splitdpi apps new steam Steam                  # yeni uygulama, açık
 sudo splitdpi apps add-host steam store.steampowered.com
-sudo splitdpi apps reset discord                     # dağıtıldığı haline dön
+sudo splitdpi apps reset discord                    # dağıtıldığı haline döner
 ```
 
-Her düzenleme uygulamanın sizin kopyanızı hazır uygulamalarla aynı biçimde
-`/etc/splitdpi/apps/ID.toml` dosyasına kaydeder; bu kopya aynı kimlikli hazır
-uygulamanın yerine geçer, bu yüzden `reset` edene kadar `presets update` onu
-değiştirmez. Kendi uygulamanızda `reset` onu siler. Siteler sayfasında `o`
-imleçteki uygulamayı açar, `n` yeni uygulama ekler. `udp ID off` kopyanıza
-yazdığınız ses profilini kaldırır; `udp ID on` hazır olanı geri getirir.
-Değişikliğin geçerli olması için SplitDPI'yi yeniden başlatın.
-
-## zapret ya da zapret2'den geçiş
-
-`sudo splitdpi takeover`, keift'in kurulum betiğinin kurduğu gibi başka bir
-zapret ya da zapret2 kurulumu arar: `/opt` altındaki dizinine, servisine ve
-çalışan süreçlerine bakar. Geçişin neleri değiştireceğini gösterir ama hiçbir
-şeyi değiştirmez. `sudo splitdpi takeover --yes` ise o kurulumun site
-listesindeki siteleri sizin sitelerinize ekler, servisini durdurur ve
-açılışta başlamasını kapatır. O kurulumun dosyalarını asla silmez ya da
-değiştirmez; `sudo splitdpi revert` servisini yeniden açar. Böyle bir araç
-hâlâ çalışıyorsa `run` başlamayı reddeder, çünkü ikisi aynı trafiği işlemeye
-çalışır.
-
-## Strateji bulma
-
-`sudo splitdpi scan` önce sağlayıcınızın hazır stratejilerini uygulamalarınızda
-ve sitelerinizde dener; hiçbiri çalışmazsa blockcheck2'yi çalıştırır. Çalışan
-stratejiyi kaydeder.
-
-- **Tek bir site.** Hazır ayarları atlayıp tek bir site için strateji aramak
-  isterseniz `sudo splitdpi scan --site pastebin.com` komutunu çalıştırın ya da
-  Tarama sayfasında "Tek siteyi blockcheck2 ile tara" seçeneğini seçin. blockcheck2 o
-  siteyi IPv4 üzerinden, bilgisayarınızda IPv6 varsa IPv6 üzerinden de dener.
-  Sonuçları, biri kaydedilmeden önce uygulamalarınızda ve sitelerinizde
-  yeniden denenir: SplitDPI hepsini açan en basit stratejiyi, mümkünse hem
-  IPv4 hem IPv6'da çalışanı kaydeder ve siteyi sitelerinize ekler. Bu, hazır
-  ayarları denemekten daha uzun sürer.
-- **Zehirlenmiş DNS.** blockcheck2 çalışmadan önce `scan`, sağlayıcınızın
-  DNS'inin onun alan adları için zehirlenmiş yanıt verip vermediğini denetler.
-  Öyleyse şifreli DNS'in (otomatik) açılıp açık kalmasını isteyip
-  istemediğinizi sorar; terminal arayüzü Cloudflare'i, başka bir sağlayıcıyı
-  ya da hayır seçeneğini sunar. Soruyu yanıtlayacak kimse yoksa açmak için
-  `--dns auto` (ya da bir sağlayıcı), onsuz devam etmek için `--dns keep`
-  verin.
-- **blockcheck2'nin paketleri.** blockcheck2 `curl` ve `nslookup` ya da `host`
-  olmadan çalışmaz. Bunlar eksikse `scan` blockcheck2'den önce onları
-  kurmayı terminalde sorar; soruyu yanıtlayacak kimse yoksa ya da hayır
-  derseniz blockcheck2'yi çalıştırmadan durur ve kurma komutunu yazar
-  (`sudo splitdpi deps install`).
-- **Diğer seçenekler.** `--apps` yalnızca verilen uygulamaları dener, `--asn`
-  ve `--country` sağlayıcı aramasını atlar, `--blockcheck-only` hazır ayarları
-  atlar, `--no-blockcheck` onlardan sonra durur, `-v` ise başarısız her
-  denemenin ham hatasını gösterir.
-- **Neden açılmadı.** `scan` ve `probe` bir sitenin neden açılmadığını
-  (bağlantı kesildi, zaman aşımına uğradı, DNS ya da güvenli bağlantı
-  başarısız oldu, ya da siteden başka bir şey yanıt verdi) anlaşılır bir dille
-  söyler ve ne denemeniz gerektiğini yazar. Hem sizin DNS'inize hem şifreli
-  DNS'e göre kendi adresi olmayan bir alan adı (yalnızca alt alan adları
-  kullanılıyor, hiç yok ya da bu bilgisayarı gösteriyor) test edilmedi olarak
-  gösterilir ve başarısızlık sayılmaz; `probe` sonunda kaç sitenin açıldığını,
-  kaçının engelli olduğunu ve kaçının test edilmediğini yazar. Terminal
-  arayüzünün Durum sayfası aynı sayıları ve en fazla üç engelli siteyi
-  gösterir; tüm sonuçlar Siteler sayfasındadır.
-- **Sonucu paylaşma.** `scan` bir strateji kaydettiğinde,
-  [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
-  deposunda önceden doldurulmuş bir issue açan bir bağlantı yazar: AS
-  numaranız, sağlayıcınız, ülkeniz, strateji ve sürümler. Terminal arayüzü de
-  aynı bağlantıyı gösterir, `c` ile kopyalar ve çıkarken bir kez daha yazar.
-  Siz issue'yu
-  göndermedikçe hiçbir şey gönderilmez; içinde IP adresiniz ya da kendi
-  siteleriniz hiçbir zaman yer almaz.
-
-`splitdpi strategy list` tüm hazır stratejileri gösterir ve kullanılanı
-işaretler; `sudo splitdpi strategy set ID` tarama yapmadan başka birini seçer.
-Terminal arayüzünün Strateji sayfası da aynı işi görür. Değişikliğin geçerli
-olması için SplitDPI'yi yeniden başlatın.
-
-## Bir site bozuldu
-
-Bankalar, devlet siteleri ve bazı alışveriş siteleri değiştirilmiş trafiği
-reddeder. Siteyi hariç tutun ve SplitDPI'yi yeniden başlatın:
-
-```sh
-sudo splitdpi exclude add https://www.ornek-banka.com.tr/
-```
-
-Terminal arayüzünde Siteler sayfasında `e` tuşuna basın.
-
-SplitDPI, yaygın Türk siteleri için hazır hariç tutma listeleriyle gelir.
-
-## Şifreli DNS
-
-Bazı sağlayıcılar DNS yanıtlarını zehirler; `doctor` ve `probe` bunu tespit
-eder. Şifreli DNS açıkken SplitDPI, 53. porttaki trafiği kendi içindeki bir
-ileticiden şu sağlayıcılardan birine gönderir:
-
-| Seçim | Ne yapar |
-|---|---|
-| `auto` | Sırayla Cloudflare, Google ve Quad9 denenir; ilk yanıt veren kullanılır. |
-| `cloudflare`, `google` | Filtreleme yapmaz. |
-| `quad9` | Bilinen zararlı yazılım ve oltalama alan adlarını da engeller. |
-| `adguard` | Reklamları ve izleyicileri de engeller. |
-
-Varsayılan protokol DNS-over-HTTPS'tir; `--dot` DNS-over-TLS'i seçer. DoT 853
-numaralı portu kullanır ve bazı sağlayıcılar bu portu engeller.
-`sudo splitdpi dns off` şifreli DNS'i kapatır. Seçim bir sonraki başlatmada
-geçerli olur; terminal arayüzünde Ayarlar sayfası aynı seçenekleri sunar.
-
-- **Sistem ayarları olduğu gibi kalır.** SplitDPI sistemin DNS ayarlarını hiç
-  değiştirmez: hiçbir çözümleyici yapılandırma dosyasına ya da servisine
-  dokunmaz; yönlendirme `inet splitdpi` tablosuyla birlikte kaybolur.
-- **Eski yanıtlar temizlenir.** Yönlendirme her yüklendiğinde (her başlatma ve
-  yeniden başlatmada) ve SplitDPI şifreli DNS ile çalışırken bir site
-  eklendiğinde, çalışıyorlarsa systemd-resolved'ın
-  (`resolvectl flush-caches`) ve nscd'nin (`nscd -i hosts`) önbelleği
-  temizlenir. DNS ileticiye uğramadan giderken, başlatmadan önce ya da
-  durdurmayla başlatma arasındaki kısa anda önbelleğe giren yanıtlar internet
-  sağlayıcınızın zehirli yanıtları olabilir ve siteyi engel sayfasında tutar.
-  Diğer yerel çözümleyicilerin önbelleğine dokunulmaz.
-- **Karar yerel çözümleyicinin.** Bu bilgisayardaki çözümleyicilere
-  (`127.0.0.0/8`, `::1`) giden sorgular hiç yönlendirilmez; programlar
-  systemd-resolved'ın yerel adresini (127.0.0.53), dnscrypt-proxy'yi ya da
-  başka bir yerel çözümleyiciyi eskisi gibi, onun kurallarıyla kullanır.
-  Yalnızca bilgisayardan 53. port üzerinden çıkan DNS yönlendirilir. DNS'i
-  zaten şifreleyen bir çözümleyici 53. porttan bir şey göndermez; bu durumda
-  SplitDPI'nin DNS'i yalnızca doğrudan dışarıdaki bir sunucuya soran programları
-  etkiler.
-- **Zaten şifreliyse.** dnscrypt-proxy, Stubby, NextDNS, AdGuard Home, TLS
-  üzerinden yönlendiren Unbound ya da Knot Resolver veya DNS-over-TLS açık
-  systemd-resolved kullanılıyorsa `doctor` bunu söyler, `splitdpi dns` ve
-  Ayarlar SplitDPI'nin DNS'ine gerek olmadığını belirtir (yine de açılabilir),
-  `scan` ise `--dns` verilmedikçe zehirlenme sorusunu atlar.
-- **VPN'ler ve yerel adlar.** VPN arayüzlerinden (config.toml'daki
-  `skip_ifaces`) geçen DNS'e dokunulmaz; böylece VPN'in ayrık DNS'i çalışmaya
-  devam eder. Yerel ağ adları sağlayıcıya hiç gitmez, ağınızın her zamanki DNS
-  sunucusuna sorulur: tek parçalı adlar, `.lan`, `.local`, `.home.arpa`,
-  `.internal`, `.localdomain`, arama alan adlarınız ve özel adreslerin ters
-  sorguları.
-- **Yine de değişenler.** `quad9` ya da `adguard` seçiliyse engelledikleri alan
-  adları çözülmez. Otel, havalimanı gibi giriş sayfası açan Wi-Fi ağlarında,
-  giriş sayfası görünmezse DNS'i kapatın (`sudo splitdpi dns off`) ve
-  SplitDPI'yi yeniden başlatın.
-
-## Nasıl çalışır, ne beklemeli
-
-SplitDPI güvenlik duvarı kurallarını kendi nftables tablosunda, `inet splitdpi`
-içinde tutar. Kural setinizi asla temizlemez; güvenlik duvarı, DNS ya da ağ
-yapılandırma dosyalarını değiştirmez. Kuralları açık kalacak şekilde çalışır:
-nfqws2 durursa trafik değiştirilmeden geçer.
-
-- **Yeni siteleri öğrenme.** Açtığınız uygulamalar ilk paketten itibaren
-  işlenir. Diğer siteler öğrenilir: yeni engellenen bir siteye ilk ziyaretler
-  (varsayılan üç) başarısız olur, sonrakiler çalışır. Bir site açılmazsa
-  yeniden deneyin.
-- **Telegram.** Yalnızca Telegram'ın web ve API alan adları kapsanır.
-  Uygulamaların doğrudan IP adreslerine yaptığı MTProto bağlantıları kapsanmaz.
-- **Aramalar ve uygulama protokolleri.** Instagram, Messenger, WhatsApp ve
-  Signal'daki sesli ve görüntülü aramalar, Roblox oyun sunucuları ve WhatsApp
-  ile Viber telefon uygulamalarının kendi bağlantıları TLS alan adı taşımaz; bu
-  yüzden kapsanmaz. Siteler sayfası bunu her uygulamanın yanında belirtir.
-- **Discord ses ve yayın.** SplitDPI bunlara dokunmaz: Discord uygulamasında
-  ses profili ve ses sunucusu (`discord.media`) adresi yoktur. Türkiye'de ses
-  SplitDPI olmadan çalışır.
-
-## Geri alma güvencesi
-
-`sudo splitdpi revert`, SplitDPI'yi durdurur, servisini kaldırır, tablosunu ve
-çalışma dosyalarını siler, sonra geride bir şey kalmadığını denetler. Sonunda
-temiz olduğunu yazar ya da kalanları listeler. `--purge` ayarları ve verileri
-de siler. `takeover` başka bir zapret kurulumunu kapattıysa geri alma onun
-servisini yeniden açar. Geri alma yapılandırmayı tek bir iş için okur: geride
-servis kalmayınca `boot` çalıştırma biçimini yeniden `window` yapmak.
-Okuyamazsa bu adımı atlar; bu yüzden bozuk bir ayar dosyası geri almayı
-engelleyemez. SplitDPI zorla sonlandırılırsa kuyruk kuralları yerinde kalır
-ama siz `revert` çalıştırana ya da onu yeniden başlatana kadar tüm trafiği
-geçirir.
-
-## SplitDPI'yi kaldırma
-
-`sudo splitdpi uninstall` neleri sileceğini listeler, hiçbir şeyi değiştirmez.
-`sudo splitdpi uninstall --yes`, `revert --purge` ile aynı işi yapar, ardından
-günlüğü ve `/usr/local/bin/splitdpi` dosyasını siler; silemediği bir şey
-kalırsa onu listeler, sorunu giderdikten sonra komutu yeniden çalıştırın.
-`SPLITDPI_PREFIX` ile başka bir yere kurulan program yerinde kalır; onu
-kendiniz silin. Terminal arayüzünde Ayarlar sayfası da listeyi gösterdikten
-sonra aynı işi yapar. Bu işlem geri alınamaz: SplitDPI'yi yeniden kullanmak
-için [Hızlı başlangıç](#hızlı-başlangıç) bölümündeki gibi yeniden kurun.
+Düzenleme kendi kopyanızı `/etc/splitdpi/apps/ID.toml` olarak kaydeder; bu
+kopya hazır uygulamanın yerine geçer ve `reset` edene kadar `presets update`
+ona dokunmaz. Kendi uygulamanızda `reset` onu siler. Kendi uygulamalarınızı
+`scan`, `probe` ve `doctor` alan adlarında dener.
 
 ## Ülkeler
 
@@ -429,7 +156,7 @@ gerçek bir bağlantıda denendi; diğer satırlar Ağustos–Ekim 2026 arasınd
 | Ülke | Önceden seçilen uygulamalar | SplitDPI ne yapabilir | Ne yapamaz |
 |---|---|---|---|
 | Türkiye | Discord, Roblox | Gerçek bir Türk Telekom hattında denendi. İki uygulama da DNS ve SNI ile engelli ([OONI](https://explorer.ooni.org/findings/267640924000)). | |
-| Rusya | YouTube, Discord, WhatsApp, X, Viber | Kısmen, denenmedi: bu uygulamalar SNI ile engelli ([OONI](https://ooni.org/post/2024-russia-report)), ama çalışan stratejiler sağlayıcıya göre değişir ve sık bozulur. Düz DNS yanıtları değiştiriliyor, bu yüzden [şifreli DNS](#şifreli-dns)'i açın. | Telegram, Instagram ve Facebook IP adresiyle engelli. Mobil beyaz liste modu ([net4people](https://github.com/net4people/bbs/issues/516)) ve yurt dışı barındırmaya giden bağlantıların yaklaşık 16 KB'den sonra donması ([net4people](https://github.com/net4people/bbs/issues/490)) aşılamaz. |
+| Rusya | YouTube, Discord, WhatsApp, X, Viber | Kısmen, denenmedi: bu uygulamalar SNI ile engelli ([OONI](https://ooni.org/post/2024-russia-report)), ama çalışan stratejiler sağlayıcıya göre değişir ve sık bozulur. Düz DNS yanıtları değiştiriliyor, bu yüzden [şifreli DNS](#şifreli-dns)'i açın. | Telegram, Instagram ve Facebook IP adresiyle engelli. Mobil beyaz liste modu ([net4people](https://github.com/net4people/bbs/issues/516)) ve yurt dışı barındırmaya giden bağlantıların yaklaşık 16 KB'den sonra donması ([net4people](https://github.com/net4people/bbs/issues/490)). |
 | Özbekistan | TikTok | Denenmedi. TikTok SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030202526.825336_UZ_webconnectivity_052c7879728aa664)). | |
 | Pakistan | Signal | Denenmedi. Signal SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030220511.996290_PK_signal_5ac96b6fcef513f4)). | Signal aramaları. Güvenlik duvarı TCP akışlarını birleştirdiği için basit bölme stratejileri işe yaramayabilir. |
 | Umman | Signal, Viber | Denenmedi. İkisi de SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030153230.174668_OM_signal_587cc9ac388c198c)). | Signal ve Viber aramaları. |
@@ -437,62 +164,304 @@ gerçek bir bağlantıda denendi; diğer satırlar Ağustos–Ekim 2026 arasınd
 | Tanzanya | Discord, Signal | Denenmedi. İkisi de SNI ile engelli ([OONI](https://explorer.ooni.org/m/20261030224510.394340_TZ_signal_ff0333dd53e6a624)). | X ve Telegram'ın web sitesi IP adresiyle engelli ([OONI](https://explorer.ooni.org/m/20261030115612.829938_TZ_webconnectivity_595b8e6a4a66486b)). Signal aramaları. |
 | Suriye | Discord | Denenmedi. Discord iki sağlayıcıda SNI ile engelli; ölçüm sayısı az ([OONI](https://explorer.ooni.org/m/20261013164632.158025_SY_webconnectivity_9e07ffe0537f7f05)). | |
 
-Rusya, Türkiye ve Özbekistan için ayrıca SplitDPI'nin dokunmadığı yerli
-sitelerin (bankalar, devlet portalları gibi) bir listesi gelir.
-
 İran ve Çin desteklenmiyor: oradaki engeller IP adreslerine ve izin listelerine
 dayanır, SplitDPI bunları aşamaz.
 
-## Hazır ayarlar nereden geliyor
+## Siteler ve istisnalar
 
-Sağlayıcı stratejilerinin çıkış noktası Çağrı Taşkın'ın
-[SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey) projesidir
-(MIT). [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs)
-gibi MIT lisanslı başka derlemeler de stratejileri karşılaştırmak için
-kullanılır. Her sağlayıcı dosyası, stratejilerinin gerçek bir bağlantıda en son
-ne zaman çalıştığını `reported` alanında tutar; `scan`'in yazdığı bağlantılarla
-gelen bildirimler bu dosyaları besler.
+**Sitelerim.** Engelli bir sitenin uygulama profili yoksa onu ekleyin.
+SplitDPI onu ilk paketten itibaren işler, `probe` ve `scan` da onu dener:
 
-`sudo splitdpi presets update` ya da Ayarlar'daki "Hazır ayarları güncelle",
-SplitDPI-presets'in son sürümündeki `presets.tar.gz` dosyasını yanında
-yayımlanan `presets.tar.gz.sha256` dosyasıyla birlikte indirir; ikisi
-uyuşmadıkça hiçbir şeyi açmaz. Sürümde sağlama dosyası yoksa, dosya tek bir
-`<sha256>  presets.tar.gz` satırı değilse ya da indirilen dosya onunla
-uyuşmuyorsa (yolda bozulmuş ya da değiştirilmişse) mesaj bunu ve hiçbir şeyin
-değiştirilmediğini söyler, örneğin: "İndirilen hazır ayarlar sağlama
-toplamıyla uyuşmadı, bu yüzden hiçbir şey değiştirilmedi. Daha sonra yeniden
-deneyin; sorun sürerse bildirin." Yalnızca sağlama dosyası indirilemezse hata
-`preset bundle checksum` ile başlar. Her durumda kullanılan hazır ayarlar
-olduğu gibi kalır.
+```sh
+sudo splitdpi sites add pastebin.com
+sudo splitdpi sites import DOSYA    # her satırda bir alan adı, # yorum başlatır
+```
 
-## Strateji bildirme
+**Dokunulmayan siteler.** Bankalar, devlet siteleri ve bazı mağazalar
+değiştirilmiş trafiği reddeder. Böyle bir siteyi istisna yapın ve SplitDPI'yi
+yeniden başlatın:
 
-"Strategy report" şablonuyla bir issue açın. `splitdpi doctor` çıktısını,
-sağlayıcınızın AS numarasını, hazır ayarı ya da stratejiyi ve
-`splitdpi probe` çıktısını ekleyin.
+```sh
+sudo splitdpi exclude add https://www.ornek-banka.com.tr/
+```
 
-## Sorumluluk reddi
+SplitDPI hazır istisna listeleriyle de gelir: genel bir liste (örneğin GitHub,
+Google, Microsoft, Steam ve oyun başlatıcıları) ve Türkiye, Rusya ve
+Özbekistan için bankalar, devlet portalları gibi yerli sitelerin listeleri.
+Açtığınız bir uygulama ya da eklediğiniz bir site hazır listelerden her zaman
+üstün gelir (YouTube'u açmak `youtube.com`'u listeden çıkarır); kendi
+istisnalarınız her şeyden üstündür.
 
-SplitDPI, bilgisayarınızın bazı ağ trafiğini gönderme biçimini değiştirir.
-Böyle bir aracı kullanmanın serbest olup olmadığı bulunduğunuz yere göre
-değişir; size uygulanan kuralları kontrol edin. SplitDPI'yi kendi
-sorumluluğunuzda kullanırsınız ve hiçbir garanti verilmez.
+**Dosyaları elle düzenlemek.** Siteleriniz `/etc/splitdpi/hosts.txt`'te,
+istisnalarınız `/etc/splitdpi/exclude.txt`'tedir. SplitDPI her satırı bir alan
+adı olarak okur: büyük harf, boşluk, `*.` ya da baştaki nokta, sondaki
+`# yorum` ve bayt sırası işareti (BOM) fark etmez; alan adı olmayan satır
+yok sayılır ama dosyada kalır.
 
-## Teşekkürler
+**Kapsam** (Ayarlar ya da `config set mode`). Varsayılan `broad`,
+uygulamalarınızı ve sitelerinizi ilk paketten işler, diğer engelli siteleri
+öğrenir: yeni engellenmiş bir siteye ilk ziyaretler (varsayılan üç) başarısız
+olur, sonrakiler çalışır. `apps` yalnızca açık uygulamaları ve sitelerinizi
+işler; bu kapsamda SplitDPI, işleyecek hiçbir şey bırakmayacak değişikliği
+(adresi olan son uygulamayı kapatmak, son sitenizi silmek gibi) reddeder.
 
-- [zapret2](https://github.com/bol-van/zapret2), bol-van (MIT): motor.
-  SplitDPI onu indirir; yeniden dağıtmaz.
-- [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey), Çağrı
-  Taşkın (MIT): sağlayıcı stratejileri, hariç tutma listesi ve Roblox adresleri.
+## Strateji bulma
+
+`sudo splitdpi scan` ya da Kurulum sayfası önce sağlayıcınızın hazır
+stratejilerini uygulamalarınızda ve sitelerinizde dener; hiçbiri çalışmazsa
+blockcheck2'yi çalıştırır. Çalışan stratejiyi kaydeder.
+
+- **Tek site:** `scan --site ALANADI` hazır ayarları atlayıp o site için
+  blockcheck2 ile arar (IPv4, bu makinede varsa IPv6), sonuçları
+  uygulamalarınızda ve sitelerinizde yeniden dener, hepsini açan en basitini
+  saklar ve siteyi sitelerinize ekler. Daha uzun sürer.
+- **DNS:** blockcheck2'den önce `scan`, sağlayıcınızın DNS'i bozup bozmadığına
+  bakar ve şifreli DNS'i açmak isteyip istemediğinizi sorar. Terminal yoksa
+  `--dns auto` (ya da bir sağlayıcı) veya `--dns keep` verin.
+- **Paketler:** blockcheck2'nin paketleri eksikse `scan` kurmayı sorar;
+  blockcheck2 başlayamazsa nedenini söyler.
+- **Seçenekler:** `--apps` yalnız o uygulamaları dener, `--asn` ve `--country`
+  sağlayıcı sorgusunu atlar, `--blockcheck-only` hazır ayarları atlar,
+  `--no-blockcheck` onlardan sonra durur, `-v` ham hataları gösterir.
+- **Elle:** `splitdpi strategy list` hazır stratejileri gösterir;
+  `sudo splitdpi strategy set ID` taramasız birini seçer.
+- **Paylaşın:** taramadan sonra SplitDPI,
+  [SplitDPI-presets](https://github.com/KadirBerkpolat1/SplitDPI-presets)
+  deposunda AS numaranız, sağlayıcınız, ülkeniz, strateji ve sürümlerle
+  önceden doldurulmuş bir issue bağlantısı yazar. Siz gönderene kadar hiçbir
+  şey gitmez; IP adresiniz ve siteleriniz içinde olmaz. Buradaki "Strategy
+  report" issue şablonu da olur.
+
+**Hazır ayarlar.** Sağlayıcı stratejileri ve uygulama profilleri SplitDPI'nin
+içinde gelir. `sudo splitdpi presets update` son SplitDPI-presets yayınını
+indirir ve sağlama dosyası tutmazsa hiçbir şeyi değiştirmez;
+`splitdpi presets list` kullanılan sürümü gösterir. Hazır ayar yazanlar:
+`splitdpi presets check DIZIN` [yayın kontrol listesinde](docs/release-checklist.md)
+anlatılır.
+
+## Şifreli DNS
+
+Bazı sağlayıcılar DNS yanıtlarını bozar. Şifreli DNS açıkken SplitDPI, 53.
+porttaki trafiği kendi içindeki bir ileticiden bir sağlayıcıya gönderir:
+
+| Seçim | Ne yapar |
+|---|---|
+| `auto` | Sırayla Cloudflare, Google ve Quad9: ilk yanıt veren kullanılır. |
+| `cloudflare`, `google` | Filtreleme yapmaz. |
+| `quad9` | Bilinen zararlı yazılım ve oltalama alan adlarını da engeller. |
+| `adguard` | Reklamları ve izleyicileri de engeller. |
+
+`sudo splitdpi dns auto` onu DNS-over-HTTPS ile açar; DNS-over-TLS için
+`--dot` ekleyin (853. port, bazı sağlayıcılar engeller). `dns off` kapatır,
+yalnız `dns` seçimi gösterir. Bir sonraki başlatmada geçerli olur.
+
+- **Bozma tespiti:** `doctor`, `probe` ve `scan` sisteminizin yanıtlarını
+  şifreli DNS'inkilerle karşılaştırır. Bilinen bir engel sayfası adresi ya da
+  şifreli DNS genel bir adres bulurken "böyle bir ad yok" veya boş yanıt,
+  bozma sayılır. `probe` her alan adı için bir `dns` satırı yazar: `✓` aynı,
+  `~` farklı, `✗` bozulmuş ya da başarısız, nedeniyle.
+- **Sisteminizde hiçbir şey değişmez:** hiçbir çözümleyici ayarına
+  dokunulmaz; yönlendirme SplitDPI'nin `inet splitdpi` tablosundadır. Bu
+  makinedeki çözümleyicilere (`127.0.0.0/8`, `::1`), örneğin systemd-resolved
+  sapına ya da dnscrypt-proxy'ye giden sorgular hiç yönlendirilmez.
+- **IPv4 ve IPv6:** iletici `127.0.0.1:5453` ve `[::1]:5453`'te dinler. IPv6
+  geri döngü adresi yoksa yalnız IPv4 DNS yönlendirilir, IPv6 DNS eskisi gibi
+  şifresiz gider. `[::1]:5453` başka bir nedenle (örneğin port dolu)
+  açılamazsa SplitDPI başlamaz.
+- **Zaten şifreli:** dnscrypt-proxy, Stubby, NextDNS, AdGuard Home, TLS ile
+  ileten Unbound ya da Knot Resolver veya DNS-over-TLS'li systemd-resolved
+  kullanılıyorsa `doctor` ve Ayarlar SplitDPI'nin DNS'ine gerek olmadığını
+  söyler, `scan` DNS'i sormaz.
+- **VPN ve yerel adlar:** VPN arayüzlerinden (`skip_ifaces`) giden DNS'e
+  dokunulmaz. Tek etiketli adlar, `.lan`, `.local`, `.home.arpa`, `.internal`,
+  `.localdomain`, arama alan adlarınız ve özel adreslerin ters sorguları
+  ağınızın her zamanki DNS sunucusuna gider.
+- **Yan etkiler:** `quad9` ve `adguard` engelledikleri alan adlarını
+  çözmez. Giriş sayfalı Wi-Fi ağları (otel, havalimanı) `dns off` yapıp
+  SplitDPI'yi yeniden başlatana kadar giriş sayfasını göstermeyebilir.
+
+## Çalışma biçimleri ve açılış servisi
+
+| Biçim | Komut | Ne zaman durur |
+|---|---|---|
+| Bu pencerede | `sudo splitdpi run` | pencere kapanınca ya da Ctrl-C ile |
+| Arka planda | `sudo splitdpi run --background` | `stop` ile ya da bilgisayar yeniden başlayınca |
+| Her açılışta | `sudo splitdpi enable` | `disable`, `stop` ya da `revert` ile |
+
+- **Arka plan** geçici systemd birimi `splitdpi-background.service` olarak
+  (oturumu kapatmak onu durdurmaz), systemd yoksa ayrık bir süreç olarak
+  çalışır. Çıktısı `/var/log/splitdpi.log`'a gider.
+- **Açılış servisi:** `enable` servisi kurar ve başlatır; pencerede ya da arka
+  planda çalışan engel aşma işi ona devreder, genellikle bir saniyeden kısa
+  sürede. Servis başlamazsa `enable` onu kaldırır, önceki çalışmayı arka
+  planda yeniden başlatır ve bunu söyler. Servis başlarken SplitDPI zaten
+  çalışıyorsa servis 4 koduyla çıkar ve yeniden başlatılmaz.
+- `enable` çalışma biçimini `boot` olarak kaydeder, `disable` ve `revert`
+  `window`'a döndürür; `config set run_mode` yalnız seçimi kaydeder ve servis
+  uymuyorsa uyarır. `status` SplitDPI'nin açılışta başlayıp başlamadığını
+  söyler.
+- Servis modu olmayan dağıtımlar (bkz.
+  [Desteklenen sistemler](#desteklenen-sistemler)) SplitDPI'yi pencerede ya da
+  arka planda çalıştırır.
+
+## zapret ya da zapret2'den geçiş
+
+SplitDPI, keift/zapret'in ve diğer zapret ya da zapret2 kurulumlarının yerini
+alır. `sudo splitdpi takeover` geçişin neyi değiştireceğini hiçbir şeyi
+değiştirmeden gösterir; `takeover --yes` o kurulumun kullanıcı sitelerini
+sizinkilere ekler, servisini durdurur ve açılışta başlamasını kapatır.
+Dosyalarını asla silmez ya da değiştirmez; `revert` servisini geri açar. Başka
+bir zapret çalışırken `run` başlamayı reddeder.
+
+## Sorun giderme
+
+- **`sudo splitdpi doctor` ile başlayın.** Çekirdeği, araçları, NFQUEUE'yu,
+  motoru, SELinux'u, çakışan araçları, init sistemini, IPv6'yı ve DNS
+  bozmasını denetler; her sorunu düzelten komutu yazar.
+- **Sonra `sudo splitdpi probe`.** Bir uygulamanın ya da sitenin neden
+  açılmadığını (bağlantı kesildi, zaman aşımı, DNS ya da güvenli bağlantı
+  başarısız, başka bir şey yanıt verdi) ve ne deneneceğini sade bir dille
+  söyler. Kendi adresi olmayan alan adı başarısız değil, denenmedi diye
+  görünür.
+- **Site listede ama engel sayfası ya da sertifika hatası çıkıyor.**
+  Genellikle zehirli bir DNS yanıtı hâlâ önbellektedir; engel aşma yanlış
+  adresi düzeltemez. SplitDPI her başlatmada ve şifreli DNS açıkken site
+  eklendiğinde systemd-resolved ve nscd önbelleklerini temizler; ama daha
+  önce ya da şifreli DNS kapalıyken giren yanıtlar kalabilir.
+  `resolvectl query --cache=no ALANADI` ile bakın, `resolvectl flush-caches`
+  ile temizleyin ve [şifreli DNS](#şifreli-dns)'i açın. Diğer çözümleyiciler
+  ve tarayıcılar kendi önbelleklerini tutar.
+- **Bir site bozuldu** (banka ya da mağaza açılmıyor): `sudo splitdpi exclude
+  add URL`, sonra yeniden başlatın.
+- **Yeni bir site birkaç kez açılmıyor, sonra açılıyor:** `broad` kapsamda
+  SplitDPI engelli siteleri başarısız ziyaretlerden öğrenir. Yeniden deneyin
+  ya da siteyi sitelerinize ekleyin.
+- **Artık hiçbir şey açılmıyor:** sağlayıcılar engellerini değiştirir.
+  `sudo splitdpi scan` ya da `scan --site ALANADI` çalıştırın.
+- **SplitDPI öldürüldü:** kuralları yerinde kalır ama `revert` çalıştırılana
+  ya da yeniden başlatılana kadar bütün trafiği değiştirmeden geçirir.
+
+## Desteklenen sistemler
+
+| Dağıtım | Init | Açılış servisi | Denendi |
+|---|---|---|---|
+| Debian | systemd | evet | Sanal makinede 13.7: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
+| Ubuntu LTS, Linux Mint | systemd | evet | Incus konteynerinde 26.04: entegrasyon testleri, yeniden başlatmalarda servis modu, çalışan engel aşmanın servise taşınması, servis başlayamayınca geri alma (2026-11-09) |
+| Fedora (Workstation, Cloud) | systemd | evet | Sanal makinede 44 Cloud, SELinux zorlayıcı modda: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
+| Fedora Atomic (Silverblue, Bazzite) | systemd | evet | henüz denenmedi |
+| CachyOS | systemd | evet | Türk Telekom bağlantısında: `scan` (hazır ayarlar ve `--site`), Discord, Roblox, Pastebin ve diğerlerinde `probe`, `revert` (2026-10-29); arka plan çalışması açıkken `enable`, motorun v1.0.7'ye yükseltilmesi (2026-11-09); bakım derlemesiyle servisin yeniden başlatılması, IPv4 ve IPv6'da DNS iletici, Discord açılıyor (2026-11-17) |
+| Arch, EndeavourOS | systemd | evet | henüz denenmedi |
+| openSUSE Tumbleweed | systemd | evet | henüz denenmedi |
+| Alpine | OpenRC | evet | Sanal makinede 3.24.3: yeniden başlatma sonrası servis modu ve revert (2026-10-29) |
+| Gentoo | OpenRC | evet | henüz denenmedi |
+| Void (glibc ve musl) | runit | evet | henüz denenmedi |
+| Artix, antiX, dinit, s6 veya sysvinit dağıtımları | diğer | hayır | henüz denenmedi |
+
+Her dağıtım SplitDPI'yi pencerede ya da arka planda çalıştırabilir.
+Değiştirilemez (immutable) dağıtımlar ve SELinux zorlayıcı mod desteklenir.
+
+## Komut başvurusu
+
+| Komut | Ne yapar |
+|---|---|
+| `splitdpi` | Terminal arayüzünü açar. |
+| `splitdpi status` | Çalışıp çalışmadığını ve nasıl, stratejiyi, motoru ve açılışta başlayıp başlamadığını gösterir. |
+| `splitdpi probe [--apps ID,ID] [-v]` | Açık uygulamalar ve siteleriniz için DNS ve HTTPS'i dener. |
+| `splitdpi doctor` | Sistemi denetler, sorunları çözümleriyle listeler. |
+| `splitdpi scan [--site DOMAIN] [--dns keep\|auto\|PROVIDER] [--apps ID,ID] [--asn N] [--country CC] [--blockcheck-only\|--no-blockcheck] [-v]` | Çalışan bir strateji bulur ve kaydeder. |
+| `splitdpi run [--background]` | Bu terminalde ya da yeniden başlatmaya kadar arka planda çalışır. |
+| `splitdpi stop` | Engel aşmayı, nasıl çalışıyorsa durdurur. |
+| `splitdpi enable` / `disable` | Açılış servisini kurup başlatır ya da kaldırır. |
+| `splitdpi logs [-f]` | Günlüğü gösterir; `-f` izlemeyi sürdürür. |
+| `splitdpi apps list\|enable ID\|disable ID` | Engel aşmanın hangi uygulamalara uygulanacağını seçer. |
+| `splitdpi apps show ID\|new ID NAME\|add-host ID DOMAIN\|remove-host ID DOMAIN\|reset ID` | Bir uygulamayı gösterir, düzenler ya da kendinizinkini ekler. |
+| `splitdpi sites list\|add DOMAIN\|remove DOMAIN\|import FILE` | Kendi engelli sitelerinizi yönetir. |
+| `splitdpi exclude list\|add DOMAIN\|remove DOMAIN` | Engel aşmanın hiç dokunmadığı siteleri yönetir. |
+| `splitdpi dns [off\|auto\|cloudflare\|google\|quad9\|adguard] [--dot]` | Şifreli DNS'i ayarlar ya da gösterir. |
+| `splitdpi strategy list\|set ID` | Hazır stratejileri listeler ya da birini seçer. |
+| `splitdpi detect [--asn N] [--country CC]` | Sağlayıcınızı ve onun hazır stratejilerini bulur. |
+| `splitdpi config [get KEY\|set KEY VALUE\|reset KEY]` | `lang`, `run_mode`, `mode`, `skip_ifaces` (`'wg*,tun*'` gibi virgüllü liste), `ipinfo_url` ve `qnum`'u (NFQUEUE numarası, başka program kullanmamalı) gösterir ya da değiştirir. |
+| `splitdpi presets list\|update` | Hazır ayar verisini gösterir ya da SHA-256'sını doğrulayıp günceller. |
+| `splitdpi engine install [--from FILE]` | Sabitlenmiş zapret2 sürümünü SHA-256'sını doğrulayıp kurar. |
+| `splitdpi deps [install [--yes]]` | Eksik paketleri listeler ya da kurar. |
+| `splitdpi takeover [--yes]` | Başka bir zapret ya da zapret2 kurulumundan SplitDPI'ye geçer. |
+| `splitdpi revert [--purge]` | SplitDPI'nin eklediği her şeyi kaldırır; `--purge` ayarları ve veriyi de. |
+| `splitdpi uninstall [--yes]` | SplitDPI'nin kendisini kaldırır. |
+| `splitdpi version` | Sürümü yazar. |
+
+**2026-11-17'de kaldırılanlar:** `engine status` (`status` ve `doctor` motoru
+gösterir), `dns on` (`dns auto` kullanın) ve `apps udp` (hiçbir uygulamanın
+ses ya da yayın profili yok).
+
+## Güvenlik notları
+
+- **Kurulum betiği:** `install.sh` GitHub'dan yalnız https ile indirir (curl
+  düz http'yi yönlendirmede de reddeder ve TLS 1.2 ya da yenisini ister) ve
+  ikiliyi ancak yayının `sha256sums.txt` dosyasındaki satırıyla tutarsa kurar.
+  Dizinler umask 022 ile oluşturulur. curl yoksa wget'e düşer; wget https'i
+  zorlamaz.
+- **İndirmeler:** zapret2 motoru, SHA-256'sı denetlenen sabit bir sürümdür;
+  hazır ayar güncellemesi `presets.tar.gz.sha256` tutmazsa reddedilir.
+- **Root servisi yalnız root'un değiştirebildiği bir ikiliyi çalıştırır:**
+  uygunsa `enable`'ı çalıştıran ikiliyi, değilse `/usr/local/bin/splitdpi`'yi.
+  İkili ve üstündeki her dizin, sembolik bağlantılar boyunca, root'a ait
+  olmalı ve grubu ya da başkaları yazamamalı; ikili `/tmp`, `/var/tmp`,
+  `/dev/shm` ya da bir ev dizini (`/home`, `/var/home`, `/root`,
+  `/var/roothome`) altında olmamalı. Hata, sorunlu dosyayı adlandırır ve
+  düzelten `sudo install` komutunu verir.
+- **Hazır ayar alan adları doğrulanır:** hazır ya da sizin, her uygulama
+  profilindeki her alan adı düz bir ana makine adı olmalıdır (harf, rakam,
+  tire, en çok 253 bayt); buna uymayan profil bir uyarıyla atlanır. `scan`,
+  root olarak çalışan blockcheck2'ye vermeden önce her alan adını yeniden
+  denetler.
+- **Güvenlik duvarı:** SplitDPI kurallarını kendi nftables tablosunda,
+  `inet splitdpi`'de tutar ve kural setinizi asla temizlemez. Kuralları açık
+  kalır: motor durursa trafik değiştirilmeden geçer.
+
+## Kaldırma
+
+`sudo splitdpi revert` SplitDPI'yi durdurur, servisini, tablosunu ve çalışma
+dosyalarını kaldırır, sonra geride bir şey kalmadığını denetler; temiz
+olduğunu söyler ya da kalanları listeler. `--purge` ayarları ve veriyi de
+siler. `takeover`'ın kapattığı zapret kurulumunun servisi geri açılır. Bozuk
+bir yapılandırma revert'i engelleyemez.
+
+`sudo splitdpi uninstall` neyi kaldıracağını listeler, hiçbir şeyi
+değiştirmez; `uninstall --yes`, `revert --purge`'ün yaptığını yapıp günlüğü,
+`/usr/local/bin/splitdpi`'yi ve yalnız root'un değiştirebildiği durumda onu
+çalıştırdığınız ikiliyi (örneğin `SPLITDPI_PREFIX` ile kurulanı) siler. Geride
+bir şey kalırsa ikililer durur, böylece komutu yeniden çalıştırabilirsiniz.
+Terminal arayüzünde Ayarlar aynısını yapar.
+
+## Teşekkürler ve lisans
+
+- bol-van'ın [zapret2](https://github.com/bol-van/zapret2)'si (MIT): motor.
+  SplitDPI onu indirir, yeniden dağıtmaz.
+- Çağrı Taşkın'ın [SplitWire-Turkey](https://github.com/cagritaskn/SplitWire-Turkey)'i
+  (MIT): sağlayıcı stratejileri, istisna listesi ve Roblox adresleri;
+  [erdometo/zapret-turkey-configs](https://github.com/erdometo/zapret-turkey-configs)
+  (MIT) bunları karşılaştırmak için.
 - [Flowseal/zapret-discord-youtube](https://github.com/Flowseal/zapret-discord-youtube)
-  (MIT): Discord ve YouTube adresleri ve Rusya hariç tutma listesi.
+  (MIT): Discord ve YouTube adresleri ve Rusya istisna listesi.
 - [dmfrpro/zapret2-flake](https://github.com/dmfrpro/zapret2-flake) (MIT):
-  yerleşik blob yedeği.
+  yerleşik blob yedek yolu.
 - [v2fly/domain-list-community](https://github.com/v2fly/domain-list-community)
   (MIT): Instagram, Facebook, WhatsApp, X, Signal, Viber, LinkedIn, TikTok ve
-  Pastebin adresleri ile Telegram, YouTube ve Discord'a eklenen adresler.
+  Pastebin adresleri ile eklenen Telegram, YouTube ve Discord adresleri.
 - [1andrevich/Re-filter-lists](https://github.com/1andrevich/Re-filter-lists)
   (MIT): bir TikTok adresi.
-- alimali54/zapret-win-turkey: Türkçe zapret2 stratejilerinin kaynağı.
+- [itdoginfo/allow-domains](https://github.com/itdoginfo/allow-domains)
+  (lisans yok; yalnız alan adları, kod ya da veri dosyası kopyalanmadı): VPN
+  sağlayıcı ve Threads adresleri ile Telegram, X, TikTok, WhatsApp, Roblox ve
+  Facebook'a eklenen adresler.
+- [OONI](https://explorer.ooni.org) ve
+  [EngelliWeb](https://ifade.org.tr/engelliweb/): yeni uygulamalardan hangisinin
+  Türkiye'de engelli olduğu.
+- alimali54/zapret-win-turkey: Türkiye zapret2 stratejilerinin kökeni.
 
-Lisanslar için [NOTICE](NOTICE) dosyasına bakın. SplitDPI MIT lisanslıdır.
+Lisanslar için [NOTICE](NOTICE). SplitDPI MIT lisanslıdır.
+
+SplitDPI bilgisayarınızın bazı ağ trafiğini nasıl gönderdiğini değiştirir.
+Bunun serbest olup olmadığı bulunduğunuz yere bağlıdır; size uygulanan
+kurallara bakın. SplitDPI'yi kendi sorumluluğunuzda, hiçbir garanti olmadan
+kullanırsınız.

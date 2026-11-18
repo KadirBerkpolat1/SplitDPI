@@ -9,5 +9,11 @@ SplitDPI preset data
   https://github.com/v2fly/domain-list-community @ 1daade8c4bb957d21d1f5c09c2b050d699e8e96c
 - 1andrevich/Re-filter-lists (MIT): byteoversea.com for TikTok (community.lst)
   https://github.com/1andrevich/Re-filter-lists
+- itdoginfo/allow-domains (no license; domain names only, no code or data files copied):
+  vpn-sites and Threads hosts, hosts added to Roblox, Telegram, X, TikTok, WhatsApp, Facebook
+  https://github.com/itdoginfo/allow-domains @ 932e11c
+- OONI Explorer measurements and EngelliWeb (İFÖD) records: which domains are blocked in
+  Türkiye for vpn-sites, grindr, scruff, hornet, wikileaks (no data copied)
+  https://explorer.ooni.org, https://ifade.org.tr/engelliweb/
 - alimali54/zapret-win-turkey: origin of winws2 preset strings (credit only)
 - zapret2 (MIT, bol-van): engine and built-in desync blobs

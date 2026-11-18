@@ -22,6 +22,20 @@ func (e InvalidError) Error() string {
 	return i18n.T("domain.invalid", e.Input)
 }
 
+// ListEntry reads one line of a domain list, which users also edit by hand:
+// a UTF-8 BOM, text after "#" and surrounding space go, and *.example.com or
+// .example.com mean example.com. text is what is left, "" for a blank or
+// comment line; d is text as a normalized domain, "" when it is not one.
+func ListEntry(line string) (text, d string) {
+	text, _, _ = strings.Cut(strings.TrimPrefix(line, "\ufeff"), "#")
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", ""
+	}
+	d, _ = Normalize(strings.TrimPrefix(text, "."))
+	return text, d
+}
+
 // Normalize strips a URL-like prefix, wildcard, port and trailing dot, lowercases,
 // punycodes IDNs, and validates the result.
 func Normalize(in string) (string, error) {
@@ -58,13 +72,15 @@ func Normalize(in string) (string, error) {
 	return ascii, nil
 }
 
-// Valid reports whether s is a normalized hostname with at least two labels and not an IP.
+// Valid reports whether s is a normalized hostname of at most 253 bytes with
+// at least two labels and not an IP.
+// Labels are lowercase LDH only: blockcheck2 passes hostnames through shell eval as root.
 func Valid(s string) bool {
 	if addr, err := netip.ParseAddr(s); err == nil {
 		_ = addr
 		return false
 	}
-	if strings.Contains(s, "..") {
+	if len(s) > 253 || strings.Contains(s, "..") {
 		return false
 	}
 	labels := strings.Split(s, ".")
@@ -72,8 +88,13 @@ func Valid(s string) bool {
 		return false
 	}
 	for _, lab := range labels {
-		if lab == "" || len(lab) > 63 {
+		if lab == "" || len(lab) > 63 || lab[0] == '-' || lab[len(lab)-1] == '-' {
 			return false
+		}
+		for i := range len(lab) {
+			if c := lab[i]; (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+				return false
+			}
 		}
 	}
 	return true

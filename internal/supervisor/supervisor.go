@@ -189,14 +189,18 @@ func (s *Supervisor) prepare(out render.Output) error {
 	return os.Chown(s.P.AutoHostlist, s.UID, s.GID)
 }
 
-// finish removes our table and run files (status.json stays), records the
-// final state and returns cause, or the cleanup error after a clean stop.
+// finish removes our table and run files (status.json and the lock file
+// stay), records the final state and returns cause, or the cleanup error
+// after a clean stop. The lock file goes on being locked until Run returns:
+// unlinked before, a run starting meanwhile would lock a new file and run
+// next to this one.
 func (s *Supervisor) finish(ctx context.Context, st Status, state string, cause error) error {
 	// ctx is usually cancelled here; cleanup must still run.
 	cerr := nft.Delete(context.WithoutCancel(ctx), s.Exec, s.P.NftTable)
 	if ents, err := os.ReadDir(s.P.RunDir); err == nil {
+		keep := []string{filepath.Base(s.P.StatusFile), filepath.Base(s.P.LockFile)}
 		for _, e := range ents {
-			if e.Name() != filepath.Base(s.P.StatusFile) {
+			if !slices.Contains(keep, e.Name()) {
 				os.RemoveAll(filepath.Join(s.P.RunDir, e.Name()))
 			}
 		}

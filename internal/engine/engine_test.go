@@ -195,7 +195,7 @@ func TestInstallRejectsTraversal(t *testing.T) {
 			p := paths.Under(filepath.Join(base, "root"))
 			seedPrevious(t, p)
 			_, err := install(p, build(t, append(good(), bad...)))
-			if !errors.Is(err, engine.ErrUnsafePath) {
+			if !errors.Is(err, safetar.ErrUnsafePath) {
 				t.Fatalf("err = %v", err)
 			}
 			checkPrevious(t, p)
@@ -326,7 +326,7 @@ func TestInstallRejectsMissingBinary(t *testing.T) {
 func TestInstallRejectsArch(t *testing.T) {
 	p := paths.Under(t.TempDir())
 	b := build(t, good())
-	if _, err := engine.Install(p, bytes.NewReader(b), sum(b), "mips"); !errors.Is(err, engine.ErrArch) {
+	if _, err := engine.Install(p, bytes.NewReader(b), sum(b), "mips"); !errors.Is(err, engine.ErrArch) || !errors.As(err, &engine.ArchError{}) {
 		t.Fatalf("err = %v", err)
 	}
 	if got := entries(t, p.StateDir); got != nil {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
@@ -166,6 +167,8 @@ func Save(p paths.Paths, c Config) error {
 	return os.Rename(name, p.ConfigFile)
 }
 
+// ReadList returns the normalized domains of the list at path, skipping lines
+// that hold none.
 func ReadList(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -178,11 +181,9 @@ func ReadList(path string) ([]string, error) {
 	var out []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+		if _, d := domain.ListEntry(sc.Text()); d != "" {
+			out = append(out, d)
 		}
-		out = append(out, line)
 	}
 	return out, sc.Err()
 }
@@ -232,6 +233,7 @@ func AddToList(path string, ds ...string) error {
 	return nil
 }
 
+// RemoveFromList drops every line whose domain is d, as ListEntry reads it.
 func RemoveFromList(path string, d string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -245,8 +247,7 @@ func RemoveFromList(path string, d string) error {
 	sc := bufio.NewScanner(strings.NewReader(string(b)))
 	for sc.Scan() {
 		line := sc.Text()
-		trim := strings.TrimSpace(line)
-		if trim != "" && !strings.HasPrefix(trim, "#") && trim == d {
+		if _, e := domain.ListEntry(line); e != "" && e == d {
 			removed = true
 			continue
 		}

@@ -46,6 +46,18 @@ Copyright (c) 2024 Andrevich
 Licensed under the MIT License.
 Used: the TikTok host byteoversea.com (community.lst).
 
+itdoginfo/allow-domains (https://github.com/itdoginfo/allow-domains)
+at 932e11c (read 2026-11-17)
+Published without a license. Domain names only, no code or data files copied.
+Used: the vpn-sites and Threads hosts (Russia/inside-raw.lst,
+Categories/hodca.lst, Services/meta.lst) and the hosts added to Roblox,
+Telegram, X, TikTok, WhatsApp and Facebook (Services/*.lst).
+
+OONI Explorer (https://explorer.ooni.org) and EngelliWeb by İFÖD
+(https://ifade.org.tr/engelliweb/)
+Measurements and court-order records used to decide which domains are blocked
+in Türkiye (vpn-sites, Grindr, Scruff, Hornet, WikiLeaks). No data copied.
+
 alimali54/zapret-win-turkey (https://github.com/alimali54/zapret-win-turkey)
 Published without a license. Credited as the origin of the Turkish zapret2
 strategy strings that SplitWire-Turkey carries.

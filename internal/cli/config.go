@@ -93,9 +93,6 @@ func findSetting(key string) (setting, error) {
 
 func setConfig(o *ops.Ops, w io.Writer, s setting, v string) error {
 	if err := s.set(o, v); err != nil {
-		if errors.Is(err, ops.ErrAppsModeEmpty) {
-			return errors.New(i18n.T("config.apps_empty"))
-		}
 		return err
 	}
 	c, err := config.Load(o.P)
@@ -111,7 +108,7 @@ func setConfig(o *ops.Ops, w io.Writer, s setting, v string) error {
 	}
 	switch {
 	case s.restart && o.Running():
-		fmt.Fprintln(w, i18n.T("strategy.restart"))
+		fmt.Fprintln(w, i18n.T("restart.hint", o.RestartCommand()))
 	case s.restart:
 		fmt.Fprintln(w, i18n.T("config.next_start"))
 	}

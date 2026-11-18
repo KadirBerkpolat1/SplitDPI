@@ -62,9 +62,11 @@ These need real hardware or VMs and a real ISP; CI cannot do them.
 
 ## Known gaps
 
-- **Discord voice and streams** are left alone: the Discord app has no UDP
-  profile and no `discord.media` addresses. In Türkiye voice works without
-  UDP desync; where voice needs it (Russia) nothing covers it today.
+- **Discord voice channels and Go Live streams** are left alone: the Discord
+  app has no UDP profile and no voice or stream addresses, and
+  `TestShippedAppsExcludeDiscordVoiceAndStream` keeps every shipped app that
+  way. In Türkiye voice works without SplitDPI; where voice itself is blocked
+  (Russia) nothing covers it today.
 
 ## Before the first public release
 
@@ -153,3 +155,62 @@ Tick these on the release commit, with the date.
 
 (2026-11-09, on `e1c3007`; the release commit changes only `README.md`,
 `README.tr.md` and this file.)
+
+## Maintenance 2026-11-17 (branch `bakim/2026-11-17`, not released)
+
+What changed, from `a311bf0` to `7e7d2bd` plus the TUI redesign and this
+documentation pass:
+
+- Presets (VERSION 2026-11-17): new apps `vpn-sites`, `grindr`, `scruff`,
+  `hornet`, `wikileaks` and `threads` (20 apps); hosts added to Roblox,
+  Telegram, TikTok, WhatsApp, X and Facebook; Hornet is probed on
+  `next.hornet.com`. A test fails if any shipped app covers Discord voice,
+  streams or UDP.
+- Security: preset and user app domains must be LDH hostnames of at most 253
+  bytes, and `scan` re-checks each domain before blockcheck2's root shell sees
+  it; `install.sh` downloads over https only (curl `--proto '=https'
+  --proto-redir '=https' --tlsv1.2`) and creates directories with umask 022.
+- Core: `probe`, `doctor` and `scan` count NXDOMAIN and empty system answers
+  as DNS tampering; the forwarder fails the start when `[::1]:5453` cannot be
+  bound, and without an IPv6 loopback only IPv4 DNS is redirected; an AAAA
+  failure keeps the A answer; user apps without a probe URL are tested at
+  their hosts; the supervisor never unlinks a held lock and `revert` keeps
+  `RunDir` while a run that did not stop holds it; `enable` prefers the
+  running binary when only root can change it and `uninstall` removes it;
+  removing the service reloads systemd and waits for runit; another country's
+  ISP strategy brings its own ASN.
+- CLI surface: `engine status`, `dns on` and `apps udp` removed;
+  `presets check`, `run --service`, `run --detached` and `revert --rules-only`
+  hidden from `--help` but still parsed (the service units and the
+  SplitDPI-presets CI use them); `presets update` needs root; `--help` and the
+  `--lang` error list `ru`; restart hints follow the run mode; hand-edited
+  `hosts.txt` and `exclude.txt` are read as normalised domains; in `apps`
+  mode no change may leave nothing to handle; `scan` reports why blockcheck2
+  did not start.
+- Preset authors: `splitdpi presets check DIR` needs no root and exits
+  non-zero on any warning, including an invalid hostname.
+
+What was verified:
+
+- [x] Live acceptance of the core slice on CachyOS with Türk Telekom, at
+      `1fd8cbc` (2026-11-17 22:07): the service restarted with the new binary
+      (`splitdpi v0.2.7-25-g1fd8cbc-cekirdek`), `127.0.0.1:5453` and
+      `[::1]:5453` both listened, the `th dport 53 … redirect to :5453` rule
+      was loaded, `https://discord.com/api/v9/gateway` answered 200 and the
+      journal had no warnings. The installed v0.2.7-4 binary was restored
+      afterwards and answered the same way.
+- [x] Per-slice verifier runs on each slice's head before its merge: the
+      security (`dc2b467`), presets (`cce95a4`) and core (`1fd8cbc`) slices
+      passed. The surface-cleanup slice (`2d56838`) failed only on its
+      `apps udp` checks, as `apps udp` was still there; its removal moved to
+      the TUI redesign.
+
+What was NOT run:
+
+- [ ] The full test suite (`go test ./...`, `-race`) after the last merges;
+      per Berk (2026-11-17) only `go build ./...`, `go vet ./...` and
+      `gofmt -l .` before the final commits.
+- [ ] The integration tests (`-tags integration`, root and netns).
+- [ ] CI: GitHub Actions does not start jobs because the account is locked by
+      a billing issue.
+- [ ] `splitdpi presets check internal/presets/data` on the merged tree.

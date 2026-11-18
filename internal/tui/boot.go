@@ -125,7 +125,7 @@ func (m Model) otherRun() bool {
 // which bypass running now it replaces.
 func (m *Model) confirmEnable() tea.Cmd {
 	if !m.svc.Supported {
-		m.note = i18n.T("service.unsupported")
+		m.note = i18n.T("tui.boot_unsupported")
 		return nil
 	}
 	if m.svcOp != nil {
@@ -176,10 +176,10 @@ func (m Model) enabled(err error) (Model, tea.Cmd) {
 		return m, m.refresh()
 	}
 	// Status and Settings enable too; they leave the wizard alone.
-	if m.page == pgScan && m.wiz.step == wDone {
+	if m.page == pgSetup && m.wiz.step == wDone {
 		m.finishWizard()
 	}
-	m.cfg.RunMode, m.note = config.RunBoot, i18n.T("service.enabled")
+	m.cfg.RunMode, m.note, m.pending = config.RunBoot, i18n.T("service.enabled"), false
 	return m, batch(m.refresh(), m.restartLogs())
 }
 
@@ -223,15 +223,6 @@ func takeoverText(e ops.TakeoverError) string {
 func firstLine(err error) string {
 	first, _, _ := strings.Cut(err.Error(), "\n")
 	return ops.TrimPeriod(first)
-}
-
-// unsafeText words an UnsafeBinaryError as the CLI does.
-func unsafeText(e ops.UnsafeBinaryError) string {
-	reason := i18n.T("service.unsafe_"+e.Reason, e.At)
-	if e.Path == e.Install {
-		return i18n.T("service.unsafe_default", e.Path, reason)
-	}
-	return i18n.T("service.unsafe", e.Path, reason, e.Path, e.Install)
 }
 
 // confirmDisable asks before the service is removed for run mode mode.
@@ -283,20 +274,6 @@ func bootValue(m Model) string {
 		return warnStyle.Render(i18n.T("boot.not_set_up"))
 	}
 	return mutedStyle.Render(i18n.T("boot.no"))
-}
-
-// bootActions set the missing service up; otherwise the run mode decides,
-// as on its own row.
-func bootActions(m Model) []action {
-	if m.bootUnset() {
-		return []action{m.setUpBootAction("enter")}
-	}
-	return runModeActions(m)
-}
-
-// setUpBootAction sets up the service that run mode boot asks for, as key.
-func (m Model) setUpBootAction(key string) action {
-	return action{Key: key, Label: i18n.T("boot.set_up"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable}
 }
 
 // quitMove is where b in the quit prompt moves the bypass run here: to the

@@ -63,6 +63,18 @@ func (o *Ops) installEngine(tarball io.Reader, wantSHA256 string) (engine.Engine
 	return e, nil
 }
 
+// EngineInstallText words an EngineInstall error for the user.
+func EngineInstallText(err error) string {
+	var arch engine.ArchError
+	switch {
+	case errors.Is(err, engine.ErrChecksum):
+		return i18n.T("engine.err.checksum", engine.Version)
+	case errors.As(err, &arch):
+		return i18n.T("engine.err.arch", arch.GOARCH)
+	}
+	return i18n.T("engine.err.install", err)
+}
+
 // removeOldEngines runs engine.RemoveOld. A failure only leaves disk space
 // taken, so it is logged, not returned.
 func (o *Ops) removeOldEngines(log io.Writer, running func() bool, keep ...engine.Engine) {

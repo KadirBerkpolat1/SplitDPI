@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/initsys"
@@ -165,7 +167,7 @@ func TestRunitStartLinks(t *testing.T) {
 	if _, err := os.Stat(p.RunitLink); !os.IsNotExist(err) {
 		t.Fatalf("link still exists")
 	}
-	if err := m.Remove(); err != nil {
+	if err := m.Remove(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if m.Installed() {
@@ -252,11 +254,53 @@ func TestSystemdLogsCmd(t *testing.T) {
 	}
 }
 
-func TestSystemdRemove(t *testing.T) {
-	m, _ := manager(t, sysinfo.Systemd, execx.Real)
-	_ = m.Install()
-	if err := m.Remove(); err != nil {
+// systemd keeps a deleted unit loaded until it reloads.
+func TestRemoveSystemdDaemonReload(t *testing.T) {
+	rec := &recorder{}
+	m, _ := manager(t, sysinfo.Systemd, rec.run)
+	if err := m.Install(); err != nil {
 		t.Fatal(err)
+	}
+	if err := m.Remove(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if m.Installed() {
+		t.Fatal("still installed")
+	}
+	if strings.Join(rec.calls, "|") != "systemctl daemon-reload" {
+		t.Fatalf("calls %v", rec.calls)
+	}
+}
+
+// sv down and the unlink only ask runsv to stop the service: its directory,
+// with the finish script, goes once runsv reports it down.
+func TestRemoveRunitWaitsForDown(t *testing.T) {
+	m, p := manager(t, sysinfo.Runit, (&recorder{}).run)
+	if err := m.Install(); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	stat := filepath.Join(p.RunitDir, "supervise", "stat")
+	if err := os.MkdirAll(filepath.Dir(stat), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stat, []byte("run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var down atomic.Bool
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		down.Store(true)
+		// Fails only when Remove did not wait and the directory is gone.
+		_ = os.WriteFile(stat, []byte("down\n"), 0o644)
+	}()
+	if err := m.Remove(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !down.Load() {
+		t.Fatal("service directory removed while runsv still ran the service")
 	}
 	if m.Installed() {
 		t.Fatal("still installed")

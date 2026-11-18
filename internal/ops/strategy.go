@@ -79,7 +79,8 @@ func strategyChoices(set presets.Set) []StrategyChoice {
 // StrategySet saves the preset strategy id to config and returns it. It
 // applies on the next start; running reports whether an instance is running now.
 func (o *Ops) StrategySet(id string) (ch StrategyChoice, running bool, err error) {
-	list := strategyChoices(o.PresetsList())
+	set := o.PresetsList()
+	list := strategyChoices(set)
 	i := slices.IndexFunc(list, func(ch StrategyChoice) bool { return ch.Strategy.ID == id })
 	if i < 0 {
 		return StrategyChoice{}, false, UnknownStrategyError{ID: id}
@@ -99,8 +100,9 @@ func (o *Ops) StrategySet(id string) (ch StrategyChoice, running bool, err error
 		Engine:  engine.Version,
 	}
 	// ASN is the user's network as scan found it; it selects the country
-	// exclude list. Without one, an ISP's strategy implies that ISP.
-	if c.Strategy != nil {
+	// exclude list. An ISP's strategy implies that ISP when there is none,
+	// or when the network is not in the ISP's country.
+	if c.Strategy != nil && (ch.ASN == 0 || countryFor(set, c.Strategy) == ch.Country) {
 		st.ASN = c.Strategy.ASN
 	}
 	if st.ASN == 0 {

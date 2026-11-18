@@ -7,18 +7,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
-// The app editor of the Sites page: an app's addresses and its voice and
-// stream (UDP) profile. A change saves the user's copy of the app, and reset
-// drops it (`splitdpi apps add-host`, `remove-host`, `udp`, `reset`).
+// The app editor of the Sites page: an app's addresses. A change saves the
+// user's copy of the app, and reset drops it (`splitdpi apps add-host`,
+// `remove-host`, `reset`).
 type appEditor struct {
 	id     string
-	cursor int // over the addresses, then the voice row if the app has one
+	cursor int // over the addresses
 }
 
 type appEditedMsg struct {
@@ -27,27 +28,16 @@ type appEditedMsg struct {
 	err  error
 }
 
-// appKind is what the Sites list says an app is.
+// appKind is what the Sites list says of an app the user changed or added;
+// nothing for a shipped one.
 func appKind(app presets.App) string {
 	switch {
 	case app.User && app.Preset != nil:
-		return i18n.T("shell.sites.app_edited")
+		return i18n.T("shell.sites.edited")
 	case app.User:
-		return i18n.T("shell.sites.app_yours")
+		return i18n.T("shell.sites.own")
 	}
-	return i18n.T("shell.sites.app")
-}
-
-// voice reports whether the app has a voice and stream profile to turn on or off.
-func voice(app presets.App) bool {
-	return app.UDP != nil || app.Preset != nil && app.Preset.UDP != nil
-}
-
-func editRows(app presets.App) int {
-	if voice(app) {
-		return len(app.Hosts) + 1
-	}
-	return len(app.Hosts)
+	return ""
 }
 
 func (a appsScreen) has(id string) bool {
@@ -70,15 +60,14 @@ func (a appsScreen) edited() (presets.App, bool) {
 }
 
 func (m *Model) openAppEditor() tea.Cmd {
-	a := &m.apps
-	if a.cursor < len(a.apps) {
-		a.edit, m.focus = &appEditor{id: a.apps[a.cursor].ID}, 0
+	if k, i := m.apps.at(m.apps.cursor); k == rowApp && i < len(m.apps.apps) {
+		m.apps.edit = &appEditor{id: m.apps.apps[i].ID}
 	}
 	return nil
 }
 
 func (m Model) appEditActions() []action {
-	back := action{Key: "esc", Label: i18n.T("tui.act.back"), Do: func(m *Model) tea.Cmd { m.apps.edit, m.focus = nil, 0; return nil }}
+	back := action{Key: "esc", Label: i18n.T("tui.act.back"), Do: func(m *Model) tea.Cmd { m.apps.edit = nil; return nil }}
 	app, ok := m.apps.edited()
 	if !ok {
 		return []action{back}
@@ -88,22 +77,13 @@ func (m Model) appEditActions() []action {
 	if cur := m.apps.edit.cursor; cur < len(app.Hosts) {
 		h := app.Hosts[cur]
 		acts = append(acts, action{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi apps remove-host " + id + " " + h, Do: func(m *Model) tea.Cmd {
-			return m.appChange("", i18n.T("apps.host_removed", h, id), func(b Backend) error { return b.AppHostRemove(id, h) })
-		}})
-	}
-	if voice(app) {
-		on, arg, note := app.UDP == nil, "off", i18n.T("apps.udp_off", id)
-		if on {
-			arg, note = "on", i18n.T("apps.udp_on", id)
-		}
-		acts = append(acts, action{Key: "v", Label: i18n.T("app_edit.voice_toggle"), CLI: "sudo splitdpi apps udp " + id + " " + arg, Do: func(m *Model) tea.Cmd {
-			return m.appChange("", note, func(b Backend) error { return b.AppSetUDP(id, on) })
+			return m.appChange("", i18n.T("tui.note.host_removed", h, app.Name), func(b Backend) error { return b.AppHostRemove(id, h) })
 		}})
 	}
 	if app.User {
-		label, note := i18n.T("app_edit.reset"), i18n.T("apps.reset", id)
+		label, note := i18n.T("app_edit.reset"), i18n.T("tui.note.app_reset", app.Name)
 		if app.Preset == nil {
-			label, note = i18n.T("app_edit.delete"), i18n.T("apps.deleted", id)
+			label, note = i18n.T("app_edit.delete"), i18n.T("tui.note.app_deleted", app.Name)
 		}
 		acts = append(acts, action{Key: "r", Label: label, CLI: "sudo splitdpi apps reset " + id, Do: func(m *Model) tea.Cmd {
 			return m.appChange("", note, func(b Backend) error { return b.AppReset(id) })
@@ -128,6 +108,10 @@ func (m *Model) hostTyped() tea.Cmd {
 	if typed == "" {
 		return nil
 	}
+	name := id
+	if app, ok := m.apps.edited(); ok {
+		name = app.Name
+	}
 	m.apps.typing = false
 	m.apps.input.Blur()
 	return func() tea.Msg {
@@ -135,7 +119,7 @@ func (m *Model) hostTyped() tea.Cmd {
 		if err != nil {
 			return appEditedMsg{err: err}
 		}
-		return appEditedMsg{note: i18n.T("apps.host_added", d, id)}
+		return appEditedMsg{note: i18n.T("tui.note.host_added", d, name)}
 	}
 }
 
@@ -148,7 +132,7 @@ func (m *Model) appTyped() tea.Cmd {
 	m.apps.typing = false
 	m.apps.input.Blur()
 	id := m.apps.newID(name)
-	return m.appChange(id, i18n.T("apps.created", id), func(b Backend) error { return b.AppNew(id, name) })
+	return m.appChange(id, i18n.T("tui.note.app_created", name), func(b Backend) error { return b.AppNew(id, name) })
 }
 
 // appEdited reads the apps again in their order, a new one last, and keeps
@@ -160,6 +144,7 @@ func (m Model) appEdited(msg appEditedMsg) (Model, tea.Cmd, bool) {
 	}
 	a := &m.apps
 	set := m.b.PresetsList()
+	m.loadNames(set)
 	apps := make([]presets.App, 0, len(set.Apps))
 	for _, old := range a.apps {
 		if app, ok := set.Apps[old.ID]; ok {
@@ -173,17 +158,20 @@ func (m Model) appEdited(msg appEditedMsg) (Model, tea.Cmd, bool) {
 	}
 	a.apps = apps
 	if msg.open != "" {
-		a.edit, m.focus = &appEditor{id: msg.open}, 0
+		a.edit = &appEditor{id: msg.open}
 	}
 	if app, ok := a.edited(); ok {
 		e := *a.edit
-		e.cursor = max(min(e.cursor, editRows(app)-1), 0)
+		e.cursor = max(min(e.cursor, len(app.Hosts)-1), 0)
 		a.edit = &e
 	} else {
 		a.edit = nil
 	}
 	a.cursor = max(min(a.cursor, a.rows()-1), 0)
 	m.note = msg.note
+	if msg.open == "" {
+		m.note = m.withChange(msg.note)
+	}
 	return m, m.refresh(), true
 }
 
@@ -191,7 +179,7 @@ func (m Model) appEdited(msg appEditedMsg) (Model, tea.Cmd, bool) {
 func (m Model) appEditKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	a := &m.apps
 	app, _ := a.edited()
-	n, e := editRows(app), *a.edit
+	n, e := len(app.Hosts), *a.edit
 	switch k.String() {
 	case "up", "k":
 		if n > 0 {
@@ -202,7 +190,7 @@ func (m Model) appEditKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 			e.cursor = (e.cursor + 1) % n
 		}
 	case "esc":
-		a.edit, m.focus = nil, 0
+		a.edit = nil
 		return m, nil, true
 	default:
 		return m, nil, false
@@ -211,39 +199,31 @@ func (m Model) appEditKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	return m, nil, true
 }
 
-// appEditView lists the app's addresses and, last, its voice and stream row;
-// under them what that row does, or the question while typing an address.
+// appEditView lists the app's addresses; under them the question while
+// typing an address.
 func (m Model) appEditView(w, h int) string {
 	a := m.apps
 	app, _ := a.edited()
 	wrap := lipgloss.NewStyle().Width(w)
-	head := []string{titleStyle.Render(app.Name) + mutedStyle.Render("  "+appKind(app))}
+	title := groupStyle.Render(app.Name)
+	if kind := appKind(app); kind != "" {
+		title += mutedStyle.Render("  " + kind)
+	}
+	head := []string{title}
 	head = append(head, strings.Split(mutedStyle.Width(w).Render(i18n.T("app_edit.head")), "\n")...)
 	head = append(head, "")
-	cur := a.edit.cursor
 	var lines []string
 	for i, host := range app.Hosts {
-		lines = append(lines, m.listMark(i == cur && !a.typing)+host)
+		lines = append(lines, m.listMark(i == a.edit.cursor && !a.typing)+host)
 	}
 	if len(app.Hosts) == 0 {
 		lines = append(lines, mutedStyle.Render(i18n.T("app_edit.empty")))
 	}
-	line := cur
 	var tail []string
-	if voice(app) {
-		on := cur == len(app.Hosts)
-		if on {
-			line = len(lines)
-		}
-		lines = append(lines, m.listMark(on && !a.typing)+m.mark(app.UDP != nil)+" "+i18n.T("app_edit.voice"))
-		if on && !a.typing {
-			tail = append([]string{""}, strings.Split(mutedStyle.Width(w).Render(i18n.T("app_edit.voice_hint")), "\n")...)
-		}
-	}
 	if a.typing {
 		tail = append([]string{""}, strings.Split(wrap.Render(i18n.T("app_edit.which_host")), "\n")...)
-		tail = append(tail, a.input.View())
+		tail = append(tail, ansi.Truncate(a.input.View(), w, ""))
 	}
-	out := append(head, scroll(lines, line, h-len(head)-len(tail), w)...)
+	out := append(head, m.scrollMore(lines, nil, a.edit.cursor, h-len(head)-len(tail), w)...)
 	return strings.Join(append(out, tail...), "\n")
 }

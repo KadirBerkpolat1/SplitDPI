@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
@@ -29,7 +31,7 @@ type ISP struct {
 	Country    string     `toml:"country"`
 	ASN        []int      `toml:"asn"`
 	Source     string     `toml:"source"`
-	Reported   string     `toml:"reported"`
+	Reported   string     `toml:"reported"` // provenance for preset authors; only declared so the schema check accepts it
 	Strategies []Strategy `toml:"strategy"`
 	File       string     `toml:"-"`
 }
@@ -197,7 +199,7 @@ func decode(fsys fs.FS, name string, v any, schema *int) error {
 	return nil
 }
 
-// readList returns the non-blank lines that are not # comments.
+// readList returns the entries of a list, as domain.ListEntry reads a line.
 func readList(fsys fs.FS, name string) ([]string, error) {
 	f, err := fsys.Open(name)
 	if err != nil {
@@ -207,8 +209,8 @@ func readList(fsys fs.FS, name string) ([]string, error) {
 	var out []string
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		if l := strings.TrimSpace(sc.Text()); l != "" && !strings.HasPrefix(l, "#") {
-			out = append(out, l)
+		if text, _ := domain.ListEntry(sc.Text()); text != "" {
+			out = append(out, text)
 		}
 	}
 	return out, sc.Err()

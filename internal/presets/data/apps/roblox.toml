@@ -1,6 +1,6 @@
 schema = 1
 id = "roblox"
 name = "Roblox"
-hosts = ["cdn.arkoselabs.com", "rbxcdn.com", "rbxinfra.net", "rbxtrk.com", "roblox-api.arkoselabs.com", "roblox.com"]
+hosts = ["cdn.arkoselabs.com", "rbxcdn.com", "rbxinfra.net", "rbxtrk.com", "roblox-api.arkoselabs.com", "roblox.com", "robloxdev.com"]
 probe = ["https://www.roblox.com/"]
 note = "Roblox game servers use UDP 49152-65535 and are not covered."

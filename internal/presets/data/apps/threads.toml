@@ -1,0 +1,6 @@
+schema = 1
+id = "threads"
+name = "Threads"
+quic = true
+hosts = ["cdninstagram.com", "threads.com", "threads.net"]
+probe = ["https://www.threads.com/robots.txt"]

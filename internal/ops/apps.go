@@ -1,12 +1,12 @@
 package ops
 
 import (
-	"errors"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
@@ -18,10 +18,6 @@ import (
 type AppExistsError struct{ ID string }
 
 func (e AppExistsError) Error() string { return "app " + e.ID + " exists" }
-
-// ErrNoUDP is returned for turning on the voice and stream (UDP) profile of
-// an app that never had one.
-var ErrNoUDP = errors.New("app has no voice and stream profile")
 
 // App returns the app id as it runs: the user's copy if there is one.
 func (o *Ops) App(id string) (presets.App, error) {
@@ -85,25 +81,12 @@ func (o *Ops) AppHostRemove(id, d string) error {
 		return nil
 	}
 	a.Hosts = slices.DeleteFunc(slices.Clone(a.Hosts), func(h string) bool { return h == n })
-	return presets.SaveUser(o.P.UserApps, a)
-}
-
-// AppSetUDP turns the app's voice and stream (UDP) profile off, or back on
-// as its preset has it.
-func (o *Ops) AppSetUDP(id string, on bool) error {
-	a, err := o.App(id)
+	c, err := config.Load(o.P)
 	if err != nil {
 		return err
 	}
-	switch {
-	case on == (a.UDP != nil):
-		return nil
-	case !on:
-		a.UDP = nil
-	case a.Preset != nil && a.Preset.UDP != nil:
-		a.UDP = a.Preset.UDP
-	default:
-		return ErrNoUDP
+	if err := o.checkAppsMode(c, a, ""); err != nil {
+		return err
 	}
 	return presets.SaveUser(o.P.UserApps, a)
 }
@@ -113,6 +96,19 @@ func (o *Ops) AppSetUDP(id string, on bool) error {
 func (o *Ops) AppReset(id string) error {
 	a, err := o.App(id)
 	if err != nil || !a.User {
+		return err
+	}
+	c, err := config.Load(o.P)
+	if err != nil {
+		return err
+	}
+	after := presets.App{}
+	if a.Preset != nil {
+		after = *a.Preset
+	} else {
+		c.Apps = slices.DeleteFunc(c.Apps, func(x string) bool { return x == id })
+	}
+	if err := o.checkAppsMode(c, after, ""); err != nil {
 		return err
 	}
 	if err := presets.RemoveUser(o.P.UserApps, id); err != nil {

@@ -6,7 +6,6 @@ import (
 	"maps"
 	"os"
 	"slices"
-	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
@@ -64,6 +63,9 @@ func (o *Ops) AppsDisable(id string) error {
 		return nil
 	}
 	c.Apps = slices.DeleteFunc(c.Apps, func(a string) bool { return a == id })
+	if err := o.checkAppsMode(c, presets.App{}, ""); err != nil {
+		return err
+	}
 	return config.Save(o.P, c)
 }
 
@@ -132,6 +134,13 @@ func (o *Ops) SitesRemove(d string) error {
 	if err != nil {
 		return err
 	}
+	c, err := config.Load(o.P)
+	if err != nil {
+		return err
+	}
+	if err := o.checkAppsMode(c, presets.App{}, n); err != nil {
+		return err
+	}
 	return config.RemoveFromList(o.P.UserHosts, n)
 }
 
@@ -142,8 +151,8 @@ type ImportSkip struct {
 }
 
 // SitesImport adds the domains in the text file at path to the user's sites:
-// one per line, "#" starts a comment, and *.example.com or .example.com mean
-// example.com. added holds the domains that were not in the list yet.
+// one per line, read as config.ListEntry reads the user's lists. added holds
+// the domains that were not in the list yet.
 // Like SitesAdd, it clears the local DNS caches when it added a domain.
 func (o *Ops) SitesImport(path string) (added []string, skipped []ImportSkip, err error) {
 	f, err := os.Open(path)
@@ -165,13 +174,11 @@ func (o *Ops) importSites(r io.Reader) (added []string, skipped []ImportSkip, er
 	}
 	sc := bufio.NewScanner(r)
 	for n := 1; sc.Scan(); n++ {
-		text, _, _ := strings.Cut(sc.Text(), "#")
-		text = strings.TrimSpace(strings.TrimPrefix(text, "\ufeff"))
+		text, d := domain.ListEntry(sc.Text())
 		if text == "" {
 			continue
 		}
-		d, err := domain.Normalize(strings.TrimPrefix(text, "."))
-		if err != nil {
+		if d == "" {
 			skipped = append(skipped, ImportSkip{Line: n, Text: text})
 			continue
 		}

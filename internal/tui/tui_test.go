@@ -193,16 +193,6 @@ func (f *fake) AppHostRemove(id, d string) error {
 	f.editApp(id, func(a *presets.App) { a.Hosts = slices.DeleteFunc(a.Hosts, func(h string) bool { return h == d }) })
 	return nil
 }
-func (f *fake) AppSetUDP(id string, on bool) error {
-	if on {
-		f.record("apps udp " + id + " on")
-		f.editApp(id, func(a *presets.App) { a.UDP = a.Preset.UDP })
-		return nil
-	}
-	f.record("apps udp " + id + " off")
-	f.editApp(id, func(a *presets.App) { a.UDP = nil })
-	return nil
-}
 func (f *fake) AppReset(id string) error {
 	f.record("apps reset " + id)
 	if a := f.set.Apps[id]; a.Preset != nil {
@@ -218,6 +208,11 @@ func (f *fake) ExcludeAdd(d string) (string, error) {
 	n := strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(d, "https://"), "/"))
 	f.excluded = append(f.excluded, n)
 	return n, nil
+}
+func (f *fake) ExcludeRemove(d string) error {
+	f.record("exclude remove " + d)
+	f.excluded = slices.DeleteFunc(f.excluded, func(s string) bool { return s == d })
+	return nil
 }
 func (f *fake) SitesList() ([]string, error) { return f.sites, nil }
 func (f *fake) SitesAdd(d string) (string, error) {
@@ -455,18 +450,16 @@ func (f *fake) SetSkipIfaces(list []string) error {
 	f.cfg.SkipIfaces = slices.Clone(list)
 	return nil
 }
-func (f *fake) SetIPInfoURL(u string) error {
-	f.record("ipinfo_url " + u)
-	if u == "" {
-		u = config.Default().IPInfoURL
-	}
-	if !strings.HasPrefix(u, "https://") || len(u) == len("https://") {
-		return errors.New("not an https URL: " + u)
-	}
+func (f *fake) RestartCommand() string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.cfg.IPInfoURL = u
-	return nil
+	switch f.st.Mode {
+	case "service":
+		return "sudo splitdpi stop && sudo splitdpi enable"
+	case "background":
+		return "sudo splitdpi stop && sudo splitdpi run --background"
+	}
+	return "sudo splitdpi stop && sudo splitdpi run"
 }
 func (f *fake) SetQNum(n int) error {
 	f.record(fmt.Sprintf("qnum %d", n))
@@ -516,6 +509,8 @@ func key(s string) tea.KeyMsg {
 	switch s {
 	case "tab":
 		return tea.KeyMsg{Type: tea.KeyTab}
+	case "shift+tab":
+		return tea.KeyMsg{Type: tea.KeyShiftTab}
 	case "enter":
 		return tea.KeyMsg{Type: tea.KeyEnter}
 	case "esc":
@@ -577,19 +572,10 @@ func settle(t *testing.T, m Model, cmd tea.Cmd) Model {
 	return m
 }
 
-// goTo moves the menu to page pg with the arrow keys and goes into the page.
+// goTo selects page pg with its number key.
 func goTo(t *testing.T, m Model, pg int) Model {
 	t.Helper()
-	if m.inPage {
-		m = press(t, m, "esc")
-	}
-	for m.page < pg {
-		m = press(t, m, "down")
-	}
-	for m.page > pg {
-		m = press(t, m, "up")
-	}
-	return press(t, m, "enter")
+	return press(t, m, strconv.Itoa(pg+1))
 }
 
 var missingKey = regexp.MustCompile(`![a-z_]+(\.[a-z_]+)+!`)
@@ -606,26 +592,31 @@ func has(t *testing.T, view, want string) {
 
 func TestStatusScreen(t *testing.T) {
 	f := newFake()
-	v := newModel(t, f).View()
-	has(t, v, "stopped")
-	has(t, v, "none, run setup")
+	m := newModel(t, f)
+	v := m.View()
+	has(t, v, "Not set up yet")
 	has(t, v, "discord")
 	has(t, v, "youtube")
-	has(t, v, "r Run")
-	has(t, v, "sudo splitdpi scan") // the setup comes first without a strategy
+	has(t, v, "w Setup") // the setup comes first without a method
+	if cliFor(m, "r") != "" || cliFor(m, "w") != "sudo splitdpi scan" {
+		t.Errorf("actions %q; want w and no start without a method", reproKeys(m))
+	}
 }
 
 func TestHeader(t *testing.T) {
 	f := newFake()
 	v := newModel(t, f).View()
 	head := strings.Split(v, "\n")[0]
-	if !strings.HasPrefix(head, "◆ SplitDPI v0.1.0") || !strings.HasSuffix(head, " ○ STOPPED ") || lipgloss.Width(head) != 80 {
+	if !strings.HasPrefix(head, "SplitDPI  ") || !strings.HasSuffix(head, "○ Stopped") || lipgloss.Width(head) != 80 {
 		t.Errorf("header %q", head)
 	}
+	for _, p := range pages {
+		has(t, head, p.Title())
+	}
 	f.st.State = "failed"
-	has(t, newModel(t, f).View(), " ● FAILED ")
+	has(t, strings.Split(newModel(t, f).View(), "\n")[0], "● Error")
 	f.st.State = "running"
-	has(t, newModel(t, f).View(), " ● RUNNING ")
+	has(t, strings.Split(newModel(t, f).View(), "\n")[0], "● Running")
 }
 
 func TestStatusSetupOnlyWithoutStrategy(t *testing.T) {
@@ -638,10 +629,10 @@ func TestStatusSetupOnlyWithoutStrategy(t *testing.T) {
 }
 
 func TestLongTextWrapsInsteadOfCut(t *testing.T) {
-	m := press(t, newModel(t, newFake()), "w")
-	v := pages[pgScan].View(m, 60, 18)
-	if !strings.Contains(strings.Join(strings.Fields(v), " "), "This sends one request to that site.") {
-		t.Errorf("lookup question cut off:\n%s", v)
+	m := goTo(t, newModel(t, newFake()), pgSetup)
+	v := pages[pgSetup].View(m, 60, 18)
+	if !strings.Contains(flat(v), flat(i18n.T("scan_page.quick_note"))) {
+		t.Errorf("the setup's note cut off:\n%s", v)
 	}
 	for _, l := range strings.Split(v, "\n") {
 		if lipgloss.Width(l) > 60 {
@@ -650,106 +641,130 @@ func TestLongTextWrapsInsteadOfCut(t *testing.T) {
 	}
 }
 
-func TestFocusMovesFooterCommand(t *testing.T) {
+func TestHintBarFollowsPage(t *testing.T) {
 	f := newFake()
 	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
-	m := press(t, newModel(t, f), "enter")
-	has(t, m.View(), "$ sudo splitdpi run")
-	m = press(t, m, "tab")
-	has(t, m.View(), "$ sudo splitdpi run --background")
-	m = press(t, m, "tab")
-	has(t, m.View(), "$ sudo splitdpi probe")
+	m := newModel(t, f)
+	bar, _ := m.hintBar()
+	for _, want := range []string{"r Start", "p Try sites", "? Help", "q Quit"} {
+		has(t, bar, want)
+	}
+	if strings.Contains(m.View(), "$ sudo splitdpi") {
+		t.Errorf("the main view echoes a command:\n%s", m.View())
+	}
+	has(t, strings.Join(press(t, m, "?").helpBox().lines, "\n"), "sudo splitdpi run")
 }
 
-func TestMenuNavigation(t *testing.T) {
+func TestPageNavigation(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	f.sites = []string{"pastebin.com"}
 	m := newModel(t, f)
-	m = press(t, m, "up")
-	if m.page != pgStatus {
-		t.Fatalf("up from the first entry: page %d", m.page)
-	}
-	m = press(t, m, "down")
-	if m.page != pgSites || m.inPage {
-		t.Fatalf("down: page %d inPage %v", m.page, m.inPage)
+	m = press(t, m, "tab")
+	if m.page != pgSites {
+		t.Fatalf("tab: page %d", m.page)
 	}
 	has(t, m.View(), "Discord") // Open loaded the page at once
 	has(t, m.View(), "pastebin.com")
-	m = press(t, press(t, m, "j"), "k")
-	if m.page != pgSites {
-		t.Fatalf("j then k: page %d", m.page)
-	}
-	m = press(t, m, "enter")
-	if !m.inPage {
-		t.Fatal("enter did not move focus into the page")
-	}
 	m = press(t, m, "down")
 	if m.page != pgSites || m.apps.cursor != 1 {
-		t.Errorf("down in the page: page %d cursor %d; want the cursor to move", m.page, m.apps.cursor)
+		t.Errorf("down: page %d cursor %d; want the cursor to move", m.page, m.apps.cursor)
 	}
-	m = press(t, m, "esc")
-	if m.inPage || m.page != pgSites {
-		t.Errorf("esc: inPage %v page %d", m.inPage, m.page)
+	m = press(t, press(t, m, "j"), "k")
+	if m.page != pgSites || m.apps.cursor != 1 {
+		t.Errorf("j then k: page %d cursor %d", m.page, m.apps.cursor)
 	}
-	m = press(t, m, "tab")
-	if !m.inPage {
-		t.Error("tab did not move focus into the page")
+	if m = press(t, m, "esc"); m.page != pgSites {
+		t.Errorf("esc left the page: %d", m.page)
 	}
-	for range pages {
-		m = press(t, press(t, m, "esc"), "down")
+	if m = press(t, m, "shift+tab"); m.page != pgStatus {
+		t.Errorf("shift+tab: page %d", m.page)
 	}
-	if m.page != len(pages)-1 {
-		t.Errorf("down past the last entry: page %d", m.page)
+	if m = press(t, m, "shift+tab"); m.page != len(pages)-1 {
+		t.Errorf("shift+tab from the first page: page %d", m.page)
+	}
+	for i := range pages {
+		if m = press(t, m, strconv.Itoa(i+1)); m.page != i {
+			t.Errorf("%d: page %d", i+1, m.page)
+		}
+	}
+	if m = press(t, m, strconv.Itoa(len(pages)+1)); m.page != len(pages)-1 {
+		t.Errorf("a digit past the last page: page %d", m.page)
 	}
 }
 
-func TestMouseClickSelectsMenuEntry(t *testing.T) {
+func TestMouseClickSelectsTab(t *testing.T) {
 	f := newFake()
 	f.strategies = testStrategies()
-	m := press(t, newModel(t, f), "enter")
-	lines := strings.Split(m.View(), "\n")
-	for i, p := range pages {
-		if !strings.Contains(lines[menuTop+i], p.Title()) {
-			t.Errorf("menu entry %q is not on line %d: %q", p.Title(), menuTop+i, lines[menuTop+i])
-		}
-	}
+	m := newModel(t, f)
+	_, spans := m.header()
 	click := func(m Model, x, y int) Model {
 		m, cmd := update(t, m, tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 		return settle(t, m, cmd)
 	}
-	m = click(m, 5, menuTop+pgStrategy)
-	if m.page != pgStrategy || m.inPage {
-		t.Fatalf("click: page %d inPage %v", m.page, m.inPage)
+	m = click(m, spans[pgSetup].x0, 0)
+	if m.page != pgSetup {
+		t.Fatalf("click on the setup tab: page %d", m.page)
 	}
-	has(t, m.View(), "tt-multidisorder")
-	m = click(m, 40, menuTop+pgLogs)
-	m = click(m, 5, menuTop+len(pages)+3)
-	if m.page != pgStrategy {
-		t.Errorf("a click outside the menu changed the page to %d", m.page)
+	if m = click(m, 40, 5); m.page != pgSetup {
+		t.Errorf("a click on the page changed the page to %d", m.page)
 	}
 }
 
 func TestHelpOverlay(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
-	m := press(t, press(t, newModel(t, f), "down"), "?")
+	m := press(t, goTo(t, newModel(t, f), pgSites), "?")
 	v := m.View()
 	has(t, v, "Keys on Sites")
 	has(t, v, "Add a site")
 	has(t, v, "A site broke")
-	has(t, v, "Everywhere")
-	has(t, v, "Back to the menu")
 	m = press(t, m, "down")
-	if m.page != pgSites || !m.help {
-		t.Errorf("a key reached the menu under the help: page %d help %v", m.page, m.help)
+	if m.page != pgSites || !m.help || m.apps.cursor != 0 {
+		t.Errorf("a key reached the page under the help: page %d help %v cursor %d", m.page, m.help, m.apps.cursor)
+	}
+	found := false
+	for range 30 {
+		found = found || strings.Contains(m.View(), "Everywhere")
+		m = press(t, m, "down")
+	}
+	if !found {
+		t.Errorf("scrolling the help never showed Everywhere:\n%s", m.View())
 	}
 	if m = press(t, m, "esc"); m.help {
 		t.Error("esc did not close the help")
 	}
 	m = press(t, press(t, m, "?"), "?")
-	if m.help || strings.Contains(m.View(), "Everywhere") {
+	if m.help || strings.Contains(m.View(), "Keys on Sites") {
 		t.Error("? did not close the help")
+	}
+}
+
+// TestHelpFits: the help keeps its title and close key on a 80x24 screen in
+// every language, scrolling what does not fit (TUI-1).
+func TestHelpFits(t *testing.T) {
+	defer i18n.Init("en")
+	for _, lang := range i18n.Supported() {
+		i18n.Init(lang)
+		f := newFake()
+		f.set = trSet()
+		f.st = supervisor.Status{State: "running", Mode: "service", PID: 7}
+		m := press(t, goTo(t, newModel(t, f), pgSites), "?")
+		m.pending = true
+		v := m.View()
+		lines := strings.Split(v, "\n")
+		if len(lines) != 24 {
+			t.Errorf("%s: %d lines", lang, len(lines))
+		}
+		for _, l := range lines {
+			if lipgloss.Width(l) > 80 {
+				t.Errorf("%s: line wider than 80: %q", lang, l)
+			}
+		}
+		end := slices.IndexFunc(lines, func(l string) bool { return strings.Contains(l, i18n.T("shell.help.close")) })
+		if end < 0 || end+1 >= len(lines) || !strings.Contains(lines[end+1], "╰") {
+			t.Errorf("%s: the help's close key or bottom border is cut:\n%s", lang, v)
+		}
 	}
 }
 
@@ -777,7 +792,7 @@ func TestGlyphsFor(t *testing.T) {
 func TestASCIIFallback(t *testing.T) {
 	u := unicodeGlyphs
 	symbols := u.border.Top + u.border.Left + u.border.TopLeft + u.border.TopRight + u.border.BottomLeft + u.border.BottomRight +
-		u.logo + u.dot + u.dotOff + u.cursor + u.menuMark + u.on + u.off + u.fail + u.bullet + u.sep + u.menuKeys +
+		u.dot + u.dotOff + u.cursor + u.on + u.off + u.never + u.fail + u.bullet + u.sep + u.arrows + u.up + u.down +
 		u.bar[0] + u.bar[1] + u.bar[2]
 	for _, ascii := range []bool{true, false} {
 		for name, v := range pageViews(t, func(m Model) Model {
@@ -798,7 +813,7 @@ func TestASCIIFallback(t *testing.T) {
 	m := newModel(t, newFake())
 	m.g = asciiGlyphs
 	v := m.View()
-	for _, want := range []string{"+--------------+", "| > Status", "* SplitDPI", "* STOPPED"} {
+	for _, want := range []string{"[1 Status]", "o Stopped", "+- "} {
 		has(t, v, want)
 	}
 }
@@ -862,43 +877,52 @@ func TestConfirmDialog(t *testing.T) {
 	}
 }
 
+// Below 80x24 the screen says to enlarge it, and a question still shows
+// with its keys, so that quitting stays possible (TUI-7).
 func TestTooSmallTerminal(t *testing.T) {
 	for _, size := range [][2]int{{79, 24}, {80, 23}, {40, 10}} {
 		m := newModel(t, newFake())
 		m, _ = update(t, m, tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		v := m.View()
-		if strings.Contains(v, "\n") || lipgloss.Width(v) > size[0] {
-			t.Errorf("%v: not one line that fits: %q", size, v)
+		if lines := strings.Split(v, "\n"); len(lines) > size[1] || lipgloss.Width(v) > size[0] {
+			t.Errorf("%v: does not fit: %q", size, v)
 		}
-		if size[0] >= 40 {
-			has(t, v, "Enlarge the terminal")
-		}
+		has(t, v, "Enlarge the terminal")
+		has(t, v, "q Quit")
 		if _, cmd := update(t, m, key("q")); cmd == nil {
 			t.Errorf("%v: q does not quit", size)
+		}
+
+		q := m
+		q.running, q.confirmQuit = true, true
+		v = q.View()
+		if lipgloss.Width(v) > size[0] {
+			t.Errorf("%v: quit prompt too wide: %q", size, v)
+		}
+		has(t, v, i18n.T("background_tui.quit_title"))
+		has(t, v, "n "+i18n.T("background_tui.quit_cancel"))
+		if q = press(t, q, "n"); q.confirmQuit {
+			t.Errorf("%v: n did not close the quit prompt", size)
 		}
 	}
 }
 
+// Every language i18n has is offered, Russian too, and each applies at once (TUI-6).
 func TestSettingsLanguage(t *testing.T) {
 	defer i18n.Init("en")
 	f := newFake()
-	m := goTo(t, newModel(t, f), pgSettings)
-	has(t, m.View(), "Language")
-	has(t, m.View(), "English")
-	has(t, m.View(), "Space Switch to Türkçe")
-	m = press(t, m, "space")
-	if i18n.Lang() != "tr" || !f.called("lang tr") {
+	m := press(t, toSetting(t, f, "lang"), "enter")
+	m = press(t, press(t, press(t, m, "down"), "down"), "enter")
+	if i18n.Lang() != "ru" || !f.called("lang ru") {
 		t.Fatalf("lang %s, calls %q", i18n.Lang(), f.calls)
 	}
-	v := m.View()
-	has(t, v, "Ayarlar")
-	has(t, v, "Türkçe")
-	has(t, v, "Dil kaydedildi.")
-	has(t, v, "Boşluk Dili değiştir: English")
-	press(t, m, "space")
+	has(t, m.View(), "Настройки")
+	has(t, m.View(), "Русский")
+	m = press(t, press(t, press(t, m, "enter"), "down"), "enter")
 	if i18n.Lang() != "en" || !f.called("lang en") {
 		t.Errorf("lang %s, calls %q", i18n.Lang(), f.calls)
 	}
+	has(t, m.View(), "Language saved.")
 }
 
 func TestLogsScreen(t *testing.T) {
@@ -906,12 +930,11 @@ func TestLogsScreen(t *testing.T) {
 	f.logs = "nfqws2 started (pid 42)\n"
 	f.logsFollow = true
 	m := newModel(t, f)
-	m.page = pgLogs - 1
-	m, cmd := update(t, m, key("down"))
+	m, cmd := update(t, m, key("4"))
 	if m.page != pgLogs || m.logCancel == nil || cmd == nil {
 		t.Fatalf("page %d, stream started %v", m.page, m.logCancel != nil)
 	}
-	has(t, m.View(), "sudo splitdpi logs -f")
+	has(t, press(t, m, "?").View(), "sudo splitdpi logs -f")
 	go cmd() // the stream and the first tick; the stream blocks until cancelled
 	deadline := time.Now().Add(2 * time.Second)
 	for !strings.Contains(m.logs.String(), "nfqws2 started") && time.Now().Before(deadline) {
@@ -919,13 +942,14 @@ func TestLogsScreen(t *testing.T) {
 	}
 	m, _ = update(t, m, logTickMsg{})
 	has(t, m.View(), "nfqws2 started (pid 42)")
-	// Leaving and coming back does not start a second stream (ticks are nil
-	// in tests, so any command would be one).
-	m, _ = update(t, m, key("down"))
+	// Leaving stops the stream; coming back starts another.
+	if m, _ = update(t, m, key("tab")); m.logCancel != nil {
+		t.Error("leaving the logs kept the stream")
+	}
 	m, _ = update(t, m, logTickMsg{})
-	m, cmd = update(t, m, key("up"))
-	if m.page != pgLogs || cmd != nil {
-		t.Errorf("back on the logs: page %d, a second stream %v", m.page, cmd != nil)
+	m, cmd = update(t, m, key("4"))
+	if m.page != pgLogs || cmd == nil || m.logCancel == nil {
+		t.Errorf("back on the logs: page %d, a new stream %v", m.page, cmd != nil)
 	}
 	m.stopAll()
 }
@@ -934,9 +958,7 @@ func TestLogsScreen(t *testing.T) {
 func TestLogsStreamError(t *testing.T) {
 	f := newFake()
 	f.logsErr = errors.New(`exec: "journalctl": executable file not found in $PATH`)
-	m := newModel(t, f)
-	m.page = pgLogs - 1
-	m = press(t, m, "down")
+	m := press(t, newModel(t, f), "4")
 	v := m.View()
 	has(t, v, `exec: "journalctl": executable file not found`)
 	if strings.Contains(v, i18n.T("tui.logs_empty")) {
@@ -965,7 +987,7 @@ func TestTickRefreshesStatus(t *testing.T) {
 	f.mu.Unlock()
 	m, cmd := update(t, m, tickMsg{})
 	m = settle(t, m, cmd)
-	has(t, m.View(), "running")
+	has(t, m.View(), "Running")
 	if ticks == 0 {
 		t.Error("tick did not schedule the next one")
 	}
@@ -978,12 +1000,12 @@ func TestProbeShowsResults(t *testing.T) {
 		t.Fatal("probe not called")
 	}
 	has(t, m.View(), "1/1 sites open")
-	has(t, m.View(), "all on the Sites page")
 }
 
 // Run now keeps the bypass inside this process; quitting must ask, then revert.
 func TestRunNowAsksBeforeQuit(t *testing.T) {
 	f := newFake()
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
 	m := newModel(t, f)
 	m, cmd := update(t, m, key("r"))
 	done := make(chan Model)
@@ -992,7 +1014,7 @@ func TestRunNowAsksBeforeQuit(t *testing.T) {
 	if !m.running {
 		t.Fatal("model does not know it runs the bypass")
 	}
-	has(t, m.View(), "● RUNNING")
+	has(t, m.View(), "● Running")
 	m, cmd = update(t, m, key("q"))
 	if cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
@@ -1012,6 +1034,7 @@ func TestRunNowAsksBeforeQuit(t *testing.T) {
 // A run started and stopped in the TUI is over: quitting has nothing to stop.
 func TestQuitAfterStoppedRun(t *testing.T) {
 	f := newFake()
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
 	m := newModel(t, f)
 	m, cmd := update(t, m, key("r"))
 	done := make(chan Model)
@@ -1053,66 +1076,88 @@ func TestDisclaimerFirstStart(t *testing.T) {
 	f.cfg.DisclaimerAccepted = false
 	m := newModel(t, f)
 	has(t, m.View(), i18n.T("disclaimer.title"))
-	if strings.Contains(m.View(), "none, run setup") || strings.Contains(m.View(), "Settings") {
-		t.Error("status or menu shown before the disclaimer was accepted")
+	if strings.Contains(m.View(), "Not set up yet") || strings.Contains(m.View(), "Settings") {
+		t.Error("status or tabs shown before the disclaimer was accepted")
 	}
-	m = press(t, m, "down")
-	if m.page != pgStatus {
-		t.Error("the menu moved under the disclaimer")
+	if m = press(t, m, "2"); m.page != pgStatus {
+		t.Error("a page opened under the disclaimer")
 	}
 	m = press(t, m, "enter")
 	if !f.called("accept disclaimer") {
 		t.Fatal("acceptance not saved")
 	}
-	has(t, m.View(), "stopped")
+	has(t, m.View(), "Not set up yet")
 }
 
 func TestWizardStopsOnDoctorBlocker(t *testing.T) {
 	f := newFake()
 	f.checks = []doctor.Check{{ID: "nft", Severity: doctor.Blocker, Msg: "nft is not installed", Fix: "sudo apt install nftables"}}
 	m := press(t, newModel(t, f), "w")
-	if m.page != pgScan || !m.inPage {
-		t.Fatalf("w: page %d inPage %v; want the scan page focused", m.page, m.inPage)
+	if m.page != pgSetup || m.wiz.step != wDoctor {
+		t.Fatalf("w: page %d step %v; want the setup's checks", m.page, m.wiz.step)
 	}
 	has(t, m.View(), "sudo apt install nftables")
 	has(t, m.View(), "✗ nft is not installed")
-	m = press(t, m, "enter") // check again
-	if m.page != pgScan || m.wiz.step != wDoctor {
-		t.Errorf("left the doctor step with a blocker: page %d step %v", m.page, m.wiz.step)
+	m = press(t, m, "r") // check again
+	if m.page != pgSetup || m.wiz.step != wDoctor || f.count("doctor") != 2 {
+		t.Errorf("left the doctor step with a blocker: page %d step %v, calls %q", m.page, m.wiz.step, f.calls)
 	}
-	has(t, m.View(), "sudo splitdpi doctor")
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi doctor" {
+		t.Errorf("check again CLI %q", cli)
+	}
+	if m = press(t, m, "esc"); m.wiz.step != wIntro || m.page != pgSetup {
+		t.Errorf("esc: page %d step %v; want the setup's start", m.page, m.wiz.step)
+	}
 }
 
-func TestScanPageStartsSetup(t *testing.T) {
+func TestSetupPageStartsSetup(t *testing.T) {
 	f := newFake()
+	f.set = trSet()
 	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
-	m := goTo(t, newModel(t, f), pgScan)
-	has(t, m.View(), "The setup checks this machine")
-	has(t, m.View(), "$ sudo splitdpi scan")
+	m := goTo(t, newModel(t, f), pgSetup)
+	has(t, flat(pageText(m.View())), "Choose how to find one")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi scan" {
+		t.Errorf("enter CLI %q", cli)
+	}
 	if f.called("doctor") {
 		t.Fatal("selecting the page started the setup")
 	}
 	m = press(t, m, "enter")
-	if !f.called("doctor") || m.wiz.step != wLookup {
+	if !f.called("doctor") || !f.called("detect") || m.wiz.step != wApps {
 		t.Errorf("enter: step %v, calls %q", m.wiz.step, f.calls)
 	}
 	// The wizard keeps its place while another page is shown.
-	m = press(t, press(t, press(t, m, "esc"), "up"), "down")
-	if m.wiz.step != wLookup {
+	m = goTo(t, goTo(t, m, pgStatus), pgSetup)
+	if m.wiz.step != wApps {
 		t.Errorf("step %v after leaving the page", m.wiz.step)
 	}
 }
 
-func TestWizardDeclineLookupShowsPicker(t *testing.T) {
+// The lookup starts at once; n chooses the provider by hand instead, and
+// the lookup's answer then changes nothing.
+func TestWizardPickProviderByHand(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
-	m := press(t, newModel(t, f), "w")
-	has(t, m.View(), "ipinfo.io")
+	f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
+	m, cmd := update(t, newModel(t, f), key("w"))
+	m, lookup := update(t, m, cmd()) // the checks pass
+	if m.wiz.step != wLookup || lookup == nil {
+		t.Fatalf("step %v; want the lookup under way", m.wiz.step)
+	}
+	has(t, m.View(), "Finding your internet provider")
+	if strings.Contains(m.View(), "ipinfo") {
+		t.Errorf("the lookup names its service:\n%s", m.View())
+	}
 	m = press(t, m, "n")
 	has(t, m.View(), "Türk Telekom")
-	has(t, m.View(), "sudo splitdpi detect --asn 9121 --country TR")
-	if f.called("detect") {
-		t.Error("IP lookup ran although it was declined")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi detect --asn 9121 --country TR" {
+		t.Errorf("pick CLI %q", cli)
+	}
+	if m, _ = update(t, m, lookup()); m.wiz.step != wPick {
+		t.Errorf("the lookup's answer left the picker: step %v", m.wiz.step)
+	}
+	if m = press(t, m, "esc"); m.wiz.step != wIntro {
+		t.Errorf("esc on the picker: step %v", m.wiz.step)
 	}
 }
 
@@ -1123,20 +1168,20 @@ func toScan(t *testing.T, f *fake) (Model, tea.Cmd) {
 	f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
 	f.cfg.Apps = nil
 	m := press(t, newModel(t, f), "w")
-	m = press(t, m, "y")
 	if m.wiz.step != wApps || !m.wiz.chosen["discord"] || m.wiz.chosen["youtube"] {
 		t.Fatalf("apps step %v, chosen %v; want TR defaults preselected", m.wiz.step, m.wiz.chosen)
 	}
-	has(t, m.View(), "sudo splitdpi apps")
-	m, cmd := update(t, m, key("enter"))
-	m, cmd = update(t, m, cmd()) // apps applied → scan starts
-	if !f.called("apps enable discord") {
-		t.Errorf("chosen apps not saved: %q", f.calls)
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi scan --asn 9121 --country TR --apps discord" {
+		t.Errorf("scan CLI %q", cli)
 	}
-	has(t, m.View(), "sudo splitdpi scan --asn 9121 --country TR --apps discord")
+	m, cmd := update(t, m, key("enter"))
+	if f.called("apps enable discord") {
+		t.Errorf("the apps were saved before a method opened them: %q", f.calls)
+	}
 	return m, cmd
 }
 
+// A cancelled scan changes nothing: the chosen apps are not saved (TUI-8).
 func TestWizardScanStreamsAndCancels(t *testing.T) {
 	f := newFake()
 	started := make(chan context.Context, 1)
@@ -1155,13 +1200,18 @@ func TestWizardScanStreamsAndCancels(t *testing.T) {
 	if scanCtx.Err() == nil {
 		t.Fatal("esc did not cancel the scan")
 	}
-	m, _ = update(t, m, <-done)
+	m = settle(t, m, func() tea.Msg { return <-done })
 	has(t, m.View(), "cancelled")
-	if m.page != pgScan || !m.inPage {
-		t.Errorf("esc during the scan left the page: page %d inPage %v", m.page, m.inPage)
+	if m.page != pgSetup || m.wiz.step != wScan {
+		t.Errorf("esc during the scan left the step: page %d step %v", m.page, m.wiz.step)
+	}
+	if f.called("apps enable discord") {
+		t.Errorf("a cancelled scan saved the apps: %q", f.calls)
 	}
 }
 
+// The done step starts the bypass the way the run mode says, offers the
+// background in run mode window and boot (TUI-9), and saves the apps.
 func TestWizardFinishStartAtBoot(t *testing.T) {
 	f := newFake()
 	f.scanFn = func(context.Context, scan.Options, func(string)) (scan.Report, error) {
@@ -1170,7 +1220,15 @@ func TestWizardFinishStartAtBoot(t *testing.T) {
 	m, cmd := toScan(t, f)
 	m = settle(t, m, cmd)
 	has(t, m.View(), "tt-multidisorder")
-	has(t, m.View(), "sudo splitdpi run")
+	if !f.called("apps enable discord") {
+		t.Errorf("the apps the method opened were not saved: %q", f.calls)
+	}
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi run" {
+		t.Errorf("start CLI %q", cli)
+	}
+	if cli := cliFor(m, "a"); cli != "sudo splitdpi run --background" {
+		t.Errorf("background CLI %q", cli)
+	}
 	m = press(t, m, "b")
 	if f.called("enable") {
 		t.Fatal("enabled without asking")
@@ -1191,6 +1249,26 @@ func TestWizardFinishStartAtBoot(t *testing.T) {
 	has(t, m.View(), i18n.T("service.enabled"))
 }
 
+func TestWizardDoneInBackgroundMode(t *testing.T) {
+	f := newFake()
+	f.cfg.RunMode = config.RunBackground
+	f.scanFn = func(context.Context, scan.Options, func(string)) (scan.Report, error) {
+		return scan.Report{Winner: &config.Strategy{ID: "tt-multidisorder"}}, nil
+	}
+	m, cmd := toScan(t, f)
+	m = settle(t, m, cmd)
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi run --background" {
+		t.Errorf("start CLI %q", cli)
+	}
+	if cliFor(m, "a") != "" {
+		t.Error("the background is offered twice")
+	}
+	if m = press(t, m, "r"); !f.called("background") || m.running || m.page != pgStatus {
+		t.Errorf("r: running here %v page %d, calls %q", m.running, m.page, f.calls)
+	}
+}
+
+// A site scan leaves the apps alone.
 func TestWizardScanSite(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
@@ -1201,28 +1279,37 @@ func TestWizardScanSite(t *testing.T) {
 		got = opt
 		return scan.Report{Winner: &config.Strategy{ID: "blockcheck", Source: "blockcheck2"}}, nil
 	}
-	m := press(t, press(t, newModel(t, f), "w"), "y")
-	has(t, m.View(), "Try ready-made strategies (fast)")
-	has(t, m.View(), "Scan a site with blockcheck2")
+	m := press(t, newModel(t, f), "w")
+	if cli := cliFor(m, "s"); cli != "sudo splitdpi scan --site DOMAIN" {
+		t.Errorf("site scan CLI %q", cli)
+	}
 	m = press(t, m, "s")
 	has(t, m.View(), "both IPv4 and IPv6")
 	m = press(t, m, "esc")
-	if m.page != pgScan || m.wiz.step != wApps {
+	if m.page != pgSetup || m.wiz.step != wApps {
 		t.Fatalf("esc on the site step: page %d step %v, want the apps step", m.page, m.wiz.step)
 	}
 	f.ipv6 = false
 	m = press(t, m, "s")
 	has(t, m.View(), "only IPv4")
 	m = typeText(t, m, "https://Pastebin.com/")
-	has(t, m.View(), "sudo splitdpi scan --asn 9121 --country TR --site https://Pastebin.com/")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi scan --asn 9121 --country TR --site https://Pastebin.com/" {
+		t.Errorf("scan CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	if got.Site != "pastebin.com" || got.ASN != 9121 {
 		t.Fatalf("scan options %+v", got)
 	}
 	has(t, m.View(), "blockcheck")
 	has(t, m.View(), "Added pastebin.com to your sites")
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "apps ") {
+			t.Errorf("a site scan changed the apps: %q", f.calls)
+		}
+	}
 }
 
+// A broken site is left alone, and x takes it off that list (TUI-2).
 func TestAppsSiteBroke(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
@@ -1230,66 +1317,105 @@ func TestAppsSiteBroke(t *testing.T) {
 	has(t, m.View(), "Discord")
 	m = press(t, m, "e")
 	m = typeText(t, m, "https://Bank.example/")
-	has(t, m.View(), "sudo splitdpi exclude add https://Bank.example/")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi exclude add https://Bank.example/" {
+		t.Errorf("exclude CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	if !f.called("exclude add https://Bank.example/") {
 		t.Fatalf("calls %q", f.calls)
 	}
-	has(t, m.View(), "✗ bank.example")
-	has(t, m.View(), "excluded, never touched")
+	has(t, m.View(), "⊘ bank.example")
+	has(t, m.View(), "Sites left alone")
+	m = press(t, m, "up") // from the first row to the last
+	has(t, m.View(), "SplitDPI never touches this site")
+	if cli := cliFor(m, "x"); cli != "sudo splitdpi exclude remove bank.example" {
+		t.Errorf("remove CLI %q", cli)
+	}
+	m = press(t, m, "x")
+	if !f.called("exclude remove bank.example") || len(m.apps.excluded) != 0 {
+		t.Fatalf("excluded %q, calls %q", m.apps.excluded, f.calls)
+	}
+	has(t, m.View(), "no longer leaves bank.example alone")
 }
 
-// "a" works from the menu too, and typing then goes to the page.
-func TestAppsAddFromMenu(t *testing.T) {
+// While typing, q and the digits go to the input, and esc only cancels it.
+func TestAppsTypingTakesKeys(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
-	m := press(t, press(t, newModel(t, f), "down"), "a")
-	if !m.inPage || !m.apps.typing {
-		t.Fatalf("a from the menu: inPage %v typing %v", m.inPage, m.apps.typing)
+	m := press(t, goTo(t, newModel(t, f), pgSites), "a")
+	if !m.apps.typing {
+		t.Fatal("a did not open the input")
 	}
-	m = typeText(t, m, "qj")
-	if m.page != pgSites || m.apps.input.Value() != "qj" {
+	m = typeText(t, m, "q1j")
+	if m.page != pgSites || m.apps.input.Value() != "q1j" || m.quitting {
 		t.Errorf("typed keys reached the shell: page %d input %q", m.page, m.apps.input.Value())
 	}
+	if bar, _ := m.hintBar(); strings.Contains(bar, "q Quit") {
+		t.Errorf("the hint bar offers q while typing: %q", bar)
+	}
 	m = press(t, m, "esc")
-	if m.apps.typing || !m.inPage {
-		t.Errorf("esc while typing: typing %v inPage %v", m.apps.typing, m.inPage)
+	if m.apps.typing || m.page != pgSites {
+		t.Errorf("esc while typing: typing %v page %d", m.apps.typing, m.page)
 	}
 }
 
+// A toggle on a running bypass says it applies on restart, and R does that (TUI-5).
 func TestAppsToggle(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	f.cfg.Apps = []string{"discord"}
 	m := goTo(t, newModel(t, f), pgSites)
-	has(t, m.View(), "$ sudo splitdpi sites add DOMAIN")
-	m = press(t, m, "tab")
-	has(t, m.View(), "$ sudo splitdpi apps disable discord")
+	if cli := cliFor(m, "space"); cli != "sudo splitdpi apps disable discord" {
+		t.Errorf("toggle CLI %q", cli)
+	}
 	f.cfg.Apps = nil // what Status says once discord is off
 	m = press(t, m, "space")
 	if !f.called("apps disable discord") {
 		t.Errorf("calls %q", f.calls)
 	}
-	has(t, m.View(), "$ sudo splitdpi apps enable discord")
+	has(t, m.View(), "Discord is off.")
+	if strings.Contains(m.View(), "restart") || m.pending {
+		t.Errorf("a stopped bypass asks for a restart:\n%s", m.View())
+	}
+	if cli := cliFor(m, "space"); cli != "sudo splitdpi apps enable discord" {
+		t.Errorf("toggle CLI after the toggle %q", cli)
+	}
+
+	f.st = supervisor.Status{State: "running", Mode: "background", PID: 7}
+	m = press(t, goTo(t, newModel(t, f), pgSites), "space")
+	has(t, m.View(), "Press R to restart")
+	if bar, _ := m.hintBar(); !strings.HasPrefix(strings.TrimSpace(bar), "R Restart") {
+		t.Errorf("the hint bar does not start with R: %q", bar)
+	}
+	m = press(t, m, "R")
+	if !f.called("stop") || !f.called("background") || m.pending {
+		t.Errorf("R: pending %v, calls %q", m.pending, f.calls)
+	}
 }
 
 func TestAppsAddRemoveSite(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	m := goTo(t, newModel(t, f), pgSites)
-	has(t, m.View(), "a Add a site")
+	if bar, _ := m.hintBar(); !strings.Contains(bar, "a Add a site") {
+		t.Errorf("hint bar %q", bar)
+	}
 	m = press(t, m, "a")
 	m = typeText(t, m, "https://Pastebin.com/")
-	has(t, m.View(), "sudo splitdpi sites add https://Pastebin.com/")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi sites add https://Pastebin.com/" {
+		t.Errorf("add CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	if !f.called("sites add https://Pastebin.com/") {
 		t.Fatalf("calls %q", f.calls)
 	}
 	has(t, m.View(), "pastebin.com")
-	has(t, m.View(), "added by you")
+	has(t, m.View(), "Sites I added")
 	// The cursor runs over the two apps, then the site.
-	m = press(t, press(t, press(t, m, "down"), "down"), "tab")
-	has(t, m.View(), "sudo splitdpi sites remove pastebin.com")
+	m = press(t, press(t, m, "down"), "down")
+	if cli := cliFor(m, "x"); cli != "sudo splitdpi sites remove pastebin.com" {
+		t.Errorf("remove CLI %q", cli)
+	}
 	m = press(t, m, "x")
 	if !f.called("sites remove pastebin.com") {
 		t.Fatalf("calls %q", f.calls)
@@ -1298,7 +1424,9 @@ func TestAppsAddRemoveSite(t *testing.T) {
 		t.Errorf("sites %q, cursor %d; want none and the last app", m.apps.sites, m.apps.cursor)
 	}
 	has(t, m.View(), "Removed pastebin.com")
-	has(t, m.View(), "sudo splitdpi apps disable youtube")
+	if cli := cliFor(m, "space"); cli != "sudo splitdpi apps disable youtube" {
+		t.Errorf("toggle CLI %q", cli)
+	}
 }
 
 func testStrategies() []ops.StrategyChoice {
@@ -1308,22 +1436,60 @@ func testStrategies() []ops.StrategyChoice {
 	}
 }
 
+// The preset methods are the setup page's second part.
 func TestStrategyChoose(t *testing.T) {
 	f := newFake()
 	f.strategies = testStrategies()
 	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
-	m := goTo(t, newModel(t, f), pgStrategy)
+	m := press(t, goTo(t, newModel(t, f), pgSetup), "m")
+	if m.wiz.step != wStrategy {
+		t.Fatalf("m: step %v", m.wiz.step)
+	}
 	has(t, m.View(), "Türk Telekom")
-	has(t, m.View(), "✓ tt-multidisorder")
-	has(t, m.View(), "sudo splitdpi strategy set tt-multidisorder")
+	has(t, m.View(), "✓ Türk Telekom")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi strategy set tt-multidisorder" {
+		t.Errorf("choose CLI %q", cli)
+	}
 	m = press(t, m, "down")
-	has(t, m.View(), "sudo splitdpi strategy set generic-multidisorder")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi strategy set generic-multidisorder" {
+		t.Errorf("choose CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	if !f.called("strategy set generic-multidisorder") {
 		t.Fatalf("calls %q", f.calls)
 	}
-	has(t, m.View(), "Strategy set to generic-multidisorder")
-	has(t, m.View(), "✓ generic-multidisorder")
+	has(t, m.View(), "Now using the method for")
+	if m.strat.cur == nil || m.strat.cur.ID != "generic-multidisorder" {
+		t.Errorf("in use: %+v", m.strat.cur)
+	}
+	if m = press(t, m, "esc"); m.wiz.step != wIntro {
+		t.Errorf("esc: step %v", m.wiz.step)
+	}
+}
+
+// A method a deep scan found shows first, and a preset replaces it only
+// after a confirm (TUI-11).
+func TestStrategyCustomKept(t *testing.T) {
+	f := newFake()
+	f.strategies = testStrategies()
+	f.cfg.Strategy = &config.Strategy{ID: "blockcheck", Source: "blockcheck2"}
+	m := press(t, goTo(t, newModel(t, f), pgSetup), "m")
+	has(t, m.View(), "✓ Found by a deep scan")
+	if m.strat.cursor != 0 || cliFor(m, "enter") != "" {
+		t.Errorf("cursor %d; enter must do nothing on the method in use", m.strat.cursor)
+	}
+	m = press(t, press(t, m, "down"), "enter")
+	if f.called("strategy set tt-multidisorder") || m.dialog == nil {
+		t.Fatalf("replaced without asking: calls %q", f.calls)
+	}
+	has(t, m.View(), "Replace the method a scan found?")
+	if m = press(t, m, "n"); f.called("strategy set tt-multidisorder") {
+		t.Fatal("n replaced it")
+	}
+	m = press(t, press(t, m, "enter"), "y")
+	if !f.called("strategy set tt-multidisorder") {
+		t.Errorf("y did not replace it: %q", f.calls)
+	}
 }
 
 // pageViews renders every page and state worth seeing at 80x24, with prep
@@ -1337,6 +1503,7 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 	f.strategies = testStrategies()
 	f.logs = "nfqws2 started (pid 42)\n"
 	f.cfg.DNSProvider = "auto"
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder", Source: "isp/tr/as9121-turk-telekom.toml", ASN: 9121}
 	f.st = supervisor.Status{State: "running", Mode: "service", PID: 4242, Engine: "v1.0.6", LastError: "nfqws2 stopped (exit status 1)"}
 	f.detected = scan.ASNInfo{ASN: 9121, Country: "TR", Org: "Turk Telekom"}
 	f.checks = []doctor.Check{{ID: "nft", Severity: doctor.Blocker, Msg: "nft is not installed", Fix: "sudo apt install nftables"}}
@@ -1349,23 +1516,28 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 	m = press(t, m, "p")
 	views["status"] = m.View()
 	views["help"] = press(t, m, "?").View()
+	views["status details"] = press(t, m, "d").View()
+	pend := m
+	pend.pending = true
+	views["status pending"] = pend.View()
 	views["sites"] = goTo(t, m, pgSites).View()
 	views["site broke"] = press(t, goTo(t, m, pgSites), "e").View()
 	views["add site"] = press(t, goTo(t, m, pgSites), "a").View()
-	views["strategy"] = goTo(t, m, pgStrategy).View()
-	views["scan intro"] = goTo(t, m, pgScan).View()
+	views["setup intro"] = goTo(t, m, pgSetup).View()
+	views["strategy"] = press(t, goTo(t, m, pgSetup), "m").View()
 	lg := goTo(t, m, pgLogs)
 	views["logs"] = lg.View()
 	lg.stopAll()
 	views["settings"] = goTo(t, m, pgSettings).View()
 
-	w := press(t, goTo(t, m, pgScan), "enter")
+	w := press(t, goTo(t, m, pgSetup), "enter")
 	views["doctor"] = w.View()
 	f.checks = nil
-	w = press(t, w, "enter")
-	views["lookup"] = w.View()
-	views["picker"] = press(t, w, "n").View()
-	a := press(t, w, "y")
+	lw, c := update(t, w, key("r"))
+	lw, _ = update(t, lw, c()) // the checks pass; the lookup starts
+	views["lookup"] = lw.View()
+	views["picker"] = press(t, lw, "n").View()
+	a := press(t, w, "r")
 	views["apps step"] = a.View()
 	views["site step"] = press(t, a, "s").View()
 	d := press(t, a, "enter")
@@ -1398,6 +1570,8 @@ func pageViews(t *testing.T, prep func(Model) Model) map[string]string {
 
 	f.st = supervisor.Status{State: "stopped"}
 	views["status stopped"] = prep(newModel(t, f)).View()
+	f.cfg.Strategy = nil
+	views["status new"] = prep(newModel(t, f)).View()
 	q := prep(newModel(t, f))
 	q.running, q.confirmQuit = true, true
 	views["quit prompt"] = q.View()
@@ -1438,7 +1612,7 @@ func TestPagesFit80x24(t *testing.T) {
 		lines := strings.Split((statusPage{}).View(newModel(t, f), 60, 18), "\n")
 		for i, l := range lines {
 			if strings.HasPrefix(l, i18n.T("tui.dns")+" ") && i+1 < len(lines) && strings.TrimSpace(lines[i+1]) != "" {
-				if !strings.HasPrefix(lines[i+1], strings.Repeat(" ", 12)) {
+				if !strings.HasPrefix(lines[i+1], strings.Repeat(" ", 12)) && !strings.HasPrefix(lines[i+1], i18n.T("boot.status_label")) {
 					t.Errorf("%s status: wrapped DNS value not indented: %q", lang, lines[i+1])
 				}
 			}
@@ -1446,51 +1620,38 @@ func TestPagesFit80x24(t *testing.T) {
 	}
 }
 
-// The approved layout, at 80x24 in Turkish.
+// The approved layout, at 80x24 in Turkish: the tab bar, the page in its
+// frame with the three parts, one line of key hints.
 func TestSitesLayoutTurkish(t *testing.T) {
 	defer i18n.Init("en")
 	i18n.Init("tr")
 	f := newFake()
 	f.set = trSet()
 	f.sites = []string{"pastebin.com"}
+	f.excluded = []string{"bank.example"}
 	f.st.State = "running"
-	m := press(t, newModel(t, f), "down")
+	m := goTo(t, newModel(t, f), pgSites)
 	lines := strings.Split(m.View(), "\n")
-	for i, want := range []string{
-		"◆ SplitDPI v0.1.0",
-		"╭──────────────╮╭",
-		"│   Durum      ││ Siteler  · engel aşmanın her zaman uygulandığı siteler",
-		"│ ▌ Siteler    ││",
-		"│   Strateji   ││   ✓ Discord       uygulama", // the menu has focus: one cursor
-		"│   Tarama     ││   ✓ YouTube       uygulama",
-		"│   Günlük     ││   ✓ pastebin.com  sizin eklediğiniz",
-		"│   Ayarlar    ││",
-	} {
-		if !strings.HasPrefix(lines[i], want) {
-			t.Errorf("line %d = %q, want prefix %q", i, lines[i], want)
-		}
+	if len(lines) != 24 {
+		t.Fatalf("%d lines", len(lines))
 	}
-	if !strings.HasSuffix(lines[0], " ● ÇALIŞIYOR ") {
-		t.Errorf("header %q", lines[0])
+	if !strings.HasPrefix(lines[0], "SplitDPI   1 Durum  2 Siteler  3 Kurulum  4 Günlük  5 Ayarlar ") ||
+		!strings.HasSuffix(lines[0], "● Çalışıyor") {
+		t.Errorf("tab bar %q", lines[0])
 	}
-	if strings.TrimSpace(lines[20]) != "" {
-		t.Errorf("toast line %q, want empty", lines[20])
+	if !strings.HasPrefix(lines[1], "╭─ "+i18n.T("shell.hint.sites")) {
+		t.Errorf("frame top %q", lines[1])
 	}
-	has(t, lines[21], " a Site ekle ")
-	has(t, lines[21], " e Bir site bozuldu ")
-	if !strings.HasSuffix(lines[21], " ? Yardım   q Çık ") {
-		t.Errorf("dock row 1 %q, want ? and q at the right", lines[21])
+	text := pageText(m.View())
+	for _, want := range []string{"Uygulamalar  2", "▸ ✓ Discord", "Eklediğim siteler  1", "✓ pastebin.com", "Dokunulmayan siteler  1", "⊘ bank.example", i18n.T("shell.sites.broad")} {
+		has(t, text, want)
 	}
-	has(t, lines[22], " i Dosyadan al ")
-	if lines[23] != "$ sudo splitdpi sites add DOMAIN" {
-		t.Errorf("CLI line %q", lines[23])
+	bar := lines[23]
+	if !strings.HasPrefix(bar, " Boşluk Aç/kapat  o Düzenle  a Site ekle") || !strings.HasSuffix(strings.TrimRight(bar, " "), "? Yardım  q Çık") {
+		t.Errorf("hint bar %q", bar)
 	}
-	if n := strings.Count(m.View(), "▸"); n != 0 {
-		t.Errorf("%d list cursors with the menu focused, want 0", n)
-	}
-	m = press(t, m, "enter")
-	if l := strings.Split(m.View(), "\n")[4]; !strings.HasPrefix(l, "│   Strateji   ││ ▸ ✓ Discord       uygulama") {
-		t.Errorf("in the page, line 4 = %q; want the list cursor", l)
+	if strings.Contains(m.View(), "$ sudo") {
+		t.Errorf("a command is echoed:\n%s", m.View())
 	}
 }
 
@@ -1544,21 +1705,25 @@ func TestSitesImport(t *testing.T) {
 	f.importAdded = []string{"pastebin.com", "rutracker.org"}
 	f.importSkipped = []ops.ImportSkip{{Line: 3, Text: "not a domain!"}, {Line: 7, Text: "http://"}}
 	m := goTo(t, newModel(t, f), pgSites)
-	has(t, m.View(), "i From a file")
+	if cliFor(m, "i") != "sudo splitdpi sites import FILE" {
+		t.Errorf("no import key: %+v", m.actions())
+	}
 	m = press(t, m, "i")
 	if !m.apps.typing || m.apps.ask != askFile {
 		t.Fatalf("i: typing %v ask %v", m.apps.typing, m.apps.ask)
 	}
 	has(t, flat(m.View()), "Which file? One site per line")
 	m = typeText(t, m, "~/list.txt")
-	has(t, m.View(), "$ sudo splitdpi sites import ~/list.txt")
+	if cli := cliFor(m, "enter"); cli != "sudo splitdpi sites import ~/list.txt" {
+		t.Errorf("import CLI %q", cli)
+	}
 	m = press(t, m, "enter")
 	path := filepath.Join(home, "list.txt")
 	if f.count("sites import "+path) != 1 {
 		t.Fatalf("calls %q", f.calls)
 	}
 	v := m.View()
-	has(t, v, "Added 2 sites. Skipped 2 lines. Restart splitdpi to apply.")
+	has(t, v, "Added 2 sites. Skipped 2 lines.")
 	has(t, v, "rutracker.org")
 	has(t, v, "Skipped lines, not a domain:")
 	has(t, v, "line 3: not a domain!")
@@ -1591,7 +1756,7 @@ func TestSitesImportCancelAndMissingFile(t *testing.T) {
 	}
 	f.importAdded, f.importSkipped = []string{"one.example"}, []ops.ImportSkip{{Line: 2, Text: "?"}}
 	m = press(t, typeText(t, press(t, m, "i"), "/tmp/one.txt"), "enter")
-	has(t, m.View(), "Added 1 site. Skipped 1 line. Restart splitdpi to apply.")
+	has(t, m.View(), "Added 1 site. Skipped 1 line.")
 	f.importErr = &fs.PathError{Op: "open", Path: "/tmp/none.txt", Err: fs.ErrNotExist}
 	m = press(t, typeText(t, press(t, m, "i"), "/tmp/none.txt"), "enter")
 	has(t, m.View(), "There is no file /tmp/none.txt.")
@@ -1619,13 +1784,12 @@ func TestSitesAppNoteTurkish(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
 	f.set.Apps["telegram"] = presets.App{ID: "telegram", Name: "Telegram", Note: "Direct connections to Telegram IPs are not covered."}
-	m := goTo(t, newModel(t, f), pgSites)
+	m := cursorOn(t, goTo(t, newModel(t, f), pgSites), "telegram")
 	v := m.View()
-	has(t, v, "Telegram  uygulama, Telegram'ın IP")
 	if strings.Contains(v, "Direct connections") {
 		t.Errorf("English note in tr:\n%s", v)
 	}
-	// The note wraps under the row instead of being cut.
+	// The note of the selected app wraps under the list instead of being cut.
 	has(t, flat(pageText(v)), "Telegram'ın IP adreslerine doğrudan bağlantıları (MTProto) kapsanmıyor.")
 }
 
@@ -1635,16 +1799,17 @@ func TestProbeFailureInPlainWords(t *testing.T) {
 	f.probeRes = failedProbe()
 	m := press(t, newModel(t, f), "p")
 	page := flat(pages[pgStatus].View(m, 60, 18))
-	has(t, page, "1/2 sites open · 1 blocked")
-	has(t, page, "✗ Discord connection cut")
-	has(t, page, "What to do Find another strategy on the Scan page.")
+	has(t, page, i18n.T("probe_summary.open", 1, 2))
+	has(t, page, i18n.T("probe_summary.blocked", 1))
+	has(t, page, "✗ Discord "+i18n.T("probe_short.reset"))
+	has(t, page, i18n.T("probe_tui.todo")+" "+probeTodo(probe.Reset))
 	if strings.Contains(m.View(), "connection reset by peer") {
 		t.Errorf("raw error on the status page:\n%s", m.View())
 	}
 	has(t, m.logs.String(), "https://discord.com/api/v9/gateway: read tcp 10.0.0.2:51234->162.159.128.233:443: read: connection reset by peer")
 
 	m = goTo(t, m, pgSites)
-	has(t, m.View(), "Discord  app, "+probe.Reset.What()[:20])
+	has(t, m.View(), "Discord  "+i18n.T("probe_short.reset"))
 	has(t, flat(pages[pgSites].View(m, 60, 18)), probeTodo(probe.Reset))
 	if strings.Contains(m.View(), "connection reset") {
 		t.Errorf("raw error on the sites page:\n%s", m.View())
@@ -1664,7 +1829,9 @@ func TestTakeoverNoticeAndConfirm(t *testing.T) {
 	page := flat(pages[pgStatus].View(m, 60, 18))
 	has(t, page, "zapret2 is running on this computer. Use SplitDPI instead of it?")
 	has(t, m.View(), "z Switch to SplitDPI")
-	has(t, m.View(), "$ sudo splitdpi takeover --yes")
+	if cli := cliFor(m, "z"); cli != "sudo splitdpi takeover --yes" {
+		t.Errorf("takeover CLI %q", cli)
+	}
 
 	m = press(t, m, "z")
 	if m.dialog == nil {
@@ -1718,16 +1885,16 @@ func TestTakeoverConfirmFitsTurkish(t *testing.T) {
 	m := newModel(t, f)
 	m = press(t, settle(t, m, m.Init()), "z")
 	v := m.View()
+	pv := flat(popupText(m))
 	for _, want := range []string{
 		"zapret2 yerine SplitDPI kullanılsın mı?",
 		"zapret2 servisinin açılışta başlaması kapatılacak.",
-		"dokunulmayacak: hiçbir şey silinmeyecek",
-		"ya da değiştirilmeyecek.",
+		"dokunulmayacak: hiçbir şey silinmeyecek ya da değiştirilmeyecek.",
 		"sudo splitdpi revert",
-		"e Evet, devam et   h Vazgeç",
 	} {
-		has(t, v, want)
+		has(t, pv, want)
 	}
+	has(t, v, "e Evet, devam et   h Vazgeç")
 	for _, l := range strings.Split(v, "\n") {
 		if lipgloss.Width(l) > 80 {
 			t.Errorf("%d columns: %q", lipgloss.Width(l), l)

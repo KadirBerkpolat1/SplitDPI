@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -25,24 +26,18 @@ type Forwarder struct {
 	DNS   *Client
 	Local *Local // local names go here, never to DNS; nil sends everything to DNS
 	Port  int    // 0 picks a free port and records it here
+	// IPv4Only listens on 127.0.0.1 alone, for a host without an IPv6
+	// loopback (see IPv6Loopback); the redirect must then be IPv4-only too.
+	IPv4Only bool
 }
 
-// Start listens on UDP and TCP at 127.0.0.1:Port and, if IPv6 is up,
+// Start listens on UDP and TCP at 127.0.0.1:Port and, unless IPv4Only,
 // [::1]:Port, then serves in the background until ctx is done. It returns
 // once the listeners are bound, so traffic can be redirected right away.
 func (f *Forwarder) Start(ctx context.Context) error {
-	u4, t4, err := f.listen4()
+	udps, tcps, err := f.listen()
 	if err != nil {
 		return err
-	}
-	udps, tcps := []*net.UDPConn{u4}, []*net.TCPListener{t4}
-	// ::1 is optional: IPv6 may be disabled, and IPv4 then carries all DNS.
-	if u6, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback, Port: f.Port}); err == nil {
-		if t6, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: net.IPv6loopback, Port: f.Port}); err == nil {
-			udps, tcps = append(udps, u6), append(tcps, t6)
-		} else {
-			u6.Close()
-		}
 	}
 	go func() {
 		<-ctx.Done()
@@ -61,6 +56,33 @@ func (f *Forwarder) Start(ctx context.Context) error {
 		go f.serveTCP(ctx, l)
 	}
 	return nil
+}
+
+// listen binds 127.0.0.1:Port and, unless IPv4Only, [::1]:Port. Any failure
+// on ::1, like another process on the port, fails: the redirect would send
+// IPv6 DNS to that process, or to nothing. With Port 0 it picks a port free
+// on both.
+func (f *Forwarder) listen() ([]*net.UDPConn, []*net.TCPListener, error) {
+	pick := f.Port == 0
+	for attempt := 0; ; attempt++ {
+		u4, t4, err := f.listen4()
+		if err != nil {
+			return nil, nil, err
+		}
+		if f.IPv4Only {
+			return []*net.UDPConn{u4}, []*net.TCPListener{t4}, nil
+		}
+		u6, t6, err := listen6(f.Port)
+		if err == nil {
+			return []*net.UDPConn{u4, u6}, []*net.TCPListener{t4, t6}, nil
+		}
+		u4.Close()
+		t4.Close()
+		if !pick || attempt == 9 || !errors.Is(err, syscall.EADDRINUSE) {
+			return nil, nil, err
+		}
+		f.Port = 0
+	}
 }
 
 // listen4 binds UDP and TCP on 127.0.0.1:Port. With Port 0 the UDP port is
@@ -83,6 +105,32 @@ func (f *Forwarder) listen4() (*net.UDPConn, *net.TCPListener, error) {
 			return nil, nil, err
 		}
 	}
+}
+
+// listen6 binds UDP and TCP on [::1]:port.
+func listen6(port int) (*net.UDPConn, *net.TCPListener, error) {
+	u, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback, Port: port})
+	if err != nil {
+		return nil, nil, err
+	}
+	t, err := net.ListenTCP("tcp6", &net.TCPAddr{IP: net.IPv6loopback, Port: port})
+	if err != nil {
+		u.Close()
+		return nil, nil, err
+	}
+	return u, t, nil
+}
+
+// IPv6Loopback reports whether the host has an IPv6 loopback to listen on:
+// binding ::1 fails with EAFNOSUPPORT or EADDRNOTAVAIL when IPv6 is off, or
+// off on lo.
+func IPv6Loopback() bool {
+	c, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6loopback})
+	if err != nil {
+		return !errors.Is(err, syscall.EAFNOSUPPORT) && !errors.Is(err, syscall.EADDRNOTAVAIL)
+	}
+	c.Close()
+	return true
 }
 
 func (f *Forwarder) serveUDP(ctx context.Context, c *net.UDPConn) {

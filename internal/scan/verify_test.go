@@ -53,9 +53,6 @@ func TestTLSCandidatesSummaryOrder(t *testing.T) {
 	if want := []string{tlsDisord, tlsSimple, ipv6Only}; !slices.Equal(res.TLSCandidates, want) {
 		t.Errorf("candidates %q, want %q", res.TLSCandidates, want)
 	}
-	if res.TCPTLS != tlsDisord {
-		t.Errorf("TCPTLS %q", res.TCPTLS)
-	}
 }
 
 // verifyEnv runs a blockcheck-only scan of log; passes decides each trial by its TLS strategy.

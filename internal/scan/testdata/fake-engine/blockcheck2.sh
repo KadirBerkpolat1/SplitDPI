@@ -1,5 +1,5 @@
 #!/bin/sh
-MARK_FILE="${MARK_FILE:-$PWD/.int-mark}"
+MARK_FILE="$PWD/mark"
 CANCEL_FILE="${MARK_FILE}.cancel"
 trap 'touch "$MARK_FILE"; exit 130' INT
 echo line1

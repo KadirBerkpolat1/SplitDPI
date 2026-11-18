@@ -186,3 +186,19 @@ func TestScanDNSCheck(t *testing.T) {
 		})
 	}
 }
+
+// probe and doctor check a user app without a probe URL at its hosts.
+func TestProbeDNSUserAppWithoutProbe(t *testing.T) {
+	o := &Ops{P: paths.Under(t.TempDir()), HTTP: &http.Client{Transport: &dohHTTP{}}}
+	fakeSystemDNS(t, "195.175.254.2")
+	if err := o.AppNew("steam", "Steam"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := o.AppHostAdd("steam", "store.steampowered.com"); err != nil {
+		t.Fatal(err)
+	}
+	got := o.ProbeDNS(context.Background(), []string{"steam"})
+	if len(got) != 1 || got[0].Domain != "store.steampowered.com" || !got[0].Poisoned {
+		t.Errorf("results %+v", got)
+	}
+}

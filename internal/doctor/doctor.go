@@ -116,7 +116,7 @@ func dnsCheck(ctx context.Context, env Env) *Check {
 				ID:       "dns",
 				Severity: Warn,
 				Msg:      i18n.T("doctor.dns.poisoned", r.Domain, r.Reason),
-				Fix:      "sudo splitdpi dns on",
+				Fix:      "sudo splitdpi dns auto",
 			}
 		}
 	}

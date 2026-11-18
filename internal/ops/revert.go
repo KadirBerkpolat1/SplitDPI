@@ -20,7 +20,8 @@ type RevertReport struct {
 
 // Revert removes the service (stop, disable, remove files), stops a running
 // supervisor, deletes our nft table, turns back on what Takeover turned off
-// and clears RunDir; purge also removes ConfigDir and StateDir, but keeps
+// and clears RunDir, unless a run that did not stop still holds its lock
+// there; purge also removes ConfigDir and StateDir, but keeps
 // StateDir while a service Takeover turned off is still off. Once no service
 // is left, run mode boot becomes the default. rulesOnly deletes only the
 // table, and only while no live supervisor holds the lock: it runs inside the
@@ -73,6 +74,12 @@ func (o *Ops) Revert(ctx context.Context, rulesOnly, purge bool) RevertReport {
 		}
 	}
 	for _, d := range dirs {
+		// Unlinked, the held LockFile would let the next run lock a new one and start beside it.
+		if d == o.P.RunDir {
+			if _, _, held := supervisor.LockInfo(o.P); held {
+				continue
+			}
+		}
 		if _, err := os.Stat(d); err == nil && os.RemoveAll(d) == nil {
 			r.Removed = append(r.Removed, d)
 		}

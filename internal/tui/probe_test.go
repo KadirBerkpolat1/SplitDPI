@@ -47,8 +47,8 @@ func manyProbes() (*fake, map[string][]probe.Result) {
 func TestStatusProbeSummary(t *testing.T) {
 	defer i18n.Init("en")
 	for lang, want := range map[string][]string{
-		"en": {"22/35 sites open · 5 blocked · 8 not tested", "2 more; all on the Sites page"},
-		"tr": {"22/35 site açılıyor · 5 engelli", "8 test edilmedi", "2 site daha; tümü Siteler sayfasında"},
+		"en": {"22/35 sites open, 5 blocked, 8 not tested", "2 more; all on the Sites page"},
+		"tr": {"22/35 site açılıyor, 5 engelli", "8 test edilmedi", "2 site daha; tümü Siteler sayfasında"},
 	} {
 		i18n.Init(lang)
 		f, _ := manyProbes()
@@ -100,7 +100,7 @@ func TestSitesNoAddressMuted(t *testing.T) {
 	f, _ := manyProbes()
 	f.sites = []string{"a-blocked.example", "cdn0.example"}
 	m := goTo(t, press(t, newModel(t, f), "p"), pgSites)
-	const mutedFG, badFG = "38;5;244m", "38;5;174m"
+	const mutedFG, badFG = "38;5;245m", "38;5;174m"
 	var sawMuted, sawBad bool
 	for _, l := range strings.Split(pages[pgSites].View(m, 76, 30), "\n") {
 		switch {
@@ -119,5 +119,11 @@ func TestSitesNoAddressMuted(t *testing.T) {
 	if !sawMuted || !sawBad {
 		t.Errorf("rows missing: muted %v blocked %v", sawMuted, sawBad)
 	}
-	has(t, flat(ansi.Strip(pages[pgSites].View(m, 76, 30))), probe.NoAddress.What())
+	for range m.apps.rows() {
+		if d, _ := m.apps.site(); d == "cdn0.example" {
+			break
+		}
+		m = press(t, m, "down")
+	}
+	has(t, flat(ansi.Strip(pages[pgSites].View(m, 76, 30))), probeTodo(probe.NoAddress))
 }

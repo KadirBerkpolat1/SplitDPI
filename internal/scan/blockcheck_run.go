@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -14,18 +13,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/domain"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/engine"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/nft"
 )
 
 const blockcheckIntWait = 15 * time.Second
 
 // BlockcheckParams configures a blockcheck2 batch run.
 type BlockcheckParams struct {
-	Domains  []string
-	IPVS     string // "4" or "46"
-	HTTP3    bool
-	MarkFile string // optional; fake engine writes on SIGINT (tests)
+	Domains []string
+	IPVS    string // "4" or "46"
+	HTTP3   bool
 	// DoH makes blockcheck2 resolve through these DoH URLs instead of the
 	// system resolver; empty leaves it to blockcheck2's own spoofing check.
 	DoH []string
@@ -44,8 +44,14 @@ func BlockcheckNFTables(pid int) []string {
 }
 
 // BlockcheckEnv returns blockcheck2 batch environment entries (eight vars,
-// ten with DoH).
-func BlockcheckEnv(p BlockcheckParams) []string {
+// ten with DoH). blockcheck2 evals each domain as root, so any domain that is
+// not a valid hostname is an error.
+func BlockcheckEnv(p BlockcheckParams) ([]string, error) {
+	for _, d := range p.Domains {
+		if !domain.Valid(d) {
+			return nil, domain.InvalidError{Input: d}
+		}
+	}
 	http3 := "0"
 	if p.HTTP3 {
 		http3 = "1"
@@ -64,10 +70,14 @@ func BlockcheckEnv(p BlockcheckParams) []string {
 		// blockcheck2 then picks the first of DOH_SERVERS that resolves.
 		env = append(env, "SECURE_DNS=1", "DOH_SERVERS="+strings.Join(p.DoH, " "))
 	}
-	return env
+	return env, nil
 }
 
-func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) []string {
+func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) ([]string, error) {
+	bc, err := BlockcheckEnv(p)
+	if err != nil {
+		return nil, err
+	}
 	path := os.Getenv("PATH")
 	if path == "" {
 		path = "/usr/sbin:/usr/bin:/sbin:/bin"
@@ -78,24 +88,25 @@ func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) []string {
 		"NFQWS2=" + e.Nfqws2(),
 		"MDIG=" + e.Mdig(),
 	}
-	env = append(env, BlockcheckEnv(p)...)
-	if p.MarkFile != "" {
-		env = append(env, "MARK_FILE="+p.MarkFile)
-	}
+	env = append(env, bc...)
 	if os.Getenv("SPLITDPI_BLOCKCHECK_SIMULATE") == "1" && os.Getenv("SPLITDPI_ROOT") != "" {
 		env = append(env, "SIMULATE=1")
 	}
-	return env
+	return env, nil
 }
 
 // RunBlockcheck runs blockcheck2.sh under the engine dir, streaming lines to progress.
 // On ctx cancel it sends SIGINT to the process group, waits up to 15s, then SIGKILL,
 // and deletes blockcheck2 nft tables for that PID.
 func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p BlockcheckParams, progress func(line string)) (string, error) {
+	env, err := blockcheckCmdEnv(e, p)
+	if err != nil {
+		return "", err
+	}
 	script := e.Blockcheck2()
 	cmd := exec.Command("sh", script)
 	cmd.Dir = e.Dir
-	cmd.Env = blockcheckCmdEnv(e, p)
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()
@@ -145,7 +156,6 @@ func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p Blo
 	select {
 	case <-ctx.Done():
 		runErr = ctx.Err()
-		signalBlockcheckCancel(p.MarkFile)
 		interruptBlockcheck(cmd.Process, pgid)
 		select {
 		case err := <-done:
@@ -167,20 +177,12 @@ func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p Blo
 func cleanupBlockcheckNFT(ctx context.Context, run execx.Runner, pid int) error {
 	var first error
 	for _, spec := range BlockcheckNFTables(pid) {
-		if err := deleteNFTTable(ctx, run, spec); err != nil && first == nil {
+		family, name, _ := strings.Cut(spec, " ")
+		if err := nft.DeleteTable(ctx, run, family, name); err != nil && first == nil {
 			first = err
 		}
 	}
 	return first
-}
-
-// signalBlockcheckCancel lets the fake engine exit promptly when SIGINT does not
-// reach the shell (common under go test); production blockcheck2 relies on INT.
-func signalBlockcheckCancel(markFile string) {
-	if markFile == "" {
-		return
-	}
-	_ = os.WriteFile(markFile+".cancel", []byte("1"), 0o644)
 }
 
 func interruptBlockcheck(proc *os.Process, pgid int) {
@@ -196,16 +198,4 @@ func killBlockcheckPG(pgid int) {
 	if pgid > 0 {
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 	}
-}
-
-func deleteNFTTable(ctx context.Context, run execx.Runner, spec string) error {
-	family, name, ok := strings.Cut(spec, " ")
-	if !ok {
-		return fmt.Errorf("bad table spec %q", spec)
-	}
-	_, err := run(ctx, "", "nft", "delete", "table", family, name)
-	if err != nil && strings.Contains(err.Error(), "No such file or directory") {
-		return nil
-	}
-	return err
 }

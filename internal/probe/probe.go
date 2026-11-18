@@ -3,9 +3,13 @@ package probe
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 )
 
 const DefaultTimeout = 8 * time.Second
@@ -41,6 +45,49 @@ func (p Prober) client() *http.Client {
 
 // SiteURL is the probe URL of a user site's normalized domain.
 func SiteURL(domain string) string { return "https://" + domain + "/" }
+
+// AppURLs are the probe URLs of a. An app without any, like one the user
+// made, is probed at each of its hosts.
+func AppURLs(a presets.App) []string {
+	if len(a.Probe) > 0 {
+		return a.Probe
+	}
+	urls := make([]string, len(a.Hosts))
+	for i, h := range a.Hosts {
+		urls[i] = SiteURL(h)
+	}
+	return urls
+}
+
+// Hosts are the distinct hostnames of the probe URLs of apps, then sites.
+// An app missing from set or a probe URL without a host is an error.
+func Hosts(set presets.Set, apps, sites []string) ([]string, error) {
+	seen := map[string]bool{}
+	var hosts []string
+	add := func(h string) {
+		if !seen[h] {
+			seen[h] = true
+			hosts = append(hosts, h)
+		}
+	}
+	for _, id := range apps {
+		a, ok := set.Apps[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown app %q", id)
+		}
+		for _, raw := range AppURLs(a) {
+			u, err := url.Parse(raw)
+			if err != nil || u.Hostname() == "" {
+				return nil, fmt.Errorf("bad probe url %q", raw)
+			}
+			add(u.Hostname())
+		}
+	}
+	for _, d := range sites {
+		add(d)
+	}
+	return hosts, nil
+}
 
 // Probe GETs each URL. OK means TLS verified and any HTTP status arrived within Timeout.
 func (p Prober) Probe(ctx context.Context, urls []string) []Result {

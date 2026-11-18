@@ -35,6 +35,9 @@ if [ "$(id -u)" -ne 0 ]; then
 		exit 1
 	fi
 fi
+# splitdpi enable runs the binary as root only if no group or other user may
+# change it or a directory above it, whatever the caller's umask.
+umask 022
 mkdir -p "$bindir"
 
 asset=splitdpi-linux-$goarch
@@ -50,12 +53,12 @@ trap 'rm -rf "$tmpdir"' EXIT INT HUP TERM
 fetch() {
 	url=$1
 	dest=$2
-	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL -o "$dest" "$url"
-	elif command -v wget >/dev/null 2>&1; then
+	if [ -n "$(command -v curl)" ]; then
+		curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$dest" "$url"
+	elif [ -n "$(command -v wget)" ]; then
 		wget -qO "$dest" "$url"
 	else
-		echo "need curl or wget to download" >&2
+		echo "need wget or curl" >&2
 		exit 1
 	fi
 }

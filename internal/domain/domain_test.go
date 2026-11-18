@@ -52,3 +52,37 @@ func TestNormalizeErrorsTranslated(t *testing.T) {
 		t.Errorf("empty: got %v, want %q", err, i18n.T("domain.empty"))
 	}
 }
+
+func TestValidRejectsNonLDH(t *testing.T) {
+	for _, s := range []string{
+		"x.$(reboot).com", "a;b.com", "a b.com", "a'b.com", "a`id`.com", "a\"b.com", "a&b.com",
+		"a_b.com", "Discord.com", "çiçek.com", "-a.com", "a-.com", "a.com-",
+	} {
+		if domain.Valid(s) {
+			t.Errorf("Valid(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestValidAcceptsLDH(t *testing.T) {
+	for _, s := range []string{"discord.com", "xn--bcher-kva.example", "a-b.c0m.tr", "1e100.net"} {
+		if !domain.Valid(s) {
+			t.Errorf("Valid(%q) = false, want true", s)
+		}
+	}
+}
+
+// A hostname is at most 253 bytes (RFC 1035), though each label fits.
+func TestValidRejectsOver253(t *testing.T) {
+	label := strings.Repeat("a", 63)
+	longest := strings.Join([]string{label, label, label, strings.Repeat("b", 61)}, ".")
+	if len(longest) != 253 || !domain.Valid(longest) {
+		t.Errorf("Valid(%d bytes) = false, want true", len(longest))
+	}
+	if domain.Valid(longest + "b") {
+		t.Error("Valid(254 bytes) = true, want false")
+	}
+	if _, err := domain.Normalize(longest + "b"); err == nil {
+		t.Error("Normalize(254 bytes): want error")
+	}
+}

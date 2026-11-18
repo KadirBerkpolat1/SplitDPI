@@ -71,7 +71,8 @@ func (c *Client) Exchange(ctx context.Context, q []byte) ([]byte, error) {
 // record: it does not exist, or exists without an address.
 var ErrNoAddress = errors.New("no A/AAAA record")
 
-// Resolve looks up the A and AAAA addresses of name. It fails with
+// Resolve looks up the A and AAAA addresses of name. The addresses one
+// question found are returned even when the other failed. It fails with
 // ErrNoAddress only when both questions got a definite answer.
 func (c *Client) Resolve(ctx context.Context, name string) ([]netip.Addr, error) {
 	fqdn, err := dnsmessage.NewName(name + ".")
@@ -93,7 +94,8 @@ func (c *Client) Resolve(ctx context.Context, name string) ([]netip.Addr, error)
 		}
 		resp, err := c.Exchange(ctx, b)
 		if err != nil {
-			return nil, err
+			last = err
+			continue
 		}
 		var m dnsmessage.Message
 		if err := m.Unpack(resp); err != nil {

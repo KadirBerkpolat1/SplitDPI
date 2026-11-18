@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 	"time"
 
@@ -61,11 +60,10 @@ type Trial struct {
 }
 
 type Report struct {
-	ASN             ASNInfo
-	Trials          []Trial
-	Blockcheck      *BlockcheckResult
-	Winner          *config.Strategy
-	VoiceUnverified bool
+	ASN        ASNInfo
+	Trials     []Trial
+	Blockcheck *BlockcheckResult
+	Winner     *config.Strategy
 }
 
 // Scan tries ISP preset candidates, then blockcheck2 unless disabled.
@@ -84,8 +82,10 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 	if opt.Site != "" {
 		opt.BlockcheckOnly = true
 	}
-	rep.VoiceUnverified = voiceUnverified(env.Set, opt.Apps)
 	urls := probeURLs(env.Set, opt.Apps, opt.Sites)
+	if len(urls) == 0 && opt.Site == "" {
+		return Report{}, errors.New(i18n.T("probe.no_hosts"))
+	}
 	cands := env.Set.Candidates(info.ASN, info.Country)
 
 	if !opt.BlockcheckOnly {
@@ -114,7 +114,7 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 
 	hosts := []string{opt.Site}
 	if opt.Site == "" {
-		if hosts, err = probeHosts(env.Set, opt.Apps, opt.Sites); err != nil {
+		if hosts, err = probe.Hosts(env.Set, opt.Apps, opt.Sites); err != nil {
 			return rep, err
 		}
 	}
@@ -127,6 +127,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		IPVS:    ipvs,
 		HTTP3:   anyQUIC(env.Set, opt.Apps),
 	}, env.Progress)
+	if bcErr != nil && log == "" {
+		return rep, bcErr
+	}
 	bc, parseErr := ParseBlockcheck(log)
 	if parseErr != nil {
 		return rep, parseErr
@@ -217,7 +220,7 @@ func probeURLs(set presets.Set, apps, sites []string) []string {
 	var urls []string
 	for _, id := range apps {
 		if a, ok := set.Apps[id]; ok {
-			urls = append(urls, a.Probe...)
+			urls = append(urls, probe.AppURLs(a)...)
 		}
 	}
 	for _, d := range sites {
@@ -226,50 +229,11 @@ func probeURLs(set presets.Set, apps, sites []string) []string {
 	return urls
 }
 
-func probeHosts(set presets.Set, apps, sites []string) ([]string, error) {
-	seen := map[string]bool{}
-	var hosts []string
-	add := func(h string) {
-		if !seen[h] {
-			seen[h] = true
-			hosts = append(hosts, h)
-		}
-	}
-	for _, id := range apps {
-		a, ok := set.Apps[id]
-		if !ok {
-			return nil, fmt.Errorf("unknown app %q", id)
-		}
-		for _, raw := range a.Probe {
-			u, err := url.Parse(raw)
-			if err != nil || u.Hostname() == "" {
-				return nil, fmt.Errorf("bad probe url %q", raw)
-			}
-			add(u.Hostname())
-		}
-	}
-	for _, d := range sites {
-		add(d)
-	}
-	return hosts, nil
-}
-
 func anyQUIC(set presets.Set, apps []string) bool {
 	for _, id := range apps {
 		if a, ok := set.Apps[id]; ok && a.QUIC {
 			return true
 		}
-	}
-	return false
-}
-
-func voiceUnverified(set presets.Set, apps []string) bool {
-	for _, id := range apps {
-		if id != "discord" {
-			continue
-		}
-		a, ok := set.Apps[id]
-		return ok && a.UDP != nil
 	}
 	return false
 }
