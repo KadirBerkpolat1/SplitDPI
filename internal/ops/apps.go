@@ -32,6 +32,8 @@ func (o *Ops) App(id string) (presets.App, error) {
 // AppNew saves a new app of the user's without addresses and enables it.
 // An empty name means the id.
 func (o *Ops) AppNew(id, name string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	if _, ok := o.PresetsList().Apps[id]; ok {
 		return AppExistsError{ID: id}
 	}
@@ -41,34 +43,46 @@ func (o *Ops) AppNew(id, name string) error {
 	if err := presets.SaveUser(o.P.UserApps, presets.App{ID: id, Name: name}); err != nil {
 		return err
 	}
-	return o.AppsEnable(id)
+	return o.appsEnable(id)
 }
 
 // AppHostAdd adds the normalized domain to the app's addresses and returns
 // it. Like SitesAdd, it clears the local DNS caches while SplitDPI runs with
 // encrypted DNS.
 func (o *Ops) AppHostAdd(id, d string) (string, error) {
+	n, added, err := o.appHostAdd(id, d)
+	if added {
+		o.flushRunningDNS()
+	}
+	return n, err
+}
+
+// appHostAdd is AppHostAdd under o.mu without the flush; added reports
+// whether it saved the domain.
+func (o *Ops) appHostAdd(id, d string) (n string, added bool, err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	a, err := o.App(id)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	n, err := domain.Normalize(d)
-	if err != nil {
-		return "", err
+	if n, err = domain.Normalize(d); err != nil {
+		return "", false, err
 	}
 	if slices.Contains(a.Hosts, n) {
-		return n, nil
+		return n, false, nil
 	}
 	a.Hosts = append(slices.Clone(a.Hosts), n)
 	slices.Sort(a.Hosts)
 	if err := presets.SaveUser(o.P.UserApps, a); err != nil {
-		return n, err
+		return n, false, err
 	}
-	o.flushRunningDNS()
-	return n, nil
+	return n, true, nil
 }
 
 func (o *Ops) AppHostRemove(id, d string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	a, err := o.App(id)
 	if err != nil {
 		return err
@@ -94,6 +108,8 @@ func (o *Ops) AppHostRemove(id, d string) error {
 // AppReset drops the user's copy of the app: a shipped app is back as
 // shipped, and an app of the user's own is deleted and disabled.
 func (o *Ops) AppReset(id string) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	a, err := o.App(id)
 	if err != nil || !a.User {
 		return err
@@ -115,7 +131,7 @@ func (o *Ops) AppReset(id string) error {
 		return err
 	}
 	if a.Preset == nil {
-		return o.AppsDisable(id)
+		return o.appsDisable(id)
 	}
 	return nil
 }
