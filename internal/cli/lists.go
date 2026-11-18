@@ -111,17 +111,6 @@ func runApps(_ context.Context, o *ops.Ops, w io.Writer, args []string) error {
 		}
 		fmt.Fprintln(w, i18n.T("apps.host_removed", args[2], args[1]))
 		return nil
-	case len(args) == 3 && args[0] == "udp" && (args[2] == "on" || args[2] == "off"):
-		on := args[2] == "on"
-		if err := o.AppSetUDP(args[1], on); err != nil {
-			return appErr(err)
-		}
-		msg := "apps.udp_off"
-		if on {
-			msg = "apps.udp_on"
-		}
-		fmt.Fprintln(w, i18n.T(msg, args[1]))
-		return nil
 	case len(args) == 2 && args[0] == "reset":
 		a, err := o.App(args[1])
 		if err == nil {
@@ -173,8 +162,6 @@ func appErr(err error) error {
 		return errors.New(i18n.T("apps.unknown", unknown.ID, strings.Join(unknown.Valid, ", ")))
 	case errors.As(err, &exists):
 		return errors.New(i18n.T("apps.exists", exists.ID))
-	case errors.Is(err, ops.ErrNoUDP):
-		return errors.New(i18n.T("apps.no_udp"))
 	}
 	return err
 }

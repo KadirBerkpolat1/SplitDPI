@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/netip"
 	"slices"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
@@ -93,6 +93,7 @@ func (m *Model) answerDNS(id string) {
 			name = a.providers[i].Name
 		}
 		line = i18n.T("dns2.scan_on", name)
+		m.wiz.dnsOn = true
 	}
 	if m.wiz.progress != nil {
 		fmt.Fprintln(m.wiz.progress, line)
@@ -110,12 +111,12 @@ func (m Model) dnsAskKey(s string) (tea.Model, tea.Cmd) {
 		a.cursor = (a.cursor + rows - 1) % rows
 	case "down", "j":
 		a.cursor = (a.cursor + 1) % rows
-	case "y", "e":
+	case "y", i18n.T("confirm_keys.yes"):
 		if !a.pick {
 			m.answerDNS(recommendedDNS)
 			return m, nil
 		}
-	case "n", "h":
+	case "n", i18n.T("confirm_keys.no"):
 		if !a.pick {
 			m.answerDNS("")
 			return m, nil
@@ -144,36 +145,41 @@ func (m Model) dnsAskKey(s string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// maxPoisonedShown keeps the dialog within a 24-line terminal.
+// maxPoisonedShown keeps the question short; the log has every domain.
 const maxPoisonedShown = 3
 
-func (m Model) dnsAskView() string {
+// dnsAskBox is the question, or the provider list, with its rows clickable.
+func (m Model) dnsAskBox() popupBox {
 	a := m.ask
-	text := lipgloss.NewStyle().Width(m.popupText())
-	lines := []string{titleStyle.Render(i18n.T("scan_page.dns.title")), ""}
-	back := i18n.T("scan_page.dns.no")
+	p := popupBox{head: 1, tail: 1}
+	p.lines = []string{titleStyle.Render(i18n.T("scan_page.dns.title")), ""}
+	back := i18n.T("tui.act.cancel")
 	if a.pick {
-		lines = append(lines, i18n.T("scan_page.dns.pick"))
-		for i, p := range a.providers {
-			lines = append(lines, m.cursorMark(i == a.cursor)+p.Name)
+		p.add(m, i18n.T("scan_page.dns.pick"))
+		for i, pr := range a.providers {
+			p.choice(m.cursorMark(i == a.cursor)+pr.Name, "#"+strconv.Itoa(i))
 		}
-		lines = append(lines, "", text.Foreground(muted).Render(a.providers[a.cursor].Note))
+		p.lines = append(p.lines, "")
+		p.add(m, mutedStyle.Render(a.providers[a.cursor].Note))
 		back = i18n.T("tui.act.back")
 	} else {
-		lines = append(lines, text.Render(i18n.T("scan_page.dns.poisoned")))
+		p.add(m, i18n.T("scan_page.dns.poisoned"))
 		for i, r := range a.q.poisoned {
 			if i == maxPoisonedShown {
-				lines = append(lines, "   "+mutedStyle.Render(i18n.N("scan_page.dns.more", len(a.q.poisoned)-i)))
+				p.lines = append(p.lines, "   "+mutedStyle.Render(i18n.N("scan_page.dns.more", len(a.q.poisoned)-i)))
 				break
 			}
-			lines = append(lines, " "+m.g.bullet+" "+r.Domain)
+			p.lines = append(p.lines, " "+m.g.bullet+" "+r.Domain)
 		}
-		lines = append(lines, text.Render(i18n.T("scan_page.dns.why")), "")
+		p.add(m, i18n.T("scan_page.dns.why"))
+		p.lines = append(p.lines, "")
 		for i, k := range []string{"scan_page.dns.yes", "scan_page.dns.other", "scan_page.dns.no"} {
-			lines = append(lines, m.cursorMark(i == a.cursor)+i18n.T(k))
+			p.choice(m.cursorMark(i == a.cursor)+i18n.T(k), "#"+strconv.Itoa(i))
 		}
 	}
-	lines = append(lines, "", i18n.T("shell.confirm.undo"), "   "+commandStyle.Render(undoDNS), "",
-		hint(m.g.menuKeys, i18n.T("scan_page.dns.move"))+"   "+hint(keyName("enter"), i18n.T("scan_page.dns.ok"))+"   "+hint(keyName("esc"), back))
-	return m.popup(strings.Join(lines, "\n"))
+	p.lines = append(p.lines, "")
+	p.add(m, i18n.T("shell.confirm.undo"))
+	p.lines = append(p.lines, "   "+commandStyle.Render(undoDNS), "")
+	p.keys([2]string{"enter", i18n.T("scan_page.dns.ok")}, [2]string{"esc", back})
+	return p
 }

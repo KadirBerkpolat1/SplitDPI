@@ -12,6 +12,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/paths"
 )
 
+// An app file with a [udp] table still loads, and an edit keeps the table.
 const discordWithVoice = `schema = 1
 id = "discord"
 name = "Discord"
@@ -39,19 +40,10 @@ func TestAppEditShipped(t *testing.T) {
 	if err := o.AppHostRemove("discord", "https://Discord.media/"); err != nil {
 		t.Fatal(err)
 	}
-	if err := o.AppSetUDP("discord", false); err != nil {
-		t.Fatal(err)
-	}
 	a, err := o.App("discord")
-	if err != nil || !a.User || a.Preset == nil || a.UDP != nil ||
+	if err != nil || !a.User || a.Preset == nil || !reflect.DeepEqual(a.UDP, shipped.UDP) ||
 		!slices.Equal(a.Hosts, slices.DeleteFunc(slices.Clone(shipped.Hosts), func(h string) bool { return h == "discord.media" })) {
 		t.Fatalf("edited discord: %+v, %v", a, err)
-	}
-	if err := o.AppSetUDP("discord", true); err != nil {
-		t.Fatal(err)
-	}
-	if a, _ := o.App("discord"); !reflect.DeepEqual(a.UDP, shipped.UDP) {
-		t.Errorf("voice back on: %+v, want %+v", a.UDP, shipped.UDP)
 	}
 	if err := o.AppReset("discord"); err != nil {
 		t.Fatal(err)
@@ -71,9 +63,6 @@ func TestAppNewOwn(t *testing.T) {
 	}
 	if d, err := o.AppHostAdd("steam", "https://Store.SteamPowered.com/app/1"); err != nil || d != "store.steampowered.com" {
 		t.Fatalf("add-host: %q, %v", d, err)
-	}
-	if err := o.AppSetUDP("steam", true); !errors.Is(err, ErrNoUDP) {
-		t.Errorf("voice on for an app without one: %v", err)
 	}
 	a, err := o.App("steam")
 	c, _ := config.Load(o.P)

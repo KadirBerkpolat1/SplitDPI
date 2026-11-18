@@ -20,37 +20,45 @@ type confirm struct {
 	yes      func(m *Model) tea.Cmd
 }
 
+// isYes and isNo are the answers to a question: the language's letter, the
+// English one, and enter or esc.
+func isYes(s string) bool { return s == "enter" || s == "y" || s == i18n.T("confirm_keys.yes") }
+func isNo(s string) bool  { return s == "esc" || s == "n" || s == i18n.T("confirm_keys.no") }
+
 func (m Model) dialogKey(s string) (tea.Model, tea.Cmd) {
-	switch s {
-	case "y", "e", "enter":
+	switch {
+	case isYes(s):
 		yes := m.dialog.yes
 		m.dialog = nil
 		cmd := yes(&m)
 		return m, cmd
-	case "n", "h", "esc":
+	case isNo(s):
 		m.dialog = nil
 	}
 	return m, nil
 }
 
-func (m Model) dialogView() string {
+func (m Model) dialogBox() popupBox {
 	c := m.dialog
 	item := lipgloss.NewStyle().Width(m.popupText() - 3)
-	lines := []string{titleStyle.Render(c.title), "", i18n.T("shell.confirm.changes")}
+	p := popupBox{head: 1, tail: 1}
+	p.lines = []string{titleStyle.Render(c.title), "", i18n.T("shell.confirm.changes")}
 	for _, ch := range c.changes {
 		for i, l := range strings.Split(item.Render(ch), "\n") {
 			prefix := "   "
 			if i == 0 {
 				prefix = " " + m.g.bullet + " "
 			}
-			lines = append(lines, prefix+l)
+			p.lines = append(p.lines, prefix+l)
 		}
 	}
 	head := i18n.T("shell.confirm.undo")
 	if c.undoHead != "" {
 		head = c.undoHead
 	}
-	lines = append(lines, "", head, "   "+commandStyle.Render(c.undo), "",
-		hint(i18n.T("confirm_keys.yes"), i18n.T("shell.confirm.yes"))+"   "+hint(i18n.T("confirm_keys.no"), i18n.T("shell.confirm.no")))
-	return m.popup(strings.Join(lines, "\n"))
+	p.lines = append(p.lines, "")
+	p.add(m, head)
+	p.lines = append(p.lines, "   "+commandStyle.Render(c.undo), "")
+	p.keys([2]string{i18n.T("confirm_keys.yes"), i18n.T("shell.confirm.yes")}, [2]string{i18n.T("confirm_keys.no"), i18n.T("shell.confirm.no")})
+	return p
 }

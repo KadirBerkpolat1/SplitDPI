@@ -61,11 +61,10 @@ type Trial struct {
 }
 
 type Report struct {
-	ASN             ASNInfo
-	Trials          []Trial
-	Blockcheck      *BlockcheckResult
-	Winner          *config.Strategy
-	VoiceUnverified bool
+	ASN        ASNInfo
+	Trials     []Trial
+	Blockcheck *BlockcheckResult
+	Winner     *config.Strategy
 }
 
 // Scan tries ISP preset candidates, then blockcheck2 unless disabled.
@@ -84,7 +83,6 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 	if opt.Site != "" {
 		opt.BlockcheckOnly = true
 	}
-	rep.VoiceUnverified = voiceUnverified(env.Set, opt.Apps)
 	urls := probeURLs(env.Set, opt.Apps, opt.Sites)
 	if len(urls) == 0 && opt.Site == "" {
 		return Report{}, errors.New(i18n.T("probe.no_hosts"))
@@ -265,17 +263,6 @@ func anyQUIC(set presets.Set, apps []string) bool {
 		if a, ok := set.Apps[id]; ok && a.QUIC {
 			return true
 		}
-	}
-	return false
-}
-
-func voiceUnverified(set presets.Set, apps []string) bool {
-	for _, id := range apps {
-		if id != "discord" {
-			continue
-		}
-		a, ok := set.Apps[id]
-		return ok && a.UDP != nil
 	}
 	return false
 }

@@ -68,9 +68,6 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 		}
 		fmt.Fprintln(w, i18n.T("share.scan", ops.ShareURL(rep, Version)))
 	}
-	if rep.VoiceUnverified {
-		fmt.Fprintln(w, i18n.T("scan.voice"))
-	}
 	suggestPresetsUpdate(w, o)
 	fmt.Fprintln(w, i18n.T("scan.next"))
 	return nil

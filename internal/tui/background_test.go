@@ -4,64 +4,69 @@ import (
 	"bytes"
 	"errors"
 	"slices"
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
-func TestBackgroundAction(t *testing.T) {
-	f := newFake()
-	m := newModel(t, f)
-	v := m.View()
-	has(t, v, "b Run in background")
-	has(t, flat(v), "Keeps running when the terminal closes")
-	for _, k := range []string{"tab", "right", "right"} { // into the page, past w and r
-		m = press(t, m, k)
-	}
-	has(t, m.View(), "$ sudo splitdpi run --background")
+// inBackgroundMode has a method to run with and run mode background: r
+// starts the bypass in the background.
+func inBackgroundMode(f *fake) *fake {
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+	f.cfg.RunMode = config.RunBackground
+	return f
+}
 
-	m = press(t, m, "b")
+func TestBackgroundAction(t *testing.T) {
+	f := inBackgroundMode(newFake())
+	m := newModel(t, f)
+	has(t, m.View(), "r Start")
+	has(t, flat(m.View()), i18n.T("tui.how.start_background"))
+	if cli := cliFor(m, "r"); cli != "sudo splitdpi run --background" {
+		t.Errorf("start CLI %q", cli)
+	}
+
+	m = press(t, m, "r")
 	if !f.called("background") {
-		t.Fatal("b did not start the background run")
+		t.Fatal("r did not start the background run")
 	}
 	has(t, m.View(), "Running in the background (pid 4343)")
-	body := flat(statusPage{}.View(m, 60, 18))
-	has(t, body, "background, pid 4343, stops at reboot")
-	if strings.Contains(m.View(), "b Run in background") {
-		t.Error("b still offered while the background run is on")
+	has(t, flat(statusPage{}.View(m, 60, 18)), i18n.T("tui.how.background"))
+	if cliFor(m, "r") != "" {
+		t.Error("r still offered while the background run is on")
 	}
 	f.st = supervisor.Status{State: "stopped"} // what Status says once Stop returns
 	m = press(t, m, "s")
 	if !f.called("stop") {
 		t.Error("s did not stop the background run")
 	}
-	if m.st.State != "stopped" || !strings.Contains(m.View(), "b Run in background") {
-		t.Errorf("after s: state %q, b offered %v", m.st.State, strings.Contains(m.View(), "b Run in background"))
+	if m.st.State != "stopped" || cliFor(m, "r") == "" {
+		t.Errorf("after s: state %q, actions %q", m.st.State, reproKeys(m))
 	}
 }
 
 func TestBackgroundActionFailure(t *testing.T) {
-	f := newFake()
+	f := inBackgroundMode(newFake())
 	f.bgErr = ops.BackgroundNotStartedError{Log: "/var/log/splitdpi.log"}
-	m := press(t, newModel(t, f), "b")
+	m := press(t, newModel(t, f), "r")
 	has(t, flat(m.View()), "did not start in the background")
 	has(t, flat(m.View()), "/var/log/splitdpi.log")
-	has(t, m.View(), "b Run in background")
+	has(t, m.View(), "r Start")
 }
 
 // A raw error of several lines, as nft prints with its rule and a caret
 // line, keeps its cause in the note at 80x24.
 func TestBackgroundRawErrorKeepsCause(t *testing.T) {
-	f := newFake()
+	f := inBackgroundMode(newFake())
 	f.bgErr = errors.New("load nft table splitdpi: nft: exit status 1: Error: Could not process rule: No such file or directory\n" +
 		"add rule inet splitdpi output meta mark 0x40000000 queue num 200 bypass\n" +
 		"                                                   ^^^^^^^^^^^^^^^^^^^^^")
-	v := press(t, newModel(t, f), "b").View()
+	v := press(t, newModel(t, f), "r").View()
 	fits(t, "raw error", v)
 	has(t, flat(v), "Could not process rule")
 }
@@ -69,19 +74,16 @@ func TestBackgroundRawErrorKeepsCause(t *testing.T) {
 // A log stream opened before the background run read the journal; starting
 // one replaces it, and the end of the old stream leaves the new one alone.
 func TestBackgroundRestartsLogStream(t *testing.T) {
-	f := newFake()
+	f := inBackgroundMode(newFake())
 	f.logsFollow = true
-	m := newModel(t, f)
-	m.page = pgLogs - 1
-	m, cmd := update(t, m, key("down"))
-	go cmd() // the first stream, until cancelled
-	m.page, m.inPage = pgStatus, false
-	m = press(t, m, "b")
+	m, cmd := update(t, newModel(t, f), key("4"))
+	go cmd()          // the first stream, until cancelled
+	m.page = pgStatus // as if the stream had been left running
+	m = press(t, m, "r")
 	if m.logCancel != nil {
 		t.Fatal("the stream from before the background run still runs")
 	}
-	m.page = pgLogs - 1
-	m, cmd = update(t, m, key("down"))
+	m, cmd = update(t, m, key("4"))
 	if cmd == nil || m.logCancel == nil {
 		t.Fatal("opening the logs again started no stream")
 	}
@@ -92,10 +94,29 @@ func TestBackgroundRestartsLogStream(t *testing.T) {
 	m.stopAll()
 }
 
-// runHere starts "Run now" and returns once the fake runs it; done delivers
-// when the run has returned.
+// The log stream runs only while Logs is shown.
+func TestLogsStopWhenLeaving(t *testing.T) {
+	f := newFake()
+	f.logsFollow = true
+	m, cmd := update(t, newModel(t, f), key("4"))
+	done := make(chan struct{})
+	go func() { cmd(); close(done) }()
+	if m.logCancel == nil {
+		t.Fatal("Logs started no stream")
+	}
+	if m = press(t, m, "tab"); m.logCancel != nil {
+		t.Error("leaving Logs kept the stream")
+	}
+	<-done
+}
+
+// runHere starts the bypass in this window and returns once the fake runs
+// it; done delivers when the run has returned.
 func runHere(t *testing.T, f *fake) (Model, chan struct{}) {
 	t.Helper()
+	if f.cfg.Strategy == nil {
+		f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+	}
 	m, cmd := update(t, newModel(t, f), key("r"))
 	done := make(chan struct{})
 	go func() { cmd(); close(done) }()
@@ -116,7 +137,7 @@ func TestQuitPromptThreeWay(t *testing.T) {
 			m, done := runHere(t, f)
 			m, _ = update(t, m, key("q"))
 			v := m.View()
-			has(t, v, i18n.T("background_tui.quit"))
+			has(t, flat(popupText(m)), flat(i18n.T("background_tui.quit")))
 			for k, label := range map[string]string{yes: "quit_stop", "b": "quit_background", no: "quit_cancel"} {
 				has(t, v, k+" "+i18n.T("background_tui."+label))
 			}

@@ -1,7 +1,6 @@
 package ops
 
 import (
-	"errors"
 	"maps"
 	"slices"
 	"strconv"
@@ -19,10 +18,6 @@ import (
 type AppExistsError struct{ ID string }
 
 func (e AppExistsError) Error() string { return "app " + e.ID + " exists" }
-
-// ErrNoUDP is returned for turning on the voice and stream (UDP) profile of
-// an app that never had one.
-var ErrNoUDP = errors.New("app has no voice and stream profile")
 
 // App returns the app id as it runs: the user's copy if there is one.
 func (o *Ops) App(id string) (presets.App, error) {
@@ -92,26 +87,6 @@ func (o *Ops) AppHostRemove(id, d string) error {
 	}
 	if err := o.checkAppsMode(c, a, ""); err != nil {
 		return err
-	}
-	return presets.SaveUser(o.P.UserApps, a)
-}
-
-// AppSetUDP turns the app's voice and stream (UDP) profile off, or back on
-// as its preset has it.
-func (o *Ops) AppSetUDP(id string, on bool) error {
-	a, err := o.App(id)
-	if err != nil {
-		return err
-	}
-	switch {
-	case on == (a.UDP != nil):
-		return nil
-	case !on:
-		a.UDP = nil
-	case a.Preset != nil && a.Preset.UDP != nil:
-		a.UDP = a.Preset.UDP
-	default:
-		return ErrNoUDP
 	}
 	return presets.SaveUser(o.P.UserApps, a)
 }

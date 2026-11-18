@@ -16,22 +16,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/i18n"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
-// The sites page: toggle apps, add or remove the user's own sites
-// (`splitdpi sites`), and "a site broke" adds an exclusion
-// (`splitdpi exclude add`).
-type sitesPage struct{}
+// The sites page in three parts: the apps to turn on or off, the user's own
+// sites (`splitdpi sites`), and the sites the bypass never touches
+// (`splitdpi exclude`).
+type sitesPage struct{ noClose }
 
 type appsScreen struct {
 	apps     []presets.App
 	sites    []string
-	cursor   int // over apps, then sites
 	excluded []string
+	cursor   int // over apps, then sites, then excluded sites
 	input    textinput.Model
 	typing   bool
 	ask      askKind
@@ -50,9 +51,22 @@ const (
 	askHost // an address for the open app
 )
 
+// rowKind is which part of the list a row is in.
+type rowKind int
+
+const (
+	rowApp rowKind = iota
+	rowSite
+	rowExcluded
+)
+
 type (
-	appsToggledMsg struct{ err error }
-	importedMsg    struct {
+	appsToggledMsg struct {
+		name string
+		on   bool
+		err  error
+	}
+	importedMsg struct {
 		path    string
 		added   int
 		skipped []ops.ImportSkip
@@ -60,9 +74,9 @@ type (
 		err     error
 	}
 	excludedMsg struct {
-		domain string
-		list   []string
-		err    error
+		note string
+		list []string
+		err  error
 	}
 	sitesMsg struct {
 		note string
@@ -84,6 +98,7 @@ func (sitesPage) View(m Model, w, h int) string { return m.appsView(w, h) }
 
 func (m *Model) openApps() {
 	set := m.b.PresetsList()
+	m.loadNames(set)
 	a := appsScreen{input: textinput.New()}
 	for _, id := range slices.Sorted(maps.Keys(set.Apps)) {
 		a.apps = append(a.apps, set.Apps[id])
@@ -111,17 +126,36 @@ func (m *Model) openApps() {
 
 func (m Model) appEnabled(id string) bool { return slices.Contains(m.cfg.Apps, id) }
 
-func (a appsScreen) rows() int { return len(a.apps) + len(a.sites) }
+func (a appsScreen) rows() int { return len(a.apps) + len(a.sites) + len(a.excluded) }
+
+// at is the part of the list row i is in, and its index there.
+func (a appsScreen) at(i int) (rowKind, int) {
+	switch {
+	case i < len(a.apps):
+		return rowApp, i
+	case i < len(a.apps)+len(a.sites):
+		return rowSite, i - len(a.apps)
+	}
+	return rowExcluded, i - len(a.apps) - len(a.sites)
+}
 
 // site returns the user site under the cursor, if the cursor is on one.
 func (a appsScreen) site() (string, bool) {
-	i := a.cursor - len(a.apps)
-	if i < 0 || i >= len(a.sites) {
-		return "", false
+	if k, i := a.at(a.cursor); k == rowSite {
+		return a.sites[i], true
 	}
-	return a.sites[i], true
+	return "", false
 }
 
+// excludedSite returns the excluded site under the cursor, if any.
+func (a appsScreen) excludedSite() (string, bool) {
+	if k, i := a.at(a.cursor); k == rowExcluded && i < len(a.excluded) {
+		return a.excluded[i], true
+	}
+	return "", false
+}
+
+// appsActions: the row's own keys first, then adding.
 func (m Model) appsActions() []action {
 	a := m.apps
 	cancel := action{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { return nil }} // appsKey cancels
@@ -140,35 +174,36 @@ func (m Model) appsActions() []action {
 	case a.edit != nil:
 		return m.appEditActions()
 	}
-	// The second action follows the cursor, so focus keeps its place.
-	first := action{Key: "space", Label: i18n.T("tui.act.toggle"), Do: (*Model).toggleApp}
-	var edit []action
-	if d, ok := a.site(); ok {
-		first = action{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi sites remove " + d, Do: (*Model).removeSite}
-	} else if a.cursor < len(a.apps) {
-		id := a.apps[a.cursor].ID
+	var own []action
+	switch k, i := a.at(a.cursor); {
+	case k == rowApp && i < len(a.apps):
+		id := a.apps[i].ID
 		verb := "enable"
 		if m.appEnabled(id) {
 			verb = "disable"
 		}
-		first.CLI = "sudo splitdpi apps " + verb + " " + id
-		edit = []action{{Key: "o", Label: i18n.T("app_edit.open"), CLI: "sudo splitdpi apps show " + id, Do: (*Model).openAppEditor}}
+		own = []action{
+			{Key: "space", Label: i18n.T("tui.act.toggle"), CLI: "sudo splitdpi apps " + verb + " " + id, Do: (*Model).toggleApp},
+			{Key: "o", Label: i18n.T("app_edit.open"), CLI: "sudo splitdpi apps show " + id, Do: (*Model).openAppEditor},
+		}
+	case k == rowSite:
+		own = []action{{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi sites remove " + a.sites[i], Do: (*Model).removeSite}}
+	case k == rowExcluded && i < len(a.excluded):
+		own = []action{{Key: "x", Label: i18n.T("tui.act.remove"), CLI: "sudo splitdpi exclude remove " + a.excluded[i], Do: (*Model).removeExcluded}}
 	}
-	return slices.Concat([]action{
-		{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(askSite)},
-		first,
-		{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(askExclude)},
-		{Key: "i", Label: i18n.T("sites_import_tui.act"), CLI: "sudo splitdpi sites import FILE", Do: startTyping(askFile)},
-	}, edit, []action{
-		{Key: "n", Label: i18n.T("app_edit.new"), CLI: "sudo splitdpi apps new ID NAME", Do: startTyping(askApp)},
-	})
+	return append(own,
+		action{Key: "a", Label: i18n.T("tui.act.add_site"), CLI: "sudo splitdpi sites add DOMAIN", Do: startTyping(askSite)},
+		action{Key: "e", Label: i18n.T("tui.apps_screen.site_broke"), CLI: "sudo splitdpi exclude add DOMAIN", Do: startTyping(askExclude)},
+		action{Key: "i", Label: i18n.T("sites_import_tui.act"), CLI: "sudo splitdpi sites import FILE", Do: startTyping(askFile)},
+		action{Key: "n", Label: i18n.T("app_edit.new"), CLI: "sudo splitdpi apps new ID NAME", Do: startTyping(askApp)},
+	)
 }
 
 // startTyping opens the text input for k.
 func startTyping(k askKind) func(m *Model) tea.Cmd {
 	return func(m *Model) tea.Cmd {
 		a := &m.apps
-		a.typing, a.ask, a.skipped, m.focus, m.inPage = true, k, nil, 0, true
+		a.typing, a.ask, a.skipped = true, k, nil
 		a.input.Placeholder, a.input.CharLimit = "example.com", 253
 		switch k {
 		case askFile:
@@ -224,16 +259,17 @@ func expandHome(p string) string {
 }
 
 func (m *Model) toggleApp() tea.Cmd {
-	a := m.apps
-	if a.cursor >= len(a.apps) {
+	k, i := m.apps.at(m.apps.cursor)
+	if k != rowApp {
 		return nil
 	}
-	id, on, b := a.apps[a.cursor].ID, m.appEnabled(a.apps[a.cursor].ID), m.b
+	app := m.apps.apps[i]
+	on, b := !m.appEnabled(app.ID), m.b
 	return func() tea.Msg {
 		if on {
-			return appsToggledMsg{b.AppsDisable(id)}
+			return appsToggledMsg{app.Name, on, b.AppsEnable(app.ID)}
 		}
-		return appsToggledMsg{b.AppsEnable(id)}
+		return appsToggledMsg{app.Name, on, b.AppsDisable(app.ID)}
 	}
 }
 
@@ -250,7 +286,22 @@ func (m *Model) excludeTyped() tea.Cmd {
 			return excludedMsg{err: err}
 		}
 		list, err := b.ExcludeList()
-		return excludedMsg{d, list, err}
+		return excludedMsg{i18n.T("tui.note.excluded", d), list, err}
+	}
+}
+
+func (m *Model) removeExcluded() tea.Cmd {
+	d, ok := m.apps.excludedSite()
+	if !ok {
+		return nil
+	}
+	b := m.b
+	return func() tea.Msg {
+		if err := b.ExcludeRemove(d); err != nil {
+			return excludedMsg{err: err}
+		}
+		list, err := b.ExcludeList()
+		return excludedMsg{i18n.T("tui.note.unexcluded", d), list, err}
 	}
 }
 
@@ -267,7 +318,7 @@ func (m *Model) siteTyped() tea.Cmd {
 			return sitesMsg{err: err}
 		}
 		list, err := b.SitesList()
-		return sitesMsg{i18n.T("sites.added", d), list, err}
+		return sitesMsg{i18n.T("tui.note.site_added", d), list, err}
 	}
 }
 
@@ -282,34 +333,41 @@ func (m *Model) removeSite() tea.Cmd {
 			return sitesMsg{err: err}
 		}
 		list, err := b.SitesList()
-		return sitesMsg{i18n.T("sites.removed", d), list, err}
+		return sitesMsg{i18n.T("tui.note.site_removed", d), list, err}
 	}
 }
 
 func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
+	a := &m.apps
 	switch msg := msg.(type) {
 	case appsToggledMsg:
 		if msg.err != nil {
 			m.note = errText(msg.err)
+			return m, m.refresh(), true
 		}
+		note := i18n.T("tui.note.app_off", msg.name)
+		if msg.on {
+			note = i18n.T("tui.note.app_on", msg.name)
+		}
+		m.note = m.withChange(note)
 		return m, m.refresh(), true
 	case excludedMsg:
 		if msg.err != nil {
 			m.note = errText(msg.err)
 			return m, nil, true
 		}
-		m.apps.excluded = msg.list
-		m.note = i18n.T("exclude.added", msg.domain)
+		a.excluded = msg.list
+		a.cursor = max(min(a.cursor, a.rows()-1), 0)
+		m.note = m.withChange(msg.note)
 		return m, nil, true
 	case sitesMsg:
 		if msg.err != nil {
 			m.note = errText(msg.err)
 			return m, nil, true
 		}
-		a := &m.apps
 		a.sites = msg.list
 		a.cursor = max(min(a.cursor, a.rows()-1), 0)
-		m.note = msg.note
+		m.note = m.withChange(msg.note)
 		return m, nil, true
 	case importedMsg:
 		switch {
@@ -320,17 +378,16 @@ func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.note = errText(msg.err)
 			return m, nil, true
 		}
-		a := &m.apps
 		a.sites, a.skipped = msg.list, msg.skipped
 		a.cursor = max(min(a.cursor, a.rows()-1), 0)
 		note := []string{i18n.N("sites_import_tui.added", msg.added)}
 		if n := len(msg.skipped); n > 0 {
 			note = append(note, i18n.N("sites_import_tui.skipped", n))
 		}
-		if msg.added > 0 {
-			note = append(note, i18n.T("sites_import_tui.restart"))
-		}
 		m.note = strings.Join(note, " ")
+		if msg.added > 0 {
+			m.note = m.withChange(m.note)
+		}
 		return m, nil, true
 	case appEditedMsg:
 		return m.appEdited(msg)
@@ -338,7 +395,8 @@ func (m Model) appsUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-// appsKey feeds the text input while typing and moves the cursor over apps and sites.
+// appsKey feeds the text input while typing and moves the cursor over the
+// rows of all three parts.
 func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	a := &m.apps
 	if a.typing {
@@ -373,68 +431,64 @@ func (m Model) appsKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-// appsView lists apps, the user's sites and the exclusions in one list,
-// each with what it is; the bypass applies to the marked ones. Under the
-// list: the selected row in full when it is cut, what to do when its probe
-// failed, and the lines the last import skipped.
+// appsView lists the three parts under their headings: apps (on or off),
+// the user's sites, the sites never touched. Under the list: the selected
+// row's note or failed probe, the lines the last import skipped, or the
+// question while typing.
 func (m Model) appsView(w, h int) string {
 	a := m.apps
 	if a.edit != nil {
 		return m.appEditView(w, h)
 	}
-	type entry struct {
-		on         bool
-		name, kind string
-		fail       probe.Category
-		note       string
-	}
-	var entries []entry
-	for _, app := range a.apps {
-		entries = append(entries, entry{m.appEnabled(app.ID), app.Name, appKind(app), probe.Overall(m.probe[app.ID]), ops.AppNote(app)})
-	}
-	for _, d := range a.sites {
-		entries = append(entries, entry{on: true, name: d, kind: i18n.T("shell.sites.yours"), fail: probe.Overall(m.probe[d])})
-	}
-	for _, d := range a.excluded {
-		entries = append(entries, entry{name: d, kind: i18n.T("shell.sites.excluded")})
-	}
-	describe := func(e entry) string {
-		s := mutedStyle.Render(e.kind)
-		switch {
-		case e.fail == probe.NoAddress:
-			s += mutedStyle.Render(", " + e.fail.What())
-		case e.fail.Failed():
-			s += mutedStyle.Render(", ") + badStyle.Render(e.fail.What())
-		}
-		if e.note != "" {
-			s += mutedStyle.Render(", " + e.note)
-		}
-		return s
-	}
+	var lines []string
+	first := make([]int, 0, a.rows()) // each row's line
 	nameW := 0
-	for _, e := range entries {
-		nameW = max(nameW, lipgloss.Width(e.name))
+	for _, app := range a.apps {
+		nameW = max(nameW, lipgloss.Width(app.Name))
+	}
+	for _, d := range slices.Concat(a.sites, a.excluded) {
+		nameW = max(nameW, lipgloss.Width(d))
 	}
 	nameW = min(nameW, w/2)
-	// A long description wraps under itself, so no note or failure is cut.
-	var lines []string
-	first := make([]int, len(entries)) // each entry's first line
-	for i, e := range entries {
-		name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW)
-		if e.fail == probe.NoAddress {
-			name = name.Foreground(muted)
+	name := lipgloss.NewStyle().Width(nameW).MaxWidth(nameW)
+	entry := func(i int, mark, label, what string) {
+		first = append(first, len(lines))
+		head := m.listMark(i == a.cursor && !a.typing) + mark + " " + name.Render(label)
+		if what != "" {
+			head += "  " + what
 		}
-		head := m.listMark(i == a.cursor && !a.typing) + m.mark(e.on) + " " + name.Render(e.name) + "  "
-		indent := lipgloss.Width(head)
-		what := describe(e)
-		first[i] = len(lines)
-		for j, l := range strings.Split(lipgloss.NewStyle().Width(max(w-indent, 10)).Render(what), "\n") {
-			if j == 0 {
-				lines = append(lines, head+l)
-			} else {
-				lines = append(lines, strings.Repeat(" ", indent)+l)
-			}
+		lines = append(lines, head)
+	}
+	section := func(title string, n int, empty string) {
+		if len(lines) > 0 {
+			lines = append(lines, "")
 		}
+		lines = append(lines, groupStyle.Render(title)+mutedStyle.Render(fmt.Sprintf("  %d", n)))
+		if n == 0 {
+			lines = append(lines, "  "+mutedStyle.Render(empty))
+		}
+	}
+
+	section(i18n.T("shell.sites.apps"), len(a.apps), i18n.T("shell.sites.apps_empty"))
+	for i, app := range a.apps {
+		entry(i, m.mark(m.appEnabled(app.ID)), app.Name, m.rowWhat(appKind(app), m.probe[app.ID]))
+	}
+	section(i18n.T("shell.sites.yours"), len(a.sites), i18n.T("shell.sites.yours_empty"))
+	for i, d := range a.sites {
+		label := d
+		if probe.Overall(m.probe[d]) == probe.NoAddress {
+			label = mutedStyle.Render(d)
+		}
+		entry(len(a.apps)+i, goodStyle.Render(m.g.on), label, m.rowWhat("", m.probe[d]))
+	}
+	section(i18n.T("shell.sites.excluded"), len(a.excluded), i18n.T("shell.sites.excluded_empty"))
+	for i, d := range a.excluded {
+		entry(len(a.apps)+len(a.sites)+i, warnStyle.Render(m.g.never), d, "")
+	}
+
+	var head []string
+	if m.mode() == config.ModeBroad {
+		head = []string{ansi.Truncate(mutedStyle.Render(i18n.T("shell.sites.broad")), w, m.g.ellipsis), ""}
 	}
 	var tail []string
 	if a.typing {
@@ -447,19 +501,63 @@ func (m Model) appsView(w, h int) string {
 		case askApp:
 			q = i18n.T("app_edit.which_app")
 		}
-		tail = append(strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n"), a.input.View())
-		tail = append([]string{""}, tail...)
+		tail = append([]string{""}, strings.Split(lipgloss.NewStyle().Width(w).Render(q), "\n")...)
+		tail = append(tail, ansi.Truncate(a.input.View(), w, ""))
 	} else {
-		if i := a.cursor; i < len(entries) && entries[i].fail != probe.None {
-			tail = append(tail, "")
-			tail = append(tail, strings.Split(mutedStyle.Width(w).Render(probeTodo(entries[i].fail)), "\n")...)
+		if about := m.rowAbout(); about != "" {
+			tail = append([]string{""}, strings.Split(mutedStyle.Width(w).Render(about), "\n")...)
 		}
-		if sk := a.skippedView(w, max(h/3, 3)); len(sk) > 0 {
-			tail = append(append(tail, ""), sk...)
+		// The skipped lines take what the list leaves, so that their count stays.
+		if left := h - len(head) - min(5, len(lines)) - len(tail) - 1; left >= 2 {
+			if sk := a.skippedView(w, min(max(h/3, 3), left)); len(sk) > 0 {
+				tail = append(append(tail, ""), sk...)
+			}
 		}
 	}
-	lines = m.scrollMore(lines, first, a.cursor, h-len(tail), w)
-	return strings.Join(append(lines, tail...), "\n")
+	// The list keeps a few lines; what is under it gives way.
+	room := max(h-len(head)-len(tail), min(5, len(lines)))
+	tail = tail[:min(len(tail), max(h-len(head)-room, 0))]
+	list := m.scrollMore(lines, first, a.cursor, room, w)
+	return strings.Join(slices.Concat(head, list, tail), "\n")
+}
+
+// rowWhat is what follows a row's name: its kind, and why its probe failed.
+func (m Model) rowWhat(kind string, rs []probe.Result) string {
+	parts := []string{}
+	if kind != "" {
+		parts = append(parts, mutedStyle.Render(kind))
+	}
+	switch c := probe.Overall(rs); {
+	case c == probe.NoAddress:
+		parts = append(parts, mutedStyle.Render(c.What()))
+	case c.Failed():
+		parts = append(parts, badStyle.Render(i18n.T("probe_short."+string(c))))
+	}
+	return strings.Join(parts, mutedStyle.Render(", "))
+}
+
+// rowAbout is what the selected row needs said: what to do about its
+// failed probe, an app's coverage note, or what a never-touched site is.
+func (m Model) rowAbout() string {
+	a := m.apps
+	switch k, i := a.at(a.cursor); k {
+	case rowApp:
+		if i >= len(a.apps) {
+			return ""
+		}
+		app := a.apps[i]
+		if c := probe.Overall(m.probe[app.ID]); c != probe.None {
+			return probeTodo(c)
+		}
+		return ops.AppNote(app)
+	case rowSite:
+		if c := probe.Overall(m.probe[a.sites[i]]); c != probe.None {
+			return probeTodo(c)
+		}
+	case rowExcluded:
+		return i18n.T("shell.sites.excluded_about")
+	}
+	return ""
 }
 
 // skippedView lists the lines the last import skipped in at most room lines.
