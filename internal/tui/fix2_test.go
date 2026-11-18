@@ -65,10 +65,9 @@ func TestRestartHeldUntilServiceRuns(t *testing.T) {
 	f.cfg.RunMode = config.RunBoot
 	m := newModel(t, f)
 	m.pending = true
-	m, stop := update(t, m, key(restartKey))
-	m, start := update(t, m, stop())
+	m, start := update(t, m, key(restartKey))
 	if m.svcOp == nil {
-		t.Fatalf("the restart did not start the service again: %q", f.calls)
+		t.Fatalf("the restart is no service change under way: %q", f.calls)
 	}
 	if p := pillText(m); p != unicodeGlyphs.dot+" "+i18n.T("fix_arayuz.pill_restarting") {
 		t.Errorf("pill %q while Enable runs", p)
@@ -138,7 +137,7 @@ func TestRestartStartsNothingDuringScan(t *testing.T) {
 	f := inBackgroundMode(newFake())
 	m := newModel(t, f)
 	m.wiz.scanning, m.restarting = true, true
-	m = settle(t, m, func() tea.Msg { return restartStoppedMsg{mode: "background"} })
+	m = settle(t, m, func() tea.Msg { return restartStoppedMsg{} })
 	if f.called("background") || m.restarting {
 		t.Errorf("calls %q, restarting %v", f.calls, m.restarting)
 	}
@@ -233,5 +232,110 @@ func TestRunWaitsForBackgroundStart(t *testing.T) {
 	}
 	if !f.called("background done") || f.called("background cut") {
 		t.Errorf("Run returned before the background start ended, or cut it: %q", f.calls)
+	}
+}
+
+// U-15b: q right after R waits until the service or background run the
+// restart stopped runs again, and quits only then.
+func TestQuitWaitsForRestart(t *testing.T) {
+	for _, mode := range []string{"service", "background"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFake()
+			start := "background"
+			if mode == "service" {
+				runningService(f)
+				f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+				f.cfg.RunMode, start = config.RunBoot, "enable"
+			} else {
+				inBackgroundMode(f)
+				f.st = supervisor.Status{State: "running", Mode: "background", PID: 4343}
+			}
+			m := newModel(t, f)
+			m.pending = true
+			m, restart := update(t, m, key(restartKey))
+			if restart == nil {
+				t.Fatal("R gave no command")
+			}
+			m, quit := update(t, m, key("q"))
+			if quit != nil {
+				t.Fatal("q quit before the restart started the bypass again")
+			}
+			msg := restart()
+			if !f.called("stop") || !f.called(start) {
+				t.Fatalf("calls %q, want stop and %s", f.calls, start)
+			}
+			m, quit = update(t, m, msg)
+			if quit == nil {
+				t.Fatal("no quit once the restart ended")
+			}
+			if _, ok := quit().(tea.QuitMsg); !ok {
+				t.Error("the restart's end did not quit")
+			}
+			if f.st.State != "running" || f.st.Mode != mode {
+				t.Errorf("left %s/%s, want %s running", f.st.State, f.st.Mode, mode)
+			}
+		})
+	}
+}
+
+// U-15b: a signal in the middle of a service restart ends the program, and
+// Run waits until the service runs again; Enable goes on to its end.
+func TestRunWaitsForRestart(t *testing.T) {
+	f := newFake()
+	runningService(f)
+	f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+	f.cfg.RunMode = config.RunBoot
+	f.gate = make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := newModel(t, f)
+	m.ctx, m.pending = ctx, true
+	m, restart := update(t, m, key(restartKey))
+	go restart()
+	for !f.called("stop") {
+		time.Sleep(time.Millisecond)
+	}
+	before := f.count("detect foreign")
+	err := runProgram(t, m, eioTerminal{}, func() {
+		for f.count("detect foreign") == before { // Init ran: the loop is up
+			time.Sleep(time.Millisecond)
+		}
+		cancel()
+		time.AfterFunc(50*time.Millisecond, func() { close(f.gate) })
+	})
+	if err != nil {
+		t.Errorf("Run: %v", err)
+	}
+	f.mu.Lock()
+	st, svcCtx := f.st, f.svcCtx
+	f.mu.Unlock()
+	if st.State != "running" || st.Mode != "service" {
+		t.Errorf("Run left the service %s/%s: %q", st.State, st.Mode, f.calls)
+	}
+	if svcCtx == nil || svcCtx.Err() != nil {
+		t.Error("Enable ran with the program's ended context")
+	}
+}
+
+// U-15b: Enable and Disable get a context that the program's end does not
+// cancel: Run waits for them, and cut short they could leave no bypass.
+func TestServiceChangeOutlivesProgramContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	for name, change := range map[string]func(*Model) tea.Cmd{
+		"enable":  (*Model).enable,
+		"disable": func(m *Model) tea.Cmd { return m.disable(config.RunWindow) },
+	} {
+		f := newFake()
+		f.cfg.Strategy = &config.Strategy{ID: "tt-multidisorder"}
+		m := newModel(t, f)
+		m.ctx = ctx
+		change(&m)()
+		f.mu.Lock()
+		c := f.svcCtx
+		f.mu.Unlock()
+		if c == nil || c.Err() != nil {
+			t.Errorf("%s ran with the program's cancelled context", name)
+		}
 	}
 }

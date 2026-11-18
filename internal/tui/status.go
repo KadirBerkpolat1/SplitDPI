@@ -32,11 +32,9 @@ type (
 		names map[string]string // the probed apps' names by id
 		err   error
 	}
-	// restartStoppedMsg: the bypass that ran in mode stopped, to start again.
-	restartStoppedMsg struct {
-		mode string
-		err  error
-	}
+	// restartStoppedMsg: the bypass stopped for a restart, to start again
+	// the way the run mode says.
+	restartStoppedMsg struct{ err error }
 )
 
 func (statusPage) Title() string         { return i18n.T("shell.menu.status") }
@@ -188,7 +186,7 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.note, m.quitting = errText(msg.err), false
 			return m, m.refresh(), true
 		}
-		m.note = i18n.T("background_tui.started", msg.pid)
+		m.note, m.pending = i18n.T("background_tui.started", msg.pid), false
 		if m.quitting {
 			m.bgPID = msg.pid
 			return m, tea.Quit, true
@@ -210,16 +208,8 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.restarting, m.note = false, i18n.T("fix2_arayuz.restart_scan")
 			return m, m.refresh(), true
 		}
-		var cmd tea.Cmd
-		switch msg.mode {
-		case "service":
-			cmd = m.enable()
-		case "background":
-			cmd = m.runBackground()
-		default:
-			m.restarting = false
-			cmd = m.startAction().Do(&m)
-		}
+		m.restarting = false
+		cmd := m.startAction().Do(&m)
 		// The restart holds until the start it began ends.
 		m.restarting = m.svcOp != nil || m.bgStarting()
 		return m, batch(cmd, m.refresh()), true
@@ -267,11 +257,20 @@ func (m *Model) runBackground() tea.Cmd {
 	if m.bgStarting() {
 		return nil
 	}
+	m.pending = false
+	return m.startBackground(m.b.Background)
+}
+
+// startBackground runs start as the background start under way.
+func (m *Model) startBackground(start func(context.Context) (int, error)) tea.Cmd {
+	if m.bgStarting() {
+		return nil
+	}
 	op := &bgStart{job: newJob()}
-	m.bgStart, m.note, m.pending = op, i18n.T("background_tui.starting"), false
-	b, ctx := m.b, context.WithoutCancel(m.ctx)
+	m.bgStart, m.note = op, i18n.T("background_tui.starting")
+	ctx := context.WithoutCancel(m.ctx)
 	return func() tea.Msg {
-		if !op.run(func() { op.pid, op.err = b.Background(ctx) }) {
+		if !op.run(func() { op.pid, op.err = start(ctx) }) {
 			return nil
 		}
 		return bgDoneMsg{op.pid, op.err}
@@ -316,15 +315,42 @@ func (m *Model) stop() tea.Cmd {
 
 // restart stops the bypass and starts it again the same way, so that it
 // picks up the changes saved since it started. Until it runs again, R and r
-// wait.
+// wait. A service or background run stops and starts again as one change
+// that quitting and Run wait for: cut between the two, it would leave no
+// bypass running.
 func (m *Model) restart() tea.Cmd {
-	m.note, m.restarting = i18n.T("tui.restarting"), true
+	m.restarting = true
 	if m.running {
+		m.note = i18n.T("tui.restarting")
 		m.runCancel() // runDoneMsg starts it again
 		return nil
 	}
-	b, mode := m.b, m.st.Mode
-	return func() tea.Msg { return restartStoppedMsg{mode, b.Stop()} }
+	b, w := m.b, m.logs
+	var cmd tea.Cmd
+	switch m.st.Mode {
+	case "service":
+		cmd = m.changeService(func(ctx context.Context) (tea.Msg, error) {
+			err := b.Stop()
+			if err == nil {
+				_, err = b.Enable(ctx, nil)
+			}
+			if err != nil {
+				fmt.Fprintln(w, err)
+			}
+			return enableMsg{err}, err
+		})
+	case "background":
+		cmd = m.startBackground(func(ctx context.Context) (int, error) {
+			if err := b.Stop(); err != nil {
+				return 0, err
+			}
+			return b.Background(ctx)
+		})
+	default:
+		cmd = func() tea.Msg { return restartStoppedMsg{b.Stop()} }
+	}
+	m.note = i18n.T("tui.restarting")
+	return cmd
 }
 
 // restartCLI is the command that restarts the bypass the way it runs now.
