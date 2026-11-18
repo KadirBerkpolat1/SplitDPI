@@ -198,12 +198,13 @@ func (m *Model) runNow() tea.Cmd {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	finished := make(chan struct{})
-	m.running, m.runCancel, m.runFinished, m.note, m.pending = true, cancel, finished, "", false
+	j := newJob()
+	m.running, m.runCancel, m.runJob, m.note, m.pending = true, cancel, j, "", false
 	b := m.b
 	return func() tea.Msg {
-		defer close(finished)
-		return runDoneMsg{b.Run(ctx, false)}
+		var err error
+		j.run(func() { err = b.Run(ctx, false) })
+		return runDoneMsg{err}
 	}
 }
 

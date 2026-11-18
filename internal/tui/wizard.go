@@ -87,8 +87,9 @@ type wizard struct {
 	cancelled  bool
 	dnsOn      bool             // the scan turned encrypted DNS on
 	asks       chan dnsQuestion // polled on each scan tick
-	resumed    chan struct{}    // closed once the bypass the scan stopped runs again; nil if it stopped none
+	done       *job             // the scan, until its rules are gone and the bypass it stopped runs again
 	paused     bool             // the scan stopped the bypass and starts it again with what it saved
+	resumeErr  error            // that start failed
 	report     *scan.Report
 	err        error
 
@@ -632,8 +633,9 @@ func (m *Model) saveApps() tea.Cmd {
 func (m *Model) startScan() tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &m.wiz
-	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.scanCancel = wScan, true, false, false, nil, nil, cancel
-	w.progress, w.asks, w.resumed = &ring{max: 200}, make(chan dnsQuestion), nil
+	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.resumeErr, w.scanCancel = wScan, true, false, false, nil, nil, nil, cancel
+	done := newJob()
+	w.progress, w.asks, w.done = &ring{max: 200}, make(chan dnsQuestion), done
 	m.note = ""
 	b, prog, logs, asks, g, site := m.b, w.progress, m.logs, w.asks, m.g, w.site
 	opt := scan.Options{
@@ -651,15 +653,7 @@ func (m *Model) startScan() tea.Cmd {
 	}
 	stopHere := m.stopOwnRun()
 	w.paused = runHere || mode != ""
-	var resumed chan struct{}
-	if mode != "" {
-		resumed = make(chan struct{})
-		w.resumed = resumed
-	}
 	scanRun := func() scanDoneMsg {
-		if resumed != nil {
-			defer close(resumed)
-		}
 		if runHere || mode != "" {
 			prog.Write([]byte(i18n.T("scan_page.paused") + "\n"))
 		}
@@ -680,8 +674,10 @@ func (m *Model) startScan() tea.Cmd {
 		return msg
 	}
 	run := func() tea.Msg {
-		msg := scanRun()
-		msg.status = readStatus(b)
+		var msg scanDoneMsg
+		if !done.run(func() { msg = scanRun(); msg.status = readStatus(b) }) {
+			return nil
+		}
 		return msg
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))

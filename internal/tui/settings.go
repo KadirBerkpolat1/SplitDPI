@@ -627,11 +627,11 @@ func (m *Model) confirmUninstall() tea.Cmd {
 // stopOwnRun returns a func that stops the bypass this TUI runs, if any,
 // and waits until its rules are gone; it runs inside a command.
 func (m *Model) stopOwnRun() func() {
-	running, cancel, finished := m.running, m.runCancel, m.runFinished
+	running, cancel, j := m.running, m.runCancel, m.runJob
 	return func() {
 		if running {
 			cancel()
-			<-finished
+			j.wait()
 		}
 	}
 }

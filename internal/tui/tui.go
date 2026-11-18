@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -155,8 +156,8 @@ type Model struct {
 	// The bypass this TUI runs itself: quitting stops it.
 	running     bool
 	runCancel   context.CancelFunc
-	runFinished chan struct{}
-	restarting  bool // the run here ends to start again
+	runJob      *job
+	restarting  bool // a restart is under way: R and r wait for it
 	confirmQuit bool
 	quitting    bool
 
@@ -204,10 +205,22 @@ func (m *Model) loadNames(set presets.Set) {
 // strategy saved in this session, the background run quitting left and what
 // the service change quitting waited for did are printed where the
 // scrollback keeps them.
+//
+// Signals are ctx's: the caller cancels it on SIGINT, SIGTERM and SIGHUP and
+// keeps catching them until Run returns. Bubble Tea's own handler would race
+// it and could block the program's end for good. Ctrl+C is a key in raw mode.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
-	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx), tea.WithOutput(m.out)).Run()
+	return m.run()
+}
+
+// run is Run for m, its program options followed by opts. Writes to a
+// terminal that is gone fail, and the cleanup goes on regardless. Once ctx
+// ended the program there is nothing to report.
+func (m Model) run(opts ...tea.ProgramOption) error {
+	opts = append([]tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(m.ctx), tea.WithoutSignalHandler(), tea.WithOutput(m.out)}, opts...)
+	final, err := tea.NewProgram(m, opts...).Run()
 	if fm, ok := final.(Model); ok {
 		fm.stopAll()
 		fm.waitService(m.out)
@@ -216,6 +229,9 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 		fm.printBackground(m.out)
 		fm.printQuitNote(m.out)
 	}
+	if m.ctx.Err() != nil {
+		return nil
+	}
 	return err
 }
 
@@ -223,7 +239,48 @@ func Run(ctx context.Context, o *ops.Ops, version string) error {
 func (m Model) stopRun() {
 	if m.runCancel != nil {
 		m.runCancel()
-		<-m.runFinished
+		m.runJob.wait()
+	}
+}
+
+// job is the work of a command that is waited for: the scan, the run here, a
+// service change. Bubble Tea drops the commands it has not started once its
+// context is done, so the command and the first wait claim the job: the
+// command does the work, or the wait finds it never started, and it never
+// will.
+type job struct {
+	claimed atomic.Bool
+	done    chan struct{}
+}
+
+func newJob() *job { return &job{done: make(chan struct{})} }
+
+// run does work and reports whether it did: not once a wait claimed the job.
+func (j *job) run(work func()) bool {
+	if !j.claimed.CompareAndSwap(false, true) {
+		return false
+	}
+	defer close(j.done)
+	work()
+	return true
+}
+
+// wait returns once the work is done, or at once if it never started.
+func (j *job) wait() {
+	if j.claimed.CompareAndSwap(false, true) {
+		close(j.done)
+		return
+	}
+	<-j.done
+}
+
+// ended is whether the work is done or will never start, without waiting.
+func (j *job) ended() bool {
+	select {
+	case <-j.done:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -529,16 +586,15 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
-// stopAll stops the log stream and a running scan. A scan that stopped the
-// bypass is waited for, so that the bypass runs again before the TUI quits.
+// stopAll stops the log stream and a running scan, and waits for the scan:
+// its trials and blockcheck2 remove their rules, and the bypass it stopped
+// runs again, before the TUI quits.
 func (m *Model) stopAll() {
 	m.stopLogs()
 	if m.wiz.scanning {
 		m.wiz.cancelled = true
 		m.wiz.scanCancel()
-		if m.wiz.resumed != nil {
-			<-m.wiz.resumed
-		}
+		m.wiz.done.wait()
 	}
 }
 
