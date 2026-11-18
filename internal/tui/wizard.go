@@ -587,7 +587,7 @@ func (m *Model) askSite() tea.Cmd {
 	w := &m.wiz
 	w.step, w.site, m.note = wSite, "", ""
 	w.ipv6 = m.b.HasIPv6(m.ctx)
-	w.input = textinput.New()
+	w.input = m.newInput()
 	w.input.Placeholder = "example.com"
 	w.input.CharLimit = 253
 	return w.input.Focus()

@@ -99,7 +99,7 @@ func (sitesPage) View(m Model, w, h int) string { return m.appsView(w, h) }
 func (m *Model) openApps() {
 	set := m.b.PresetsList()
 	m.loadNames(set)
-	a := appsScreen{input: textinput.New()}
+	a := appsScreen{input: m.newInput()}
 	for _, id := range slices.Sorted(maps.Keys(set.Apps)) {
 		a.apps = append(a.apps, set.Apps[id])
 	}

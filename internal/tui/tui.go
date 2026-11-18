@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
@@ -117,7 +119,8 @@ type Model struct {
 	width   int
 	height  int
 	every   func(time.Duration, func(time.Time) tea.Msg) tea.Cmd
-	out     io.Writer // the program's output, for escape sequences the renderer cannot send
+	blink   cursor.Mode // the text inputs' cursor: blinking unless tests make it static
+	out     io.Writer   // the program's output, for escape sequences the renderer cannot send
 
 	page    int // the selected tab
 	help    bool
@@ -178,6 +181,13 @@ func New(ctx context.Context, b Backend, version string) Model {
 	m.st, m.cfg, m.stErr, m.svc = s.st, s.cfg, s.err, s.svc
 	m.loadNames(b.PresetsList())
 	return m
+}
+
+// newInput is a text input whose cursor follows m.blink.
+func (m Model) newInput() textinput.Model {
+	in := textinput.New()
+	in.Cursor.SetMode(m.blink)
+	return in
 }
 
 // loadNames keeps the names Status shows: the apps' and the strategy's ISP's.

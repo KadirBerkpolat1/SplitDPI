@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -506,6 +507,7 @@ func newModel(t *testing.T, f *fake) Model {
 	t.Helper()
 	m := New(context.Background(), f, "v0.1.0")
 	m.every = func(time.Duration, func(time.Time) tea.Msg) tea.Cmd { return nil }
+	m.blink = cursor.CursorStatic
 	m.width, m.height = 80, 24
 	m.g = unicodeGlyphs
 	return m
@@ -553,7 +555,7 @@ func typeText(t *testing.T, m Model, s string) Model {
 }
 
 // settle runs cmd and feeds results back until nothing is left. Batches are
-// expanded; ticks never run because tests disable m.every.
+// expanded; ticks and cursor blinks never run because newModel disables them.
 func settle(t *testing.T, m Model, cmd tea.Cmd) Model {
 	t.Helper()
 	queue := []tea.Cmd{cmd}

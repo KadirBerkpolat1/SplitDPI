@@ -159,7 +159,7 @@ func qnumActions(m Model) []action {
 }
 
 func (m *Model) openText(id, value string, limit int) tea.Cmd {
-	in := textinput.New()
+	in := m.newInput()
 	in.CharLimit, in.Width = limit, 48
 	in.SetValue(value)
 	cmd := in.Focus()
@@ -278,7 +278,7 @@ func (m Model) ifaceActions() []action {
 	}
 	acts := []action{{Key: "a", Label: i18n.T("settings_ifaces.add"), CLI: ifacesCLI(append(slices.Clone(e.list), "NAME")), Do: func(m *Model) tea.Cmd {
 		e := *m.settings.ifaces
-		e.adding, e.err, e.input = true, "", textinput.New()
+		e.adding, e.err, e.input = true, "", m.newInput()
 		e.input.Placeholder, e.input.CharLimit = "wg*", 16
 		cmd := e.input.Focus()
 		m.settings.ifaces = &e
