@@ -14,7 +14,7 @@ import (
 
 // Status is written to StatusFile on every state change.
 type Status struct {
-	State      string    `json:"state"`                // running|stopped|failed
+	State      string    `json:"state"`                // running|restarting|stopped|failed
 	Mode       string    `json:"mode"`                 // foreground|background|service|scan
 	PID        int       `json:"pid"`                  // the supervisor
 	ChildPID   int       `json:"child_pid,omitempty"`  // the guard, nfqws2's parent
@@ -26,6 +26,14 @@ type Status struct {
 	StderrTail []string  `json:"stderr_tail,omitempty"`
 	Since      time.Time `json:"since"`
 }
+
+// StateRestarting is the state between nfqws2 exiting and its restart: the
+// supervisor still holds the lock, but no nfqws2 handles the queue.
+const StateRestarting = "restarting"
+
+// On reports whether the supervisor that wrote st was on: running, or
+// restarting nfqws2. Whether it still is, only the lock tells.
+func (st Status) On() bool { return st.State == "running" || st.State == StateRestarting }
 
 func ReadStatus(p paths.Paths) (Status, error) {
 	var st Status
@@ -93,11 +101,14 @@ func LockInfo(p paths.Paths) (pid int, mode string, held bool) {
 // flock shared for a moment, and an exclusive one cannot be taken meanwhile.
 const lockWait = 2 * time.Second
 
-// lock takes the exclusive flock and records our PID and mode. The returned
-// file must stay open for as long as the lock is needed. ErrAlreadyRunning
-// means that a live run holds it; a flock held only shared, by LockInfo in
-// status, the TUI or enable, is waited out.
-func lock(p paths.Paths, mode string) (*os.File, error) {
+// Lock takes the exclusive run lock and records our PID and mode. The
+// returned file must stay open for as long as the lock is needed.
+// ErrAlreadyRunning means that a live run holds it; a flock held only shared,
+// by LockInfo in status, the TUI or enable, is waited out.
+func Lock(p paths.Paths, mode string) (*os.File, error) {
+	if err := os.MkdirAll(p.RunDir, 0o755); err != nil {
+		return nil, err
+	}
 	deadline := time.Now().Add(lockWait)
 	for {
 		f, err := flockPath(p, deadline)

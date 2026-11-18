@@ -53,6 +53,9 @@ type Supervisor struct {
 	// FlushDNS, if set, runs once the table and its DNS redirect have loaded,
 	// to clear what local resolvers cached while DNS went around the forwarder.
 	FlushDNS func(ctx context.Context, log io.Writer)
+	// Locked means the caller holds the run lock (see Lock) for as long as Run
+	// runs, as a scan does around its trials; Run then does not take it.
+	Locked bool
 }
 
 type ErrAlreadyRunning struct{ Mode string }
@@ -76,14 +79,13 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 	if log == nil {
 		log = io.Discard
 	}
-	if err := os.MkdirAll(s.P.RunDir, 0o755); err != nil {
-		return err
+	if !s.Locked {
+		lf, err := Lock(s.P, meta.Mode)
+		if err != nil {
+			return err
+		}
+		defer lf.Close()
 	}
-	lf, err := lock(s.P, meta.Mode)
-	if err != nil {
-		return err
-	}
-	defer lf.Close()
 
 	st := meta
 	st.PID = os.Getpid()
@@ -152,6 +154,10 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 		d := min(time.Second<<quick, maxBackoff)
 		quick++
 		fmt.Fprintln(log, i18n.T("supervisor.restarting", err, d))
+		st.State = StateRestarting
+		if werr := writeStatus(s.P, st); werr != nil {
+			fmt.Fprintln(log, werr)
+		}
 		slept := make(chan struct{})
 		go func() { s.Sleep(d); close(slept) }()
 		select {

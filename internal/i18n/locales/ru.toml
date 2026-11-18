@@ -304,6 +304,7 @@ unsafe_location = "%s лежит во временном или домашнем
 running = "работает"
 stopped = "остановлен"
 failed = "сбой"
+restarting = "перезапускается"
 
 [mode]
 foreground = "в окне"

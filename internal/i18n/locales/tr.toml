@@ -304,6 +304,7 @@ unsafe_location = "%s geçici bir dizinde ya da bir ev dizininde"
 running = "çalışıyor"
 stopped = "durdu"
 failed = "hata verdi"
+restarting = "yeniden başlatılıyor"
 
 [mode]
 foreground = "ön plan"

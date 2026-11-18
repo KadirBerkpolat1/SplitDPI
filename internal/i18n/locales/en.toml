@@ -299,6 +299,7 @@ unsafe_location = "%s is in a temporary or home directory"
 running = "running"
 stopped = "stopped"
 failed = "failed"
+restarting = "restarting"
 
 [mode]
 foreground = "foreground"
