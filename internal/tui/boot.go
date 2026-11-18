@@ -33,18 +33,19 @@ type (
 // when the program ends otherwise: cut short, it could leave no bypass
 // running.
 type serviceOp struct {
-	done chan struct{}
-	msg  tea.Msg // the result, once done is closed
-	err  error
+	*job
+	msg tea.Msg // the result, once done is closed
+	err error
 }
 
 // changeService runs change as the service change under way.
 func (m *Model) changeService(change func() (tea.Msg, error)) tea.Cmd {
-	op := &serviceOp{done: make(chan struct{})}
+	op := &serviceOp{job: newJob()}
 	m.svcOp = op
 	return func() tea.Msg {
-		defer close(op.done)
-		op.msg, op.err = change()
+		if !op.run(func() { op.msg, op.err = change() }) {
+			return nil
+		}
 		return serviceDoneMsg{op.msg, op.err}
 	}
 }
@@ -79,14 +80,7 @@ func (m Model) serviceDone(d serviceDoneMsg) (tea.Model, tea.Cmd) {
 
 // runEnded is whether the bypass this TUI runs has ended, before its
 // runDoneMsg has arrived.
-func (m Model) runEnded() bool {
-	select {
-	case <-m.runFinished:
-		return true
-	default:
-		return false
-	}
-}
+func (m Model) runEnded() bool { return m.runJob.ended() }
 
 // waitService waits for the service change the program ended in the middle
 // of, by a signal or a lost terminal, and says how it ended.
@@ -95,12 +89,10 @@ func (m Model) waitService(w io.Writer) {
 	if op == nil {
 		return
 	}
-	select {
-	case <-op.done:
-	default:
+	if !op.ended() && op.claimed.Load() {
 		fmt.Fprintln(w, i18n.T("tui.service_wait"))
-		<-op.done
 	}
+	op.wait()
 	if op.err != nil {
 		fmt.Fprintln(w, errText(op.err))
 		return
@@ -117,9 +109,13 @@ func (m Model) waitService(w io.Writer) {
 // in the foreground: enabling the service stops that run. The bypass this
 // TUI runs is m.running.
 func (m Model) otherRun() bool {
-	return !m.running && m.st.State == "running" && m.st.PID != os.Getpid() &&
+	return !m.running && m.stateOn() && m.st.PID != os.Getpid() &&
 		(m.st.Mode == "background" || m.st.Mode == "foreground")
 }
+
+// otherTerminal is whether the bypass runs in the foreground of another
+// terminal (`splitdpi run`): only that terminal can start it again.
+func (m Model) otherTerminal() bool { return m.otherRun() && m.st.Mode == "foreground" }
 
 // confirmEnable asks before the service is installed and started, and says
 // which bypass running now it replaces.
@@ -232,7 +228,7 @@ func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
 		return nil
 	}
 	changes := []string{i18n.T("shell.disable.service")}
-	if m.st.State == "running" && m.st.Mode == "service" {
+	if m.stateOn() && m.st.Mode == "service" {
 		changes = append(changes, i18n.T("shell.disable.stops"))
 	}
 	m.dialog = &confirm{

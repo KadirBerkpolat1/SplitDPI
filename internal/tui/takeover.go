@@ -18,6 +18,7 @@ type (
 	foreignMsg  struct{ found []ops.Foreign }
 	takeoverMsg struct {
 		lines []string
+		added int // the sites imported, which a running bypass picks up on restart
 		err   error
 	}
 )
@@ -97,8 +98,10 @@ func (m *Model) takeover(todo []ops.Foreign) tea.Cmd {
 	b, ctx, w := m.b, m.ctx, m.logs
 	return func() tea.Msg {
 		var lines []string
+		added := 0
 		for _, f := range todo {
 			r, err := b.Takeover(ctx, f)
+			added += len(r.Added)
 			var did []string
 			if len(r.Added) > 0 || (f.Hostlist != "" && err == nil) {
 				did = append(did, i18n.N("takeover.imported", len(r.Added), f.Hostlist))
@@ -121,10 +124,10 @@ func (m *Model) takeover(todo []ops.Foreign) tea.Cmd {
 			lines = append(lines, did...)
 			if err != nil {
 				fmt.Fprintln(w, f.Kind+": "+err.Error())
-				return takeoverMsg{lines, err}
+				return takeoverMsg{lines, added, err}
 			}
 		}
-		return takeoverMsg{lines: lines}
+		return takeoverMsg{lines: lines, added: added}
 	}
 }
 
@@ -135,10 +138,17 @@ func (m Model) takeoverUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		return m, nil, true
 	case takeoverMsg:
 		m.takenOver = msg.lines
-		m.note = i18n.T("takeover_tui.done")
-		if msg.err != nil {
-			m.note = errText(msg.err)
+		note := i18n.T("takeover_tui.done")
+		if m.bypassOn() {
+			note = i18n.T("fix_arayuz.takeover_done_running")
 		}
+		if msg.err != nil {
+			note = errText(msg.err)
+		}
+		if msg.added > 0 {
+			note = m.withChange(note)
+		}
+		m.note = note
 		m.loadTakenOver()
 		return m, tea.Batch(m.refresh(), m.detectForeign()), true
 	}

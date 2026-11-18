@@ -87,8 +87,9 @@ type wizard struct {
 	cancelled  bool
 	dnsOn      bool             // the scan turned encrypted DNS on
 	asks       chan dnsQuestion // polled on each scan tick
-	resumed    chan struct{}    // closed once the bypass the scan stopped runs again; nil if it stopped none
+	done       *job             // the scan, until its rules are gone and the bypass it stopped runs again
 	paused     bool             // the scan stopped the bypass and starts it again with what it saved
+	resumeErr  error            // that start failed
 	report     *scan.Report
 	err        error
 
@@ -120,6 +121,9 @@ type (
 		// runHere: the scan stopped the run in this TUI, to start again here.
 		runHere   bool
 		resumeErr error
+		// restarted: the service or background run the scan stopped runs
+		// again, with every change saved before.
+		restarted bool
 		// status is read once the bypass runs again, so that the done step
 		// never shows the stopped one a tick read during the scan.
 		status statusMsg
@@ -328,8 +332,12 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 				m.note = errText(msg.applied.err)
 			}
 		}
+		w.resumeErr = msg.resumeErr
 		if msg.resumeErr != nil {
 			m.note = errText(msg.resumeErr)
+		}
+		if msg.restarted {
+			m.pending = false
 		}
 		if msg.runHere && !m.quitting {
 			cmd := m.runNow()
@@ -601,23 +609,28 @@ func (m *Model) scanSite() tea.Cmd {
 	return m.startScan()
 }
 
-// saveApps saves the apps chosen for the trials (`apps enable|disable`).
+// saveApps saves the apps chosen for the trials (`apps enable|disable`):
+// the new ones first, so that mode apps never runs out of apps between two
+// changes.
 func (m *Model) saveApps() tea.Cmd {
 	b, chosen, current := m.b, m.wiz.chosen, m.cfg.Apps
-	ids := make([]string, 0, len(m.wiz.apps))
+	var enable, disable []string
 	for _, a := range m.wiz.apps {
-		ids = append(ids, a.ID)
+		switch on := slices.Contains(current, a.ID); {
+		case chosen[a.ID] && !on:
+			enable = append(enable, a.ID)
+		case !chosen[a.ID] && on:
+			disable = append(disable, a.ID)
+		}
 	}
 	return func() tea.Msg {
-		for _, id := range ids {
-			var err error
-			switch on := slices.Contains(current, id); {
-			case chosen[id] && !on:
-				err = b.AppsEnable(id)
-			case !chosen[id] && on:
-				err = b.AppsDisable(id)
+		for _, id := range enable {
+			if err := b.AppsEnable(id); err != nil {
+				return appsAppliedMsg{err}
 			}
-			if err != nil {
+		}
+		for _, id := range disable {
+			if err := b.AppsDisable(id); err != nil {
 				return appsAppliedMsg{err}
 			}
 		}
@@ -632,8 +645,9 @@ func (m *Model) saveApps() tea.Cmd {
 func (m *Model) startScan() tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &m.wiz
-	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.scanCancel = wScan, true, false, false, nil, nil, cancel
-	w.progress, w.asks, w.resumed = &ring{max: 200}, make(chan dnsQuestion), nil
+	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.resumeErr, w.scanCancel = wScan, true, false, false, nil, nil, nil, cancel
+	done := newJob()
+	w.progress, w.asks, w.done = &ring{max: 200}, make(chan dnsQuestion), done
 	m.note = ""
 	b, prog, logs, asks, g, site := m.b, w.progress, m.logs, w.asks, m.g, w.site
 	opt := scan.Options{
@@ -646,20 +660,12 @@ func (m *Model) startScan() tea.Cmd {
 	}
 	save := m.saveApps()
 	runHere, mode := m.running, ""
-	if !runHere && m.st.State == "running" && (m.st.Mode == "service" || m.st.Mode == "background") {
+	if !runHere && m.stateOn() && (m.st.Mode == "service" || m.st.Mode == "background") {
 		mode = m.st.Mode
 	}
 	stopHere := m.stopOwnRun()
 	w.paused = runHere || mode != ""
-	var resumed chan struct{}
-	if mode != "" {
-		resumed = make(chan struct{})
-		w.resumed = resumed
-	}
 	scanRun := func() scanDoneMsg {
-		if resumed != nil {
-			defer close(resumed)
-		}
 		if runHere || mode != "" {
 			prog.Write([]byte(i18n.T("scan_page.paused") + "\n"))
 		}
@@ -677,11 +683,14 @@ func (m *Model) startScan() tea.Cmd {
 			msg.applied = &a
 		}
 		msg.resumeErr = resume(context.WithoutCancel(ctx), b, mode)
+		msg.restarted = mode != "" && msg.resumeErr == nil
 		return msg
 	}
 	run := func() tea.Msg {
-		msg := scanRun()
-		msg.status = readStatus(b)
+		var msg scanDoneMsg
+		if !done.run(func() { msg = scanRun(); msg.status = readStatus(b) }) {
+			return nil
+		}
 		return msg
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))
@@ -859,6 +868,8 @@ func (m Model) wizardView(width, h int) string {
 		switch {
 		case w.scanning:
 			head = append(head, i18n.T("tui.wiz.scanning"))
+		case w.cancelled && w.resumeErr != nil:
+			head = append(head, badStyle.Render(i18n.T("fix_arayuz.cancelled_not_restarted")))
 		case w.cancelled && w.dnsOn:
 			head = append(head, warnStyle.Render(i18n.T("tui.wiz.cancelled_dns")))
 		case w.cancelled:

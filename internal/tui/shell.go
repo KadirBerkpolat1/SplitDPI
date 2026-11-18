@@ -87,6 +87,9 @@ func (m Model) layout() screen {
 	return s
 }
 
+// pageSize is the width and height View gives the page.
+func (m Model) pageSize() (int, int) { return m.width - 4, m.layout().frameH - 2 }
+
 // View is the tab bar, the page in its frame, the toast and the hint bar;
 // a popup covers the frame and the toast.
 func (m Model) View() string {
@@ -179,9 +182,14 @@ func (m Model) tab(i int, title string) string {
 }
 
 // pill is the bypass state in words, or only its dot when words is false.
+// A setup scan shows itself, as on Status.
 func (m Model) pill(words bool) string {
 	dot, label, style := m.g.dotOff, i18n.T("shell.pill.stopped"), mutedStyle
 	switch {
+	case m.wiz.scanning:
+		dot, label, style = m.g.dot, i18n.T("fix_arayuz.pill_scanning"), warnStyle
+	case !m.running && m.st.State == "restarting":
+		dot, label, style = m.g.dot, i18n.T("fix_arayuz.pill_restarting"), warnStyle
 	case m.bypassOn():
 		dot, label, style = m.g.dot, i18n.T("shell.pill.running"), goodStyle
 	case m.st.State == "failed":
@@ -194,9 +202,11 @@ func (m Model) pill(words bool) string {
 }
 
 // pillAction is what a click on the pill does: Status's stop, or its start
-// in the run mode, with the confirmation that start asks for.
+// in the run mode, with the confirmation that start asks for; nothing while
+// they are held.
 func (m Model) pillAction() (action, bool) {
 	switch {
+	case m.held():
 	case m.bypassOn():
 		return m.stopAction(), true
 	case m.canStart() && m.cfg.Strategy != nil:
@@ -259,9 +269,11 @@ func hint(key, label string) string { return keyStyle.Render(key) + " " + label 
 // restartKey restarts a running bypass with pending changes from any page.
 const restartKey = "R"
 
-// restartAction is R while the running bypass has changes waiting.
+// restartAction is R while the running bypass has changes waiting. It waits
+// while restarting is held or a start is under way; a run in another
+// terminal restarts there, where it can be seen.
 func (m Model) restartAction() (action, bool) {
-	if !m.pending || !m.bypassOn() {
+	if !m.pending || !m.bypassOn() || m.held() || m.svcOp != nil || m.bgStarting || m.otherTerminal() {
 		return action{}, false
 	}
 	return action{Key: restartKey, Label: i18n.T("tui.act.restart"), CLI: m.restartCLI(), Do: (*Model).restart}, true

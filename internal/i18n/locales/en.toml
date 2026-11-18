@@ -982,3 +982,12 @@ dns_off = "Encrypted DNS is off."
 [fix_cekirdek]
 scan_running = "A scan is running. Wait until it ends, or stop it where it runs."
 stop_here = "SplitDPI runs in this process: stop it here."
+
+[fix_arayuz]
+pill_scanning = "Scanning"
+pill_restarting = "Restarting"
+how_restarting = "The engine stopped and starts again in a moment."
+pending_foreground = "Changes you saved are not in use yet: restart the bypass in the terminal it runs in."
+restart_foreground = "Restart the bypass in the terminal it runs in to apply it."
+cancelled_not_restarted = "Scan cancelled, but the bypass it stopped did not start again."
+takeover_done_running = "Done. The other tool is off."

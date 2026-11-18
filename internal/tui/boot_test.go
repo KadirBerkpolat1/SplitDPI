@@ -495,7 +495,8 @@ func TestQuitAfterServiceAsksForRunHere(t *testing.T) {
 // says how it ended.
 func TestWaitService(t *testing.T) {
 	m := newModel(t, newFake())
-	op := &serviceOp{done: make(chan struct{})}
+	op := &serviceOp{job: newJob()}
+	op.claimed.Store(true) // the change has started
 	m.svcOp = op
 	var out bytes.Buffer
 	returned := make(chan struct{})
