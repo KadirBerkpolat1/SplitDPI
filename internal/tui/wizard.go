@@ -120,6 +120,9 @@ type (
 		// runHere: the scan stopped the run in this TUI, to start again here.
 		runHere   bool
 		resumeErr error
+		// status is read once the bypass runs again, so that the done step
+		// never shows the stopped one a tick read during the scan.
+		status statusMsg
 	}
 	scanTickMsg struct{}
 	engineMsg   struct {
@@ -295,6 +298,7 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		return m, nil, true
 	case scanDoneMsg:
+		m.applyStatus(msg.status)
 		w.scanning, m.ask = false, nil
 		w.scanCancel()
 		if !w.cancelled && (msg.err == nil || errors.Is(msg.err, scan.ErrNoStrategy)) {
@@ -331,7 +335,7 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			cmd := m.runNow()
 			return m, batch(cmd, m.refresh()), true
 		}
-		return m, m.refresh(), true
+		return m, nil, true
 	}
 	return m.strategyUpdate(msg)
 }
@@ -506,6 +510,11 @@ func (m Model) doneActions() []action {
 	return append(acts, action{Key: "esc", Label: i18n.T("tui.wiz.done"), Do: (*Model).resetWizard})
 }
 
+// doneRuns is whether the done step offers a way to run the bypass.
+func (m Model) doneRuns() bool {
+	return slices.ContainsFunc(m.doneActions(), func(a action) bool { return a.Key != "c" && a.Key != "esc" })
+}
+
 // wizardBack goes back one step: to the step before, or to the intro.
 func (m *Model) wizardBack() tea.Cmd {
 	w := &m.wiz
@@ -647,7 +656,7 @@ func (m *Model) startScan() tea.Cmd {
 		resumed = make(chan struct{})
 		w.resumed = resumed
 	}
-	run := func() tea.Msg {
+	scanRun := func() scanDoneMsg {
 		if resumed != nil {
 			defer close(resumed)
 		}
@@ -668,6 +677,11 @@ func (m *Model) startScan() tea.Cmd {
 			msg.applied = &a
 		}
 		msg.resumeErr = resume(context.WithoutCancel(ctx), b, mode)
+		return msg
+	}
+	run := func() tea.Msg {
+		msg := scanRun()
+		msg.status = readStatus(b)
 		return msg
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))
@@ -865,9 +879,10 @@ func (m Model) wizardView(width, h int) string {
 		if w.shared != "" {
 			head = append(head, "", i18n.T("scan_page.share"), ansi.Hardwrap(w.shared, width, false))
 		}
-		// The question repeats the hint bar's keys; it gives way to the link.
+		// The question repeats the hint bar's keys to run the bypass; it gives
+		// way to the link, and goes when the bar offers none.
 		how := append(slices.Clone(head), "", i18n.T("tui.wiz.how"))
-		if lipgloss.Height(lipgloss.NewStyle().Width(width).Render(strings.Join(how, "\n"))) <= h {
+		if m.doneRuns() && lipgloss.Height(lipgloss.NewStyle().Width(width).Render(strings.Join(how, "\n"))) <= h {
 			head = how
 		}
 	}

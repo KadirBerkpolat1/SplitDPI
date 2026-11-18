@@ -135,7 +135,13 @@ func (f *fake) Background(ctx context.Context) (int, error) {
 	f.st = supervisor.Status{State: "running", Mode: "background", PID: 4343}
 	return 4343, nil
 }
-func (f *fake) Stop() error { f.record("stop"); return nil }
+func (f *fake) Stop() error {
+	f.record("stop")
+	f.mu.Lock()
+	f.st = supervisor.Status{State: "stopped"}
+	f.mu.Unlock()
+	return nil
+}
 func (f *fake) Logs(ctx context.Context, follow bool, w io.Writer) error {
 	f.record("logs")
 	io.WriteString(w, f.logs)

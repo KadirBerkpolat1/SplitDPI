@@ -239,6 +239,8 @@ func TestPillClick(t *testing.T) {
 	}
 	for _, x := range []int{pillX(m), m.width - 1} {
 		f.calls = nil
+		f.st = supervisor.Status{State: "running", Mode: "service", PID: 7} // the click before stopped it
+		m.st = f.st
 		m, cmd = click(t, m, x, 0)
 		if m = settle(t, m, cmd); !f.called("stop") || m.page != pgStatus {
 			t.Errorf("click on the pill at %d: calls %q", x, f.calls)

@@ -258,13 +258,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		return m, tea.Batch(m.refresh(), m.tick())
 	case statusMsg:
-		m.st, m.cfg, m.stErr, m.svc = msg.st, msg.cfg, msg.err, msg.svc
-		if !m.bypassOn() {
-			m.pending = false
-		}
-		if s := m.cfg.Strategy; s != nil && s.ASN != m.ispASN {
-			m.loadNames(m.b.PresetsList())
-		}
+		m.applyStatus(msg)
 		return m, nil
 	case tea.MouseMsg:
 		return m.mouse(msg)
@@ -272,6 +266,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.key(msg)
 	}
 	return m, nil
+}
+
+// applyStatus takes in what readStatus read.
+func (m *Model) applyStatus(msg statusMsg) {
+	m.st, m.cfg, m.stErr, m.svc = msg.st, msg.cfg, msg.err, msg.svc
+	if !m.bypassOn() {
+		m.pending = false
+	}
+	if s := m.cfg.Strategy; s != nil && s.ASN != m.ispASN {
+		m.loadNames(m.b.PresetsList())
+	}
 }
 
 func (m Model) key(k tea.KeyMsg) (tea.Model, tea.Cmd) {

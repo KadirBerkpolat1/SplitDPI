@@ -595,6 +595,40 @@ func TestScanPausesRunningService(t *testing.T) {
 	}
 }
 
+// The done step shows the service the scan started again at once, not the
+// stopped one a status tick read during the scan, and asks how to run only
+// when its hint bar offers a way.
+func TestScanDoneShowsRestartedService(t *testing.T) {
+	f := newFake()
+	runningService(f)
+	f.scanFn = func(context.Context, scan.Options, func(string)) (scan.Report, error) {
+		return scan.Report{Winner: &config.Strategy{ID: "tt-multidisorder"}}, nil
+	}
+	m, cmd := toScan(t, f)
+	msg := cmd()
+	if b, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range b {
+			if d, ok := c().(scanDoneMsg); ok {
+				msg = d
+			}
+		}
+	}
+	if _, ok := msg.(scanDoneMsg); !ok {
+		t.Fatalf("scan gave %T", msg)
+	}
+	m.st = supervisor.Status{State: "stopped"} // a status tick during the scan
+	m, _ = update(t, m, msg)
+	if m.st.State != "running" {
+		t.Fatalf("done step shows %+v, want the running service", m.st)
+	}
+	if cli := cliFor(m, "r"); cli != "" {
+		t.Errorf("done offers r (%q) for a service that runs", cli)
+	}
+	if strings.Contains(m.View(), i18n.T("tui.wiz.how")) {
+		t.Errorf("asks how to run with no way to run offered:\n%s", m.View())
+	}
+}
+
 // Quitting during the scan waits until the service it stopped runs again.
 func TestQuitDuringScanRestartsService(t *testing.T) {
 	f := newFake()

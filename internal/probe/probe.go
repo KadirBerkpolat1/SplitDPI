@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
@@ -89,12 +90,24 @@ func Hosts(set presets.Set, apps, sites []string) ([]string, error) {
 	return hosts, nil
 }
 
-// Probe GETs each URL. OK means TLS verified and any HTTP status arrived within Timeout.
+// maxParallel bounds the probes in flight: imported site lists can be long.
+const maxParallel = 8
+
+// Probe GETs each URL, up to maxParallel at once, so that blocked URLs cost
+// one Timeout together rather than one each; the results keep the order of
+// urls. OK means TLS verified and any HTTP status arrived within Timeout.
 func (p Prober) Probe(ctx context.Context, urls []string) []Result {
 	out := make([]Result, len(urls))
+	sem := make(chan struct{}, maxParallel)
+	var wg sync.WaitGroup
 	for i, u := range urls {
-		out[i] = p.probeOne(ctx, u)
+		sem <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-sem }()
+			out[i] = p.probeOne(ctx, u)
+		})
 	}
+	wg.Wait()
 	return out
 }
 
