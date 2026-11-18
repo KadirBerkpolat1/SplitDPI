@@ -268,9 +268,10 @@ func dnsScan(t *testing.T, f *fake) (Model, chan tea.Msg, chan string) {
 	t.Helper()
 	answer := make(chan string, 1)
 	f.scanFn = func(ctx context.Context, opt scan.Options, progress func(string)) (scan.Report, error) {
-		answer <- opt.DNSCheck(ctx, []probe.DNSResult{
+		s, _ := opt.DNSCheck(ctx, []probe.DNSResult{
 			{Domain: "discord.com", Poisoned: true, System: []netip.Addr{netip.MustParseAddr("195.175.254.2")}, DoH: []netip.Addr{netip.MustParseAddr("162.159.135.232")}},
 		})
+		answer <- s
 		<-ctx.Done()
 		return scan.Report{}, ctx.Err()
 	}

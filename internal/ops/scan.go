@@ -164,14 +164,25 @@ func (o *Ops) freshClient() *http.Client {
 }
 
 // scanPackages makes sure blockcheck2 finds curl and nslookup or host, which
-// it cannot run without, installing them when opt.Packages agrees.
+// it cannot run without, installing them when opt.Packages agrees. A
+// question that fails or is cancelled ends the scan with its error.
 func (o *Ops) scanPackages(ctx context.Context, opt scan.Options, progress func(string)) error {
 	p := o.MissingPackages(sysinfo.Curl, sysinfo.Lookup)
 	if len(p.Tools) == 0 {
 		return nil
 	}
 	names := strings.Join(p.Names, ", ")
-	if !p.CanInstall() || opt.Packages == nil || !opt.Packages(ctx, p) {
+	yes := false
+	if p.CanInstall() && opt.Packages != nil {
+		var err error
+		if yes, err = opt.Packages(ctx, p); err == nil {
+			err = ctx.Err()
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if !yes {
 		return errors.New(i18n.T("scan.packages", names, InstallHint(p)))
 	}
 	if progress != nil {
@@ -211,7 +222,13 @@ func (o *Ops) scanDNS(ctx context.Context, c *config.Config, opt scan.Options, d
 	if len(poisoned) == 0 {
 		return nil
 	}
-	provider := ask(ctx, poisoned)
+	provider, err := ask(ctx, poisoned)
+	if err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return err
+	}
 	if provider == "" || provider == dns.Off {
 		return nil
 	}

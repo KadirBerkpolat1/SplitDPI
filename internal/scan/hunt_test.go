@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -113,4 +114,61 @@ func appears(path string, within time.Duration) bool {
 		}
 	}
 	return false
+}
+
+// A scan cancelled while a trial probes ends with ctx's error: the trial is
+// not recorded as failed, no other trial starts, and blockcheck2 does not run.
+func TestScanCancelledInTrial(t *testing.T) {
+	for _, opt := range []scan.Options{
+		{Apps: []string{"roblox"}},
+		{Apps: []string{"roblox"}, NoBlockcheck: true},
+		{Site: "www.roblox.com"},
+	} {
+		ctx, cancel := context.WithCancel(context.Background())
+		env, trials, bc := testEnv(t, testSet(), nil)
+		env.Probe = func(_ context.Context, urls []string) []probe.Result {
+			cancel()
+			return []probe.Result{{URL: urls[0], Err: context.Canceled.Error(), Cause: context.Canceled}}
+		}
+		rep, err := scan.Scan(ctx, env, opt)
+		cancel()
+		if !errors.Is(err, context.Canceled) || len(rep.Trials) != 0 || trials.Load() != 1 {
+			t.Errorf("%+v: err %v, trials recorded %d, started %d; want context.Canceled, 0, 1", opt, err, len(rep.Trials), trials.Load())
+		}
+		want := int32(0)
+		if opt.Site != "" {
+			want = 1 // before the cancel, which comes in a verification trial
+		}
+		if bc.Load() != want {
+			t.Errorf("%+v: blockcheck2 ran %d times, want %d", opt, bc.Load(), want)
+		}
+	}
+}
+
+// A cancelled scan starts no blockcheck2: nothing to stop or clean up after.
+func TestRunBlockcheckCancelledStartsNothing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "blockcheck2.sh"), []byte("touch \"$PWD/started\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var calls []string
+	run := func(_ context.Context, _ string, name string, args ...string) ([]byte, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, strings.Join(append([]string{name}, args...), " "))
+		return nil, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := scan.RunBlockcheck(ctx, engine.Engine{Dir: dir, ArchDir: "linux-x86_64"}, run,
+		scan.BlockcheckParams{Domains: []string{"example.com"}, IPVS: "4"}, func(string) {})
+	mu.Lock()
+	defer mu.Unlock()
+	if !errors.Is(err, context.Canceled) || len(calls) != 0 {
+		t.Errorf("err %v, ran %q; want context.Canceled and nothing run", err, calls)
+	}
+	if appears(filepath.Join(dir, "started"), 100*time.Millisecond) {
+		t.Error("blockcheck2.sh ran")
+	}
 }

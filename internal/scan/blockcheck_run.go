@@ -97,8 +97,12 @@ func blockcheckCmdEnv(e engine.Engine, p BlockcheckParams) ([]string, error) {
 
 // RunBlockcheck runs blockcheck2.sh under the engine dir, streaming lines to progress.
 // On ctx cancel it sends SIGINT to the process group, waits up to 15s, then SIGKILL,
-// and deletes blockcheck2 nft tables for that PID.
+// and deletes blockcheck2 nft tables for that PID. A ctx already done starts
+// nothing and returns its error.
 func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p BlockcheckParams, progress func(line string)) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	env, err := blockcheckCmdEnv(e, p)
 	if err != nil {
 		return "", err
