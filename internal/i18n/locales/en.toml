@@ -631,7 +631,8 @@ conflict = "%s is running (zapret, another DPI-bypass tool); splitdpi can switch
 
 [scan_page]
 manual_note = "Pick one of the ready-made methods yourself."
-quick_note = "Checks this computer, finds your provider and tries its known methods. Usually a few minutes."
+quick_note = "Checks this computer, finds your provider and tries its known methods. Usually under a minute; a few minutes more when no known method works."
+paused = "The bypass is stopped for the scan and starts again when it ends."
 site_note = "Tries many methods one by one until a single site opens. Can take long."
 last = "Last scan"
 last_won_one = "%d method tried; working: %s"

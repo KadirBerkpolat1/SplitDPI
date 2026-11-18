@@ -23,6 +23,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/supervisor"
 )
 
 var engineBlocker = doctor.Check{ID: "engine", Severity: doctor.Blocker, Msg: "the zapret2 engine is not installed", Fix: "sudo splitdpi engine install"}
@@ -548,5 +549,76 @@ func TestScanScreensFit80x24(t *testing.T) {
 		fits(t, lang+" scan trials", dm.View())
 		dm.cancelScan()
 		<-done
+	}
+}
+
+// runningService makes f's bypass run as the service, as on an installed
+// machine, where a setup scan used to stop at "already running".
+func runningService(f *fake) {
+	f.st = supervisor.Status{State: "running", Mode: "service", PID: 77}
+	f.svc = ops.ServiceState{Supported: true, Installed: true, Enabled: true}
+}
+
+// The service stops for the trials and starts again once the chosen apps are
+// saved, so that it runs with what the scan found.
+func TestScanPausesRunningService(t *testing.T) {
+	f := newFake()
+	runningService(f)
+	f.scanFn = func(context.Context, scan.Options, func(string)) (scan.Report, error) {
+		f.record("scan")
+		return scan.Report{Winner: &config.Strategy{ID: "tt-multidisorder"}}, nil
+	}
+	m, cmd := toScan(t, f)
+	m = settle(t, m, cmd)
+	if m.wiz.step != wDone {
+		t.Fatalf("step %v, err %v, note %q", m.wiz.step, m.wiz.err, m.note)
+	}
+	f.mu.Lock()
+	var got []string
+	for _, c := range f.calls {
+		if c == "stop" || c == "scan" || c == "enable" || strings.HasPrefix(c, "apps ") {
+			got = append(got, c)
+		}
+	}
+	f.mu.Unlock()
+	if want := []string{"stop", "scan", "apps enable discord", "enable"}; !slices.Equal(got, want) {
+		t.Errorf("calls %q, want %q", got, want)
+	}
+	if !strings.Contains(m.wiz.progress.String(), i18n.T("scan_page.paused")) {
+		t.Errorf("progress does not say the bypass stopped: %q", m.wiz.progress.String())
+	}
+	if m.st.State != "running" {
+		t.Fatalf("service not running after the scan: %+v", m.st)
+	}
+	if cli := cliFor(m, "r"); cli != "" {
+		t.Errorf("done offers a restart (%q) though the service already runs what the scan saved", cli)
+	}
+}
+
+// Quitting during the scan waits until the service it stopped runs again.
+func TestQuitDuringScanRestartsService(t *testing.T) {
+	f := newFake()
+	runningService(f)
+	started := make(chan struct{})
+	f.scanFn = func(ctx context.Context, _ scan.Options, _ func(string)) (scan.Report, error) {
+		close(started)
+		<-ctx.Done()
+		return scan.Report{}, ctx.Err()
+	}
+	m, cmd := toScan(t, f)
+	go cmd()
+	<-started
+	_, quit := update(t, m, key("q"))
+	if !f.called("enable") {
+		t.Errorf("quit before the service started again: %q", f.calls)
+	}
+	if f.called("apps enable discord") {
+		t.Errorf("a cancelled scan saved the apps: %q", f.calls)
+	}
+	if quit == nil {
+		t.Fatal("q did not quit")
+	}
+	if _, ok := quit().(tea.QuitMsg); !ok {
+		t.Errorf("q gave %T, want tea.QuitMsg", quit())
 	}
 }

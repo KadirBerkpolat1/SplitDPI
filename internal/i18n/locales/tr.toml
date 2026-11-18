@@ -631,7 +631,8 @@ conflict = "%s çalışıyor (zapret, başka bir DPI engel aşma aracı); splitd
 
 [scan_page]
 manual_note = "Hazır yöntemlerden birini kendiniz seçin."
-quick_note = "Bilgisayarı denetler, sağlayıcınızı bulur ve bilinen yöntemlerini dener. Genellikle birkaç dakika sürer."
+quick_note = "Bilgisayarı denetler, sağlayıcınızı bulur ve bilinen yöntemlerini dener. Genellikle bir dakikadan kısa sürer; bilinen yöntemler çalışmazsa birkaç dakika daha."
+paused = "Engel aşma tarama için durduruldu, tarama bitince yeniden başlar."
 site_note = "Tek bir site açılana kadar birçok yöntemi tek tek dener. Uzun sürebilir."
 last = "Son tarama"
 last_won_one = "%d yöntem denendi; çalışan: %s"

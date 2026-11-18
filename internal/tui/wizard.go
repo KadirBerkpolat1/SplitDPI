@@ -87,6 +87,8 @@ type wizard struct {
 	cancelled  bool
 	dnsOn      bool             // the scan turned encrypted DNS on
 	asks       chan dnsQuestion // polled on each scan tick
+	resumed    chan struct{}    // closed once the bypass the scan stopped runs again; nil if it stopped none
+	paused     bool             // the scan stopped the bypass and starts it again with what it saved
 	report     *scan.Report
 	err        error
 
@@ -113,6 +115,11 @@ type (
 	scanDoneMsg    struct {
 		rep scan.Report
 		err error
+		// applied is the saving of the chosen apps after a winner, nil without.
+		applied *appsAppliedMsg
+		// runHere: the scan stopped the run in this TUI, to start again here.
+		runHere   bool
+		resumeErr error
 	}
 	scanTickMsg struct{}
 	engineMsg   struct {
@@ -313,10 +320,16 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			w.step = wDone
 			if w.site != "" {
 				m.note = i18n.T("tui.note.site_added", w.site)
-				return m, m.refresh(), true
+			} else if msg.applied != nil && msg.applied.err != nil {
+				m.note = errText(msg.applied.err)
 			}
-			// The apps chosen for the trials are saved once a strategy opens them.
-			return m, batch(m.saveApps(), m.refresh()), true
+		}
+		if msg.resumeErr != nil {
+			m.note = errText(msg.resumeErr)
+		}
+		if msg.runHere && !m.quitting {
+			cmd := m.runNow()
+			return m, batch(cmd, m.refresh()), true
 		}
 		return m, m.refresh(), true
 	}
@@ -474,7 +487,7 @@ func (m Model) doneActions() []action {
 	}
 	var acts []action
 	switch {
-	case m.bypassOn():
+	case m.bypassOn() && !m.wiz.paused:
 		acts = append(acts, action{Key: "r", Label: i18n.T("tui.act.restart"), CLI: m.restartCLI(), Do: finish((*Model).restart)})
 	case m.canStart():
 		a := m.startAction()
@@ -603,13 +616,17 @@ func (m *Model) saveApps() tea.Cmd {
 	}
 }
 
+// startScan runs the trials. A bypass running as the service, in the
+// background or in this TUI holds the queue they need: it stops for the scan
+// and starts again the same way after, once the chosen apps are saved. A run
+// in another terminal stays, and the scan refuses to start.
 func (m *Model) startScan() tea.Cmd {
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &m.wiz
 	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.scanCancel = wScan, true, false, false, nil, nil, cancel
-	w.progress, w.asks = &ring{max: 200}, make(chan dnsQuestion)
+	w.progress, w.asks, w.resumed = &ring{max: 200}, make(chan dnsQuestion), nil
 	m.note = ""
-	b, prog, logs, asks, g := m.b, w.progress, m.logs, w.asks, m.g
+	b, prog, logs, asks, g, site := m.b, w.progress, m.logs, w.asks, m.g, w.site
 	opt := scan.Options{
 		ASN: w.info.ASN, Country: w.info.Country, Apps: w.chosenList(), Site: w.site,
 		DNSCheck: func(ctx context.Context, poisoned []probe.DNSResult) string { return askDNS(ctx, asks, poisoned) },
@@ -618,11 +635,55 @@ func (m *Model) startScan() tea.Cmd {
 	if w.site != "" {
 		opt.Apps = nil
 	}
+	save := m.saveApps()
+	runHere, mode := m.running, ""
+	if !runHere && m.st.State == "running" && (m.st.Mode == "service" || m.st.Mode == "background") {
+		mode = m.st.Mode
+	}
+	stopHere := m.stopOwnRun()
+	w.paused = runHere || mode != ""
+	var resumed chan struct{}
+	if mode != "" {
+		resumed = make(chan struct{})
+		w.resumed = resumed
+	}
 	run := func() tea.Msg {
+		if resumed != nil {
+			defer close(resumed)
+		}
+		if runHere || mode != "" {
+			prog.Write([]byte(i18n.T("scan_page.paused") + "\n"))
+		}
+		stopHere()
+		if mode != "" {
+			if err := b.Stop(); err != nil {
+				return scanDoneMsg{err: err, runHere: runHere}
+			}
+		}
 		rep, err := b.Scan(ctx, opt, func(l string) { prog.Write([]byte(l + "\n")) })
-		return scanDoneMsg{rep, err}
+		msg := scanDoneMsg{rep: rep, err: err, runHere: runHere}
+		// The apps chosen for the trials are saved once a strategy opens them.
+		if err == nil && rep.Winner != nil && site == "" {
+			a := save().(appsAppliedMsg)
+			msg.applied = &a
+		}
+		msg.resumeErr = resume(context.WithoutCancel(ctx), b, mode)
+		return msg
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))
+}
+
+// resume starts the bypass the scan stopped again, the way it ran: mode is
+// the stopped run's, "" when the scan stopped none.
+func resume(ctx context.Context, b Backend, mode string) error {
+	var err error
+	switch mode {
+	case "service":
+		_, err = b.Enable(ctx, nil)
+	case "background":
+		_, err = b.Background(ctx)
+	}
+	return err
 }
 
 // writeTrial lists a finished trial and why each probe failed in plain

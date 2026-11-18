@@ -522,12 +522,16 @@ func (m *Model) quit() tea.Cmd {
 	return tea.Quit
 }
 
-// stopAll stops the log stream and a running scan.
+// stopAll stops the log stream and a running scan. A scan that stopped the
+// bypass is waited for, so that the bypass runs again before the TUI quits.
 func (m *Model) stopAll() {
 	m.stopLogs()
 	if m.wiz.scanning {
 		m.wiz.cancelled = true
 		m.wiz.scanCancel()
+		if m.wiz.resumed != nil {
+			<-m.wiz.resumed
+		}
 	}
 }
 
