@@ -99,7 +99,7 @@ func TestInstallPrefixTrustedByEnable(t *testing.T) {
 	sum := sha256.Sum256(bin)
 	sums := fmt.Sprintf("%s  splitdpi-linux-amd64\n", hex.EncodeToString(sum[:]))
 	ver := "v0.1.0-umask"
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv, tlsEnv := tlsServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/download/" + ver + "/splitdpi-linux-amd64":
 			_, _ = w.Write(bin)
@@ -109,13 +109,12 @@ func TestInstallPrefixTrustedByEnable(t *testing.T) {
 			http.NotFound(w, r)
 		}
 	}))
-	t.Cleanup(srv.Close)
 
 	parent := t.TempDir()
 	prefix := filepath.Join(parent, "opt", "splitdpi")
 	cmd := exec.Command("sh", "-c", "umask 002 && exec sh install.sh")
 	cmd.Dir = repoRoot(t)
-	cmd.Env = append(os.Environ(), "SPLITDPI_VERSION="+ver, "SPLITDPI_BASE_URL="+srv.URL, "SPLITDPI_PREFIX="+prefix)
+	cmd.Env = append(append(os.Environ(), tlsEnv...), "SPLITDPI_VERSION="+ver, "SPLITDPI_BASE_URL="+srv.URL, "SPLITDPI_PREFIX="+prefix)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("install: %v\n%s", err, out)
 	}
