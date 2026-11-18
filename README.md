@@ -44,20 +44,20 @@ strategies and starts SplitDPI.
 
 ## Everyday use
 
-<!-- tui: check after redesign -->
 `sudo splitdpi` opens the terminal UI with five pages: **Status**, **Sites**,
 **Setup**, **Logs** and **Settings**. Tab and Shift+Tab or the number keys
 switch pages; the arrow keys move inside a page and Enter acts. Esc goes back,
 `?` lists every key, `q` quits.
 
-- **Status** shows whether the bypass runs and whether your apps and sites
-  open. Start or stop it here and turn **Start at boot** on or off. After a
-  change that needs a restart, a **Restart** action appears.
+- **Status** shows whether the bypass runs, your provider, the apps it handles
+  and whether they open. Start or stop it here and turn **Start at boot** on
+  or off. After a change that needs a restart, press `R` to restart; `d` shows
+  the details (method, engine, process).
 - **Sites** has three sections: **Apps** (turn app profiles on or off, edit
-  their addresses), **My sites** (blocked sites you add) and **Never-touched
-  sites** (sites the bypass leaves alone).
-- **Setup** runs the guided setup, and finds a new strategy when the current
-  one stops working.
+  their addresses), **Sites I added** (blocked sites you add) and **Sites left
+  alone** (sites the bypass never touches; `x` removes one).
+- **Setup** runs the guided setup, runs a deep scan for one site, or lets you
+  pick a ready-made bypass method by hand when the current one stops working.
 - **Logs** shows SplitDPI's log as it runs.
 - **Settings** has a main group (Language, Start at boot, Encrypted DNS,
   Scope) and an **Advanced** group with the rest: interfaces to leave alone,
@@ -67,7 +67,6 @@ switch pages; the arrow keys move inside a page and Enter acts. Esc goes back,
 Before anything that changes the system, a dialog says what will change and
 how to undo it; answer `y` or `n` (`e` or `h` in Turkish). The UI needs at
 least 80x24 and uses plain ASCII on the Linux console or a non-UTF-8 locale.
-<!-- /tui -->
 
 The commands you will use most:
 

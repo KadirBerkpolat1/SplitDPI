@@ -43,22 +43,23 @@ sorar, stratejileri dener ve SplitDPI'yi başlatır.
 
 ## Günlük kullanım
 
-<!-- tui: check after redesign -->
 `sudo splitdpi` terminal arayüzünü beş sayfayla açar: **Durum**, **Siteler**,
 **Kurulum**, **Günlük** ve **Ayarlar**. Tab ile Shift+Tab ya da rakam
 tuşları sayfa değiştirir; ok tuşları sayfa içinde gezer, Enter seçileni
 yapar. Esc geri döner, `?` bütün tuşları gösterir, `q` çıkar.
 
-- **Durum** engel aşmanın çalışıp çalışmadığını ve uygulamalarınızla
-  sitelerinizin açılıp açılmadığını gösterir. Burada başlatıp durdurur,
-  **Açılışta başlat**'ı açıp kapatırsınız. Yeniden başlatma isteyen bir
-  değişiklikten sonra **Yeniden başlat** eylemi çıkar.
+- **Durum** engel aşmanın çalışıp çalışmadığını, sağlayıcınızı, hangi
+  uygulamalar için çalıştığını ve açılıp açılmadıklarını gösterir. Burada
+  başlatıp durdurur, **Açılışta başlasın**'ı açıp kapatırsınız. Yeniden
+  başlatma isteyen bir değişiklikten sonra `R` yeniden başlatır; `d`
+  ayrıntıları (yöntem, motor, süreç) gösterir.
 - **Siteler** üç bölümdür: **Uygulamalar** (uygulama profillerini açıp
-  kapatın, adreslerini düzenleyin), **Sitelerim** (kendi eklediğiniz engelli
-  siteler) ve **Dokunulmayan siteler** (engel aşmanın hiç dokunmadığı
-  siteler).
-- **Kurulum** rehberli kurulumu çalıştırır; mevcut strateji çalışmayı bırakınca
-  yenisini de burada bulursunuz.
+  kapatın, adreslerini düzenleyin), **Eklediğim siteler** (kendi eklediğiniz
+  engelli siteler) ve **Dokunulmayan siteler** (engel aşmanın hiç dokunmadığı
+  siteler; `x` birini kaldırır).
+- **Kurulum** rehberli kurulumu ya da tek bir site için derin taramayı
+  çalıştırır; mevcut yöntem çalışmayı bırakınca hazır yöntemlerden birini elle
+  de seçebilirsiniz.
 - **Günlük** SplitDPI'nin günlüğünü canlı gösterir.
 - **Ayarlar**'da bir ana grup (Dil, Açılışta başlat, Şifreli DNS, Kapsam) ve
   geri kalanı için **Gelişmiş** grubu vardır: dokunulmayacak ağ arayüzleri,
@@ -69,7 +70,6 @@ Sistemi değiştiren her işten önce bir pencere neyin değişeceğini ve nası
 geri alınacağını söyler; `e` ya da `h` ile yanıtlayın (İngilizcede `y`/`n`).
 Arayüz en az 80x24 ister; Linux konsolunda ya da UTF-8 olmayan yerel ayarda
 düz ASCII ile çizer.
-<!-- /tui -->
 
 En çok kullanılan komutlar:
 
