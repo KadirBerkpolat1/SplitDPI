@@ -197,17 +197,19 @@ func (m *Model) loadNames(set presets.Set) {
 	}
 }
 
-// Run opens the TUI on the terminal. A service change the program ended in
-// the middle of is waited for, and the bypass it may run is stopped (and its
-// rules removed), before Run returns; then the share link of a strategy
-// saved in this session, the background run quitting left and what the
-// service change quitting waited for did are printed where the scrollback
-// keeps them.
+// Run opens the TUI on the terminal. A scan that stopped the bypass and a
+// service change the program ended in the middle of are waited for, and the
+// bypass it may run is stopped (and its rules removed), before Run returns,
+// also when a signal or a lost terminal ended it; then the share link of a
+// strategy saved in this session, the background run quitting left and what
+// the service change quitting waited for did are printed where the
+// scrollback keeps them.
 func Run(ctx context.Context, o *ops.Ops, version string) error {
 	m := New(ctx, o, version)
 	o.Log = m.logs // supervisor output must not scribble over the screen
 	final, err := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(ctx), tea.WithOutput(m.out)).Run()
 	if fm, ok := final.(Model); ok {
+		fm.stopAll()
 		fm.waitService(m.out)
 		fm.stopRun()
 		fm.printShare(m.out)
