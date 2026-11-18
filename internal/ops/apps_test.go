@@ -16,7 +16,7 @@ import (
 const discordWithVoice = `schema = 1
 id = "discord"
 name = "Discord"
-hosts = ["discord.com", "discord.media"]
+hosts = ["discord.com", "discordapp.net"]
 
 [udp]
 ports = "50000-50100"
@@ -34,15 +34,15 @@ func TestAppEditShipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	shipped, err := o.App("discord")
-	if err != nil || shipped.UDP == nil || !slices.Contains(shipped.Hosts, "discord.media") {
+	if err != nil || shipped.UDP == nil || !slices.Contains(shipped.Hosts, "discordapp.net") {
 		t.Fatalf("cached discord: %+v, %v", shipped, err)
 	}
-	if err := o.AppHostRemove("discord", "https://Discord.media/"); err != nil {
+	if err := o.AppHostRemove("discord", "https://Discordapp.NET/"); err != nil {
 		t.Fatal(err)
 	}
 	a, err := o.App("discord")
 	if err != nil || !a.User || a.Preset == nil || !reflect.DeepEqual(a.UDP, shipped.UDP) ||
-		!slices.Equal(a.Hosts, slices.DeleteFunc(slices.Clone(shipped.Hosts), func(h string) bool { return h == "discord.media" })) {
+		!slices.Equal(a.Hosts, slices.DeleteFunc(slices.Clone(shipped.Hosts), func(h string) bool { return h == "discordapp.net" })) {
 		t.Fatalf("edited discord: %+v, %v", a, err)
 	}
 	if err := o.AppReset("discord"); err != nil {

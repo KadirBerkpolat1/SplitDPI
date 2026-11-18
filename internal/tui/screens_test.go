@@ -24,7 +24,7 @@ var extraScreens = []struct {
 	{"app editor", func(t *testing.T, prep func(Model) Model) map[string]string {
 		f := newFake()
 		f.set = trSet()
-		f.set.Apps["discord"] = presets.App{ID: "discord", Name: "Discord", Hosts: []string{"discord.gg", "discord.media"}, UDP: &presets.UDP{Ports: "50000-50100"}}
+		f.set.Apps["discord"] = presets.App{ID: "discord", Name: "Discord", Hosts: []string{"discord.gg", "discordapp.net"}}
 		return map[string]string{"app editor": press(t, goTo(t, prep(newModel(t, f)), pgSites), "o").View()}
 	}},
 	// Enter on every settings row that opens something on the settings page.

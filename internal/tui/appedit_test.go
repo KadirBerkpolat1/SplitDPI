@@ -11,10 +11,10 @@ import (
 func TestAppEditor(t *testing.T) {
 	f := newFake()
 	f.set = trSet()
-	f.set.Apps["discord"] = presets.App{ID: "discord", Name: "Discord", Hosts: []string{"discord.gg", "discord.media"}, UDP: &presets.UDP{Ports: "50000-50100"}}
+	f.set.Apps["discord"] = presets.App{ID: "discord", Name: "Discord", Hosts: []string{"discord.gg", "discordapp.net"}, UDP: &presets.UDP{Ports: "50000-50100"}}
 	m := goTo(t, newModel(t, f), pgSites)
 	m = press(t, m, "o")
-	has(t, m.View(), "discord.media")
+	has(t, m.View(), "discordapp.net")
 	if strings.Contains(m.View(), "UDP") {
 		t.Errorf("the editor offers the voice profile:\n%s", m.View())
 	}
@@ -23,10 +23,10 @@ func TestAppEditor(t *testing.T) {
 	}
 
 	m = press(t, press(t, m, "down"), "x")
-	if !f.called("apps remove-host discord discord.media") {
+	if !f.called("apps remove-host discord discordapp.net") {
 		t.Fatalf("calls %q", f.calls)
 	}
-	if app, _ := m.apps.edited(); slices.Contains(app.Hosts, "discord.media") {
+	if app, _ := m.apps.edited(); slices.Contains(app.Hosts, "discordapp.net") {
 		t.Error("the removed address is still listed")
 	}
 	has(t, m.View(), "changed by you")
@@ -38,7 +38,7 @@ func TestAppEditor(t *testing.T) {
 	if !f.called("apps reset discord") {
 		t.Fatalf("calls %q", f.calls)
 	}
-	has(t, m.View(), "discord.media")
+	has(t, m.View(), "discordapp.net")
 	if strings.Contains(m.View(), "changed by you") {
 		t.Error("a reset app still shows as edited")
 	}

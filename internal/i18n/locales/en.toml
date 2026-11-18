@@ -952,7 +952,7 @@ wait = "Packages are being installed; wait until the package manager finishes."
 [tui.how]
 foreground = "Runs in another terminal; it stops when that one closes."
 background = "Runs in the background; it stops when the computer restarts."
-service = "Runs as the boot service; it starts by itself at every boot."
+service = "Runs as the system service."
 scan = "A scan is running."
 here = "Runs in this window; it stops when you quit."
 failed = "The bypass stopped because of an error. Press d for the details, r to start it again."
