@@ -17,8 +17,8 @@ import (
 )
 
 // The settings editors: a picker for each setting with a few fixed values,
-// a text input for one value, and a list editor for skip_ifaces. Each saves
-// through ops and shows a refusal inside the editor.
+// a text input for the queue number, and a list editor for skip_ifaces.
+// Each saves through ops and shows a refusal inside the editor.
 
 // picker chooses one of a setting's values; err is the last refusal.
 type picker struct {
@@ -80,7 +80,7 @@ func (m Model) choicesFor(id string) choices {
 
 // openPicker opens id's picker on the value in use.
 func (m *Model) openPicker(id string) tea.Cmd {
-	m.settings.pick, m.focus = &picker{id: id, cursor: max(m.choicesFor(id).inUse, 0)}, 0
+	m.settings.pick = &picker{id: id, cursor: max(m.choicesFor(id).inUse, 0)}
 	return nil
 }
 
@@ -93,8 +93,7 @@ func (m Model) pickerActions() []action {
 	}
 }
 
-// pickerKey moves the cursor and leaves enter to the dock; other keys do
-// nothing while the picker is open.
+// pickerKey moves the cursor; esc closes the picker.
 func (m Model) pickerKey(s string) (Model, tea.Cmd, bool) {
 	p := *m.settings.pick
 	n := len(m.choicesFor(p.id).names)
@@ -106,7 +105,7 @@ func (m Model) pickerKey(s string) (Model, tea.Cmd, bool) {
 	case "esc":
 		m.settings.pick = nil
 		return m, nil, true
-	case "enter", "tab", "shift+tab", "left", "right":
+	default:
 		return m, nil, false
 	}
 	m.settings.pick = &p
@@ -144,60 +143,11 @@ func modeActions(m Model) []action {
 	}}}
 }
 
-func excludeValue(m Model) string {
-	if m.settings.excluded == 0 {
-		return mutedStyle.Render(i18n.T("tui.none"))
-	}
-	return i18n.N("settings_exclude.count", m.settings.excluded)
-}
-
-// excludeActions jump to the Sites page, where the exclusions close its list.
-func excludeActions(Model) []action {
-	return []action{{Key: "enter", Label: i18n.T("settings_exclude.go"), CLI: "sudo splitdpi exclude list", Do: func(m *Model) tea.Cmd {
-		cmd := m.jumpTo(pgSites)
-		m.apps.cursor = max(m.apps.rows()-1, 0)
-		m.note = i18n.T("settings_exclude.jumped")
-		return cmd
-	}}}
-}
-
-func strategyValue(m Model) string {
-	if s := m.cfg.Strategy; s != nil {
-		return s.ID
-	}
-	return warnStyle.Render(i18n.T("tui.strategy_none"))
-}
-
-func strategyActions(Model) []action {
-	return []action{{Key: "enter", Label: i18n.T("settings_strategy.go"), CLI: "sudo splitdpi strategy list", Do: func(m *Model) tea.Cmd {
-		return m.jumpTo(pgStrategy)
-	}}}
-}
-
-// jumpTo opens page pg with the keys in it.
-func (m *Model) jumpTo(pg int) tea.Cmd {
-	m.page, m.inPage, m.focus, m.note = pg, true, 0, ""
-	return pages[pg].Open(m)
-}
-
-// textEditor edits one value typed in full: ipinfo_url or qnum.
+// textEditor edits one value typed in full: the queue number.
 type textEditor struct {
 	id    string
 	input textinput.Model
 	err   string
-}
-
-func ipinfoValue(m Model) string {
-	if m.cfg.IPInfoURL == "" {
-		return config.Default().IPInfoURL
-	}
-	return m.cfg.IPInfoURL
-}
-
-func ipinfoActions(m Model) []action {
-	return []action{{Key: "enter", Label: i18n.T("settings_page.edit"), CLI: "sudo splitdpi config set ipinfo_url " + shellArg(ipinfoValue(m)), Do: func(m *Model) tea.Cmd {
-		return m.openText("ipinfo_url", ipinfoValue(*m), 2048)
-	}}}
 }
 
 func qnumValue(m Model) string { return strconv.Itoa(m.cfg.QNum) }
@@ -213,17 +163,13 @@ func (m *Model) openText(id, value string, limit int) tea.Cmd {
 	in.CharLimit, in.Width = limit, 48
 	in.SetValue(value)
 	cmd := in.Focus()
-	m.settings.text, m.focus = &textEditor{id: id, input: in}, 0
+	m.settings.text = &textEditor{id: id, input: in}
 	return cmd
 }
 
-// textCLI is the command that saves what is typed.
+// cli is the command that saves what is typed.
 func (t textEditor) cli() string {
-	v := strings.TrimSpace(t.input.Value())
-	if v == "" && t.id == "ipinfo_url" {
-		return "sudo splitdpi config reset ipinfo_url"
-	}
-	return "sudo splitdpi config set " + t.id + " " + shellArg(v)
+	return "sudo splitdpi config set " + t.id + " " + shellArg(strings.TrimSpace(t.input.Value()))
 }
 
 func (m Model) textActions() []action {
@@ -233,7 +179,7 @@ func (m Model) textActions() []action {
 	}
 }
 
-// textKey feeds the input; enter is the dock's save.
+// textKey feeds the input; enter is the save action.
 func (m Model) textKey(k tea.KeyMsg) (Model, tea.Cmd, bool) {
 	switch k.String() {
 	case "enter":
@@ -255,44 +201,30 @@ type textSavedMsg struct {
 	err       error
 }
 
-// saveText saves the typed value; ops checks it, except that qnum must be
-// a number to be passed at all.
+// saveText saves the typed queue number; ops checks its range.
 func (m *Model) saveText() tea.Cmd {
 	t := *m.settings.text
 	v, b := strings.TrimSpace(t.input.Value()), m.b
-	if t.id == "qnum" {
-		n, err := strconv.Atoi(v)
-		if err != nil {
-			t.err = i18n.T("settings_qnum.not_number")
-			m.settings.text = &t
-			return nil
-		}
-		return func() tea.Msg { return textSavedMsg{t.id, strconv.Itoa(n), b.SetQNum(n)} }
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		t.err = i18n.T("settings_qnum.not_number")
+		m.settings.text = &t
+		return nil
 	}
-	return func() tea.Msg { return textSavedMsg{t.id, v, b.SetIPInfoURL(v)} }
+	return func() tea.Msg { return textSavedMsg{t.id, strconv.Itoa(n), b.SetQNum(n)} }
 }
 
 func (m Model) textView(w, h int) string {
 	t := m.settings.text
 	block := func(style lipgloss.Style, s string) []string { return strings.Split(style.Width(w).Render(s), "\n") }
-	var lines []string
-	switch t.id {
-	case "qnum":
-		lines = append(block(lipgloss.NewStyle(), i18n.T("settings_qnum.head")), "")
-		lines = append(lines, block(warnStyle, i18n.T("settings_qnum.warn"))...)
-	default:
-		lines = block(lipgloss.NewStyle(), i18n.T("settings_ipinfo.head"))
-	}
+	lines := append(block(lipgloss.NewStyle(), i18n.T("settings_qnum.head")), "")
+	lines = append(lines, block(warnStyle, i18n.T("settings_qnum.warn"))...)
 	lines = append(lines, "", ansi.Truncate(t.input.View(), w, ""))
 	if t.err != "" {
 		lines = append(lines, block(badStyle, t.err)...)
 	}
-	hint := i18n.T("settings_qnum.default", config.Default().QNum)
-	if t.id == "ipinfo_url" {
-		hint = i18n.T("settings_ipinfo.default", config.Default().IPInfoURL)
-	}
 	lines = append(lines, "")
-	lines = append(lines, block(mutedStyle, hint)...)
+	lines = append(lines, block(mutedStyle, i18n.T("settings_qnum.default", config.Default().QNum))...)
 	return lipgloss.NewStyle().MaxHeight(h).Render(strings.Join(lines, "\n"))
 }
 
@@ -330,7 +262,7 @@ func shellArg(s string) string {
 
 func ifacesActions(m Model) []action {
 	return []action{{Key: "enter", Label: i18n.T("settings_page.edit"), CLI: ifacesCLI(m.cfg.SkipIfaces), Do: func(m *Model) tea.Cmd {
-		m.settings.ifaces, m.focus = &ifaceEditor{list: slices.Clone(m.cfg.SkipIfaces)}, 0
+		m.settings.ifaces = &ifaceEditor{list: slices.Clone(m.cfg.SkipIfaces)}
 		return nil
 	}}}
 }
@@ -349,7 +281,7 @@ func (m Model) ifaceActions() []action {
 		e.adding, e.err, e.input = true, "", textinput.New()
 		e.input.Placeholder, e.input.CharLimit = "wg*", 16
 		cmd := e.input.Focus()
-		m.settings.ifaces, m.focus = &e, 0
+		m.settings.ifaces = &e
 		return cmd
 	}}}
 	if len(e.list) > 0 {
@@ -487,13 +419,8 @@ func (m Model) editorUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		s.text = nil
-		if msg.id == "qnum" {
-			m.cfg.QNum, _ = strconv.Atoi(msg.value)
-			m.note = m.savedNote(i18n.T("settings_qnum.label"), msg.value)
-		} else {
-			m.cfg.IPInfoURL = msg.value
-			m.note = m.savedNote(i18n.T("settings_ipinfo.label"), ipinfoValue(m))
-		}
+		m.cfg.QNum, _ = strconv.Atoi(msg.value)
+		m.note = m.savedNote(i18n.T("settings_qnum.label"), msg.value)
 		return m, m.refresh(), true
 	case ifacesMsg:
 		if msg.err != nil {

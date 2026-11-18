@@ -76,8 +76,7 @@ func (m *Model) installPkgs() tea.Cmd {
 // skipPkgs goes on without the packages; this setup does not offer them again.
 func (m *Model) skipPkgs() tea.Cmd {
 	m.wiz.pkgsSkipped = true
-	m.checked()
-	return nil
+	return m.checked()
 }
 
 func (m Model) pkgsDone(msg pkgsMsg) (Model, tea.Cmd) {

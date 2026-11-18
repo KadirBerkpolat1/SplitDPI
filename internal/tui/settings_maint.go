@@ -36,10 +36,11 @@ type (
 
 func working() string { return mutedStyle.Render(i18n.T("settings_page.working")) }
 
-// withRestart adds that a running bypass picks up the change when it restarts.
-func (m Model) withRestart(lines []string) []string {
-	if m.bypassOn() {
-		lines = append(lines, i18n.T("settings_dns.on_restart"))
+// withRestart adds that a running bypass picks up the change when it
+// restarts, and that R does that.
+func (m *Model) withRestart(lines []string) []string {
+	if c := m.changed(); c != "" {
+		lines = append(lines, c)
 	}
 	return lines
 }
@@ -155,7 +156,7 @@ func doctorValue(m Model) string {
 
 func doctorActions(Model) []action {
 	return []action{{Key: "enter", Label: i18n.T("settings_doctor.do"), CLI: "sudo splitdpi doctor", Do: func(m *Model) tea.Cmd {
-		m.settings.doctorOpen, m.focus = true, 0
+		m.settings.doctorOpen = true
 		return m.settingsDoctor()
 	}}}
 }
@@ -176,16 +177,13 @@ func (m Model) doctorViewActions() []action {
 	}
 }
 
-// doctorViewKey leaves r to the dock; other keys do nothing here.
+// doctorViewKey: esc closes the check; r is the action.
 func (m Model) doctorViewKey(s string) (Model, tea.Cmd, bool) {
-	switch s {
-	case "esc":
+	if s == "esc" {
 		m.settings.doctorOpen = false
 		return m, nil, true
-	case "r", "enter", "tab", "shift+tab", "left", "right":
-		return m, nil, false
 	}
-	return m, nil, true
+	return m, nil, false
 }
 
 // doctorView lists every check with its fix, problems first.

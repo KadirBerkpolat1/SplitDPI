@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"unicode"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/dns"
@@ -19,14 +16,13 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/ops"
 )
 
-// The settings page: every setting in groups, one row each with its value.
-// / filters the rows; each row opens its own editor or runs its action.
-type settingsPage struct{}
+// The settings page: the four settings most people need, then the advanced
+// ones and the maintenance actions. Enter on a row opens its editor or runs
+// its action.
+type settingsPage struct{ noClose }
 
 type settingsScreen struct {
-	cursor    int // over the rows the search leaves
-	search    textinput.Model
-	searching bool // the search box has the keys
+	cursor int
 
 	// The editors; at most one is open.
 	dns        *dnsPicker
@@ -40,7 +36,6 @@ type settingsScreen struct {
 	checking  bool
 	engine    string   // the installed engine's version, "" if none
 	presets   string   // the preset data's version
-	excluded  int      // how many sites are excluded
 	takenOver []string // the services revert turns back on
 
 	result      []string // what the last maintenance action did
@@ -68,14 +63,10 @@ type setting struct {
 // The groups, in order.
 const (
 	grpGeneral = iota
-	grpBypass
-	grpDNS
-	grpNetwork
-	grpMaint
 	grpAdvanced
 )
 
-var groupKeys = []string{"general", "bypass", "dns", "network", "maintenance", "advanced"}
+var groupKeys = []string{"general", "advanced"}
 
 func groupName(g int) string { return i18n.T("settings_group." + groupKeys[g]) }
 
@@ -84,24 +75,20 @@ func label(key string) func() string { return func() string { return i18n.T(key)
 var settings = []setting{
 	{id: "lang", group: grpGeneral, label: label("shell.settings.lang"), value: langValue, actions: langActions},
 	{id: "run_mode", group: grpGeneral, label: label("run_mode.label"), value: runModeValue, actions: runModeActions},
-	{id: "boot", group: grpGeneral, label: label("boot.label"), value: bootValue, actions: bootActions},
-	{id: "mode", group: grpBypass, label: label("settings_mode.label"), value: modeValue, actions: modeActions},
-	{id: "exclude", group: grpBypass, label: label("settings_exclude.label"), value: excludeValue, actions: excludeActions},
-	{id: "strategy", group: grpBypass, label: label("settings_strategy.label"), value: strategyValue, actions: strategyActions},
-	{id: "dns", group: grpDNS, label: label("settings_dns.label"), value: dnsValue, actions: dnsActions},
-	{id: "skip_ifaces", group: grpNetwork, label: label("settings_ifaces.label"), value: ifacesValue, actions: ifacesActions},
-	{id: "ipinfo_url", group: grpNetwork, label: label("settings_ipinfo.label"), value: ipinfoValue, actions: ipinfoActions},
-	{id: "presets", group: grpMaint, label: label("settings_presets.label"), value: presetsValue, actions: presetsActions},
-	{id: "engine", group: grpMaint, label: label("settings_engine.label"), value: engineValue, actions: engineActions},
-	{id: "doctor", group: grpMaint, label: label("settings_doctor.label"), value: doctorValue, actions: doctorActions},
-	{id: "takeover", group: grpMaint, label: label("settings_takeover.label"), value: takeoverValue, actions: takeoverActions, shown: canTakeOverAny},
-	{id: "revert", group: grpMaint, label: label("settings_revert.label"), value: revertValue, actions: revertActions, shown: hasTakenOver},
-	{id: "uninstall", group: grpMaint, label: label("settings_uninstall.label"), value: uninstallValue, actions: uninstallActions},
+	{id: "dns", group: grpGeneral, label: label("settings_dns.label"), value: dnsValue, actions: dnsActions},
+	{id: "mode", group: grpGeneral, label: label("settings_mode.label"), value: modeValue, actions: modeActions},
+	{id: "skip_ifaces", group: grpAdvanced, label: label("settings_ifaces.label"), value: ifacesValue, actions: ifacesActions},
 	{id: "qnum", group: grpAdvanced, label: label("settings_qnum.label"), value: qnumValue, actions: qnumActions},
+	{id: "engine", group: grpAdvanced, label: label("settings_engine.label"), value: engineValue, actions: engineActions},
+	{id: "presets", group: grpAdvanced, label: label("settings_presets.label"), value: presetsValue, actions: presetsActions},
+	{id: "doctor", group: grpAdvanced, label: label("settings_doctor.label"), value: doctorValue, actions: doctorActions},
+	{id: "takeover", group: grpAdvanced, label: label("settings_takeover.label"), value: takeoverValue, actions: takeoverActions, shown: canTakeOverAny},
+	{id: "revert", group: grpAdvanced, label: label("settings_revert.label"), value: revertValue, actions: revertActions, shown: hasTakenOver},
+	{id: "uninstall", group: grpAdvanced, label: label("settings_uninstall.label"), value: uninstallValue, actions: uninstallActions},
 }
 
-// The languages offered; the others still work with --lang.
-var langs = []string{"en", "tr"}
+// The languages offered, as i18n supports them.
+var langs = i18n.Supported()
 
 // The README there has the install command.
 const repoURL = "github.com/KadirBerkpolat1/SplitDPI"
@@ -132,7 +119,6 @@ func (settingsPage) Hint() string  { return i18n.T("shell.hint.settings") }
 func (settingsPage) Open(m *Model) tea.Cmd {
 	s := &m.settings
 	s.dns, s.pick, s.text, s.ifaces, s.doctorOpen = nil, nil, nil, nil, false
-	s.search, s.searching = textinput.Model{}, false
 	m.loadSettings()
 	return m.detectForeign()
 }
@@ -145,42 +131,18 @@ func (m *Model) loadSettings() {
 		s.engine = engineVersion(e)
 	}
 	s.presets = m.b.PresetsList().Version
-	list, err := m.b.ExcludeList()
-	if err != nil {
-		m.note = errText(err)
-	}
-	s.excluded = len(list)
 	m.loadTakenOver()
 }
 
-// shownSettings are the rows that apply here and match the search.
+// shownSettings are the rows that apply here.
 func (m Model) shownSettings() []setting {
-	q := fold(strings.TrimSpace(m.settings.search.Value()))
 	var out []setting
 	for _, st := range settings {
-		if st.shown != nil && !st.shown(m) {
-			continue
+		if st.shown == nil || st.shown(m) {
+			out = append(out, st)
 		}
-		if q != "" && !strings.Contains(fold(groupName(st.group)+" "+st.label()+" "+ansi.Strip(st.value(m))+" "+st.id), q) {
-			continue
-		}
-		out = append(out, st)
 	}
 	return out
-}
-
-// fold makes text comparable whatever its case, Turkish dotted and dotless
-// i included: i, ı, I and İ are all the same letter to a search.
-func fold(s string) string {
-	return strings.Map(func(r rune) rune {
-		switch r {
-		case 'I', 'İ', 'ı':
-			return 'i'
-		case '\u0307': // the dot strings.ToLower leaves after İ
-			return -1
-		}
-		return unicode.ToLower(r)
-	}, s)
 }
 
 // settingsCursor is the cursor kept within the n shown rows.
@@ -210,40 +172,11 @@ func (settingsPage) Actions(m Model) []action {
 		return m.ifaceActions()
 	case s.doctorOpen:
 		return m.doctorViewActions()
-	case s.searching:
-		return []action{
-			{Key: "enter", Label: i18n.T("settings_page.search_done"), Do: func(m *Model) tea.Cmd { m.endSearch(); return nil }},
-			{Key: "esc", Label: i18n.T("settings_page.search_clear"), Do: func(m *Model) tea.Cmd { m.clearSearch(); return nil }},
-		}
 	}
-	var acts []action
 	if st, ok := m.current(); ok {
-		acts = st.actions(m)
+		return st.actions(m)
 	}
-	acts = append(acts, action{Key: "/", Label: i18n.T("settings_page.search"), Do: (*Model).startSearch})
-	if s.search.Value() != "" {
-		acts = append(acts, action{Key: "esc", Label: i18n.T("settings_page.search_clear"), Do: func(m *Model) tea.Cmd { m.clearSearch(); return nil }})
-	}
-	return acts
-}
-
-func (m *Model) startSearch() tea.Cmd {
-	in := textinput.New()
-	in.Prompt, in.Placeholder, in.CharLimit = "/ ", i18n.T("settings_page.search_placeholder"), 40
-	in.SetValue(m.settings.search.Value())
-	cmd := in.Focus()
-	m.settings.search, m.settings.searching, m.focus, m.inPage = in, true, 0, true
-	return cmd
-}
-
-// endSearch leaves the box and keeps its filter, so the rows' keys work.
-func (m *Model) endSearch() {
-	m.settings.searching, m.focus = false, 0
-	m.settings.search.Blur()
-}
-
-func (m *Model) clearSearch() {
-	m.settings.search, m.settings.searching, m.settings.cursor, m.focus = textinput.Model{}, false, 0, 0
+	return nil
 }
 
 func (settingsPage) Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
@@ -259,50 +192,17 @@ func (settingsPage) Key(m Model, k tea.KeyMsg, s string) (Model, tea.Cmd, bool) 
 		return m.ifaceKey(k)
 	case st.doctorOpen:
 		return m.doctorViewKey(s)
-	case st.searching:
-		return m.searchKey(k, s)
 	}
 	n := len(m.shownSettings())
 	switch s {
 	case "up", "k":
-		m.settings.cursor, m.focus = (m.settingsCursor(n)+n-1)%max(n, 1), 0
-		return m, nil, n > 1
-	case "down", "j":
-		m.settings.cursor, m.focus = (m.settingsCursor(n)+1)%max(n, 1), 0
-		return m, nil, n > 1
-	case "esc":
-		if st.search.Value() != "" {
-			m.clearSearch()
-			return m, nil, true
-		}
-	}
-	return m, nil, false
-}
-
-// searchKey types into the search box; the arrows still move over the rows.
-func (m Model) searchKey(k tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
-	n := len(m.shownSettings())
-	switch s {
-	case "esc":
-		m.clearSearch()
-		return m, nil, true
-	case "enter":
-		m.endSearch()
-		return m, nil, true
-	case "up":
 		m.settings.cursor = (m.settingsCursor(n) + n - 1) % max(n, 1)
 		return m, nil, true
-	case "down":
+	case "down", "j":
 		m.settings.cursor = (m.settingsCursor(n) + 1) % max(n, 1)
 		return m, nil, true
 	}
-	before := m.settings.search.Value()
-	var cmd tea.Cmd
-	m.settings.search, cmd = m.settings.search.Update(k)
-	if m.settings.search.Value() != before {
-		m.settings.cursor = 0
-	}
-	return m, cmd, true
+	return m, nil, false
 }
 
 func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
@@ -330,12 +230,13 @@ func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.note = errText(msg.err)
 			return m, nil, true
 		case msg.off:
-			m.note = i18n.T("dns.off")
+			m.note = i18n.T("tui.note.dns_off")
 		default:
-			m.note = i18n.T("dns2.set", msg.name, msg.proto.Name())
+			m.note = i18n.T("tui.note.dns_on", msg.name, msg.proto.Name())
 		}
 		if msg.running {
-			m.note += " " + i18n.T("dns.restart")
+			m.pending = true
+			m.note += " " + i18n.T("tui.restart_hint", restartKey)
 		}
 		return m, m.refresh(), true
 	case uninstallMsg:
@@ -349,7 +250,7 @@ func (settingsPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		if msg.err == nil {
 			s.uninstalled, s.dns, m.dialog, m.help = true, nil, nil, false
-			m.page, m.inPage, m.focus, m.note = pgSettings, true, 0, ""
+			m.page, m.note = pgSettings, ""
 			return m, nil, true
 		}
 		for _, d := range msg.r.Leftover {
@@ -388,41 +289,35 @@ func (settingsPage) View(m Model, w, h int) string {
 	return m.settingsList(w, h)
 }
 
-var groupStyle = lipgloss.NewStyle().Bold(true)
-
-// settingsList is the search line, the rows under their group headers, then
-// what the selected row is for and what the last action did.
+// settingsList is the rows under their group headers, then what the
+// selected row is for and what the last action did.
 func (m Model) settingsList(w, h int) string {
 	s := m.settings
-	var head []string
-	switch {
-	case s.searching:
-		head = []string{s.search.View(), ""}
-	case s.search.Value() != "":
-		head = []string{mutedStyle.Render(i18n.T("settings_page.filtered", s.search.Value())), ""}
-	}
 	labelW := 0
 	for _, st := range settings {
 		labelW = max(labelW, lipgloss.Width(st.label()))
 	}
+	labelW = min(labelW, w/2)
 	rows := m.shownSettings()
 	cur := m.settingsCursor(len(rows))
 	var lines []string
 	at, group := 0, -1
 	for i, st := range rows {
 		if st.group != group {
+			if group >= 0 {
+				lines = append(lines, "")
+			}
 			group = st.group
 			lines = append(lines, groupStyle.Render(groupName(group)))
 		}
 		if i == cur {
 			at = len(lines)
 		}
-		lines = append(lines, m.listMark(i == cur)+lipgloss.NewStyle().Width(labelW+2).Render(st.label())+st.value(m))
+		name := lipgloss.NewStyle().Width(labelW + 2).MaxWidth(labelW + 2).Render(st.label())
+		lines = append(lines, m.listMark(i == cur)+name+st.value(m))
 	}
 	var tail []string
-	if len(rows) == 0 {
-		lines = []string{mutedStyle.Render(i18n.T("settings_page.no_match"))}
-	} else {
+	if len(rows) > 0 {
 		tail = append(tail, "")
 		tail = append(tail, strings.Split(mutedStyle.Width(w).Render(i18n.T("settings_help."+rows[cur].id)), "\n")...)
 	}
@@ -431,33 +326,22 @@ func (m Model) settingsList(w, h int) string {
 		tail = append(tail, strings.Split(lipgloss.NewStyle().Width(w).Render(strings.Join(s.result, "\n")), "\n")...)
 	}
 	// The rows keep at least a few lines; the tail gives way.
-	room := max(h-len(head)-len(tail), min(6, len(lines)))
-	tail = tail[:min(len(tail), max(h-len(head)-room, 0))]
-	out := append(head, scroll(lines, at, room, w)...)
-	return strings.Join(append(out, tail...), "\n")
+	room := max(h-len(tail), min(6, len(lines)))
+	tail = tail[:min(len(tail), max(h-room, 0))]
+	return strings.Join(append(scroll(lines, at, room, w), tail...), "\n")
 }
 
 // savedNote says a setting was saved as value, and when it applies.
-func (m Model) savedNote(label, value string) string {
-	note := i18n.T("settings_page.saved", label, value)
-	if m.bypassOn() {
-		note += " " + i18n.T("settings_dns.on_restart")
-	}
-	return note
+func (m *Model) savedNote(label, value string) string {
+	return m.withChange(i18n.T("settings_page.saved", label, value))
 }
 
 func langValue(Model) string { return i18n.T("shell.lang." + i18n.Lang()) }
 
-// langActions: enter picks a language, space switches to the next one; it
-// applies at once and is saved as the config's lang.
+// langActions: enter picks a language; it applies at once and is saved as
+// the config's lang.
 func langActions(Model) []action {
-	next := langs[(slices.Index(langs, i18n.Lang())+1)%len(langs)]
-	return []action{
-		{Key: "enter", Label: i18n.T("settings_page.lang_choose"), CLI: "sudo splitdpi config set lang " + i18n.Lang(), Do: func(m *Model) tea.Cmd { return m.openPicker("lang") }},
-		{Key: "space", Label: i18n.T("shell.settings.lang_to", i18n.T("shell.lang."+next)), CLI: "sudo splitdpi config set lang " + next, Do: func(m *Model) tea.Cmd {
-			return m.setLang(next)
-		}},
-	}
+	return []action{{Key: "enter", Label: i18n.T("settings_page.lang_choose"), CLI: "sudo splitdpi config set lang " + i18n.Lang(), Do: func(m *Model) tea.Cmd { return m.openPicker("lang") }}}
 }
 
 func (m *Model) setLang(lang string) tea.Cmd {
@@ -466,8 +350,8 @@ func (m *Model) setLang(lang string) tea.Cmd {
 	return func() tea.Msg { return langMsg{b.SetLang(lang)} }
 }
 
-// The run modes in the picker's order.
-var runModes = []config.RunMode{config.RunWindow, config.RunBackground, config.RunBoot}
+// The run modes in the picker's order: at boot first, this window last.
+var runModes = []config.RunMode{config.RunBoot, config.RunBackground, config.RunWindow}
 
 // runMode is the saved run mode; window while the config cannot be read.
 func (m Model) runMode() config.RunMode {
@@ -491,9 +375,19 @@ func runModeCLI(mode config.RunMode) string {
 	return "sudo splitdpi run"
 }
 
-func runModeValue(m Model) string { return runModeName(m.runMode()) }
+// runModeValue is the run mode, with a warning while boot lacks the service.
+func runModeValue(m Model) string {
+	if m.bootUnset() {
+		return warnStyle.Render(i18n.T("boot.not_set_up"))
+	}
+	return runModeName(m.runMode())
+}
 
+// runModeActions set the missing service up; otherwise enter picks the mode.
 func runModeActions(m Model) []action {
+	if m.bootUnset() {
+		return []action{{Key: "enter", Label: i18n.T("boot.set_up"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable}}
+	}
 	return []action{{Key: "enter", Label: i18n.T("run_mode.change"), CLI: runModeCLI(m.runMode()), Do: func(m *Model) tea.Cmd {
 		return m.openPicker("run_mode")
 	}}}
@@ -532,6 +426,7 @@ func (m Model) choiceList(names, notes []string, inUse func(i int) bool, cursor,
 	for _, n := range names {
 		nameW = max(nameW, lipgloss.Width(n))
 	}
+	nameW = min(nameW, w/2)
 	blank := strings.Repeat(" ", lipgloss.Width(m.g.on))
 	pre := lipgloss.Width(m.cursorMark(false)) + lipgloss.Width(blank) + 1 + nameW + 2
 	note := lipgloss.NewStyle().Width(max(w-pre, 10))
@@ -580,7 +475,7 @@ func (m *Model) openDNSPicker() tea.Cmd {
 	}
 	p.cursor = max(slices.IndexFunc(p.list, func(d ops.DNSProvider) bool { return d.ID == m.cfg.DNSProvider }), 0)
 	p.system, _ = m.b.SystemEncryptedDNS(m.ctx)
-	m.settings.dns, m.focus = p, 0
+	m.settings.dns = p
 	return nil
 }
 
@@ -611,15 +506,14 @@ func (m Model) dnsPickerActions() []action {
 		{Key: "t", Label: i18n.T("settings_dns.use", other.Name()), CLI: dnsCLI(id, other), Do: func(m *Model) tea.Cmd {
 			p := *m.settings.dns
 			p.proto = other
-			m.settings.dns, m.focus = &p, 0
+			m.settings.dns = &p
 			return nil
 		}},
 		{Key: "esc", Label: i18n.T("tui.act.cancel"), Do: func(m *Model) tea.Cmd { m.settings.dns = nil; return nil }},
 	}
 }
 
-// dnsPickerKey moves the cursor and leaves the action keys to the dock;
-// other keys do nothing while the picker is open.
+// dnsPickerKey moves the cursor and leaves the action keys to the hint bar.
 func (m Model) dnsPickerKey(s string) (Model, tea.Cmd, bool) {
 	p := *m.settings.dns
 	n := len(p.list)
@@ -631,7 +525,7 @@ func (m Model) dnsPickerKey(s string) (Model, tea.Cmd, bool) {
 	case "esc":
 		m.settings.dns = nil
 		return m, nil, true
-	case "enter", "t", "tab", "shift+tab", "left", "right":
+	default:
 		return m, nil, false
 	}
 	m.settings.dns = &p
@@ -654,7 +548,7 @@ func (m *Model) chooseDNS() tea.Cmd {
 		changes = append(changes, systemDNSNote(p.system))
 	}
 	if m.bypassOn() {
-		changes = append(changes, i18n.T("settings_dns.on_restart"))
+		changes = append(changes, i18n.T("settings_dns.on_restart", restartKey))
 	}
 	m.dialog = &confirm{
 		title:   i18n.T("settings_dns.title"),

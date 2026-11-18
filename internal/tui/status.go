@@ -16,8 +16,9 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 )
 
-// The status page: is the bypass running and with what; run, stop, probe.
-type statusPage struct{}
+// The status page: is the bypass running, for what; start, stop, restart,
+// start at boot, try the sites. The technical details fold away.
+type statusPage struct{ noClose }
 
 type (
 	runDoneMsg struct{ err error }
@@ -25,17 +26,31 @@ type (
 		pid int
 		err error
 	}
+	stopMsg  struct{ err error }
 	probeMsg struct {
 		res   map[string][]probe.Result
 		names map[string]string // the probed apps' names by id
 		err   error
 	}
+	// restartStoppedMsg: the bypass that ran in mode stopped, to start again.
+	restartStoppedMsg struct {
+		mode string
+		err  error
+	}
 )
 
-func (statusPage) Title() string                                              { return i18n.T("shell.menu.status") }
-func (statusPage) Hint() string                                               { return i18n.T("shell.hint.status") }
-func (statusPage) Open(m *Model) tea.Cmd                                      { return m.detectForeign() }
-func (statusPage) Key(m Model, _ tea.KeyMsg, _ string) (Model, tea.Cmd, bool) { return m, nil, false }
+func (statusPage) Title() string         { return i18n.T("shell.menu.status") }
+func (statusPage) Hint() string          { return i18n.T("shell.hint.status") }
+func (statusPage) Open(m *Model) tea.Cmd { return m.detectForeign() }
+
+// Key lets r restart too while the bypass runs: start is not offered then.
+func (statusPage) Key(m Model, _ tea.KeyMsg, s string) (Model, tea.Cmd, bool) {
+	if a, ok := m.restartAction(); ok && s == "r" {
+		cmd := a.Do(&m)
+		return m, cmd, true
+	}
+	return m, nil, false
+}
 
 func (m Model) bypassOn() bool { return m.running || m.st.State == "running" }
 
@@ -51,40 +66,60 @@ func (statusPage) Actions(m Model) []action {
 	}
 	if m.cfg.Strategy == nil {
 		acts = append(acts, action{Key: "w", Label: i18n.T("tui.act.setup"), CLI: "sudo splitdpi scan", Do: func(m *Model) tea.Cmd {
-			m.page, m.inPage = pgScan, true
-			return m.openWizard()
+			return batch(m.selectPage(pgSetup), m.openWizard())
 		}})
 	}
 	switch {
 	case m.bypassOn():
 		acts = append(acts, m.stopAction())
-	case m.canStart():
-		acts = append(acts, m.runAction())
-		if m.runMode() != config.RunBackground { // else r already does it
-			acts = append(acts, action{Key: "b", Label: i18n.T("background_tui.act"), CLI: runModeCLI(config.RunBackground), Do: (*Model).runBackground})
-		}
+	case m.canStart() && m.cfg.Strategy != nil:
+		acts = append(acts, m.startAction())
 	}
-	if m.bootUnset() && !m.canStart() { // else r sets the service up
-		acts = append(acts, m.setUpBootAction("e"))
+	if a, ok := m.bootAction(); ok {
+		acts = append(acts, a)
 	}
-	return append(acts, action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps})
+	details := i18n.T("tui.act.details_show")
+	if m.details {
+		details = i18n.T("tui.act.details_hide")
+	}
+	return append(acts,
+		action{Key: "p", Label: i18n.T("tui.act.probe"), CLI: "sudo splitdpi probe", Do: (*Model).probeApps},
+		action{Key: "d", Label: details, CLI: "sudo splitdpi status", Do: func(m *Model) tea.Cmd { m.details = !m.details; return nil }},
+	)
 }
 
 func (m Model) stopAction() action {
 	return action{Key: "s", Label: i18n.T("tui.act.stop"), CLI: "sudo splitdpi stop", Do: (*Model).stop}
 }
 
-// runAction is r: it starts the bypass the way the run mode in Settings says.
-func (m Model) runAction() action {
+// startAction is r: it starts the bypass the way the run mode in Settings
+// says. In run mode boot it starts the service, which it first sets up.
+func (m Model) startAction() action {
 	mode := m.runMode()
-	a := action{Key: "r", Label: i18n.T("tui.act.run"), CLI: runModeCLI(mode), Do: (*Model).runNow}
-	switch mode {
-	case config.RunBackground:
-		a.Label, a.Do = i18n.T("run_mode.run_background"), (*Model).runBackground
-	case config.RunBoot:
-		a.Label, a.Do = i18n.T("run_mode.run_boot"), (*Model).confirmEnable
+	a := action{Key: "r", Label: i18n.T("tui.act.start"), CLI: runModeCLI(mode), Do: (*Model).runNow}
+	switch {
+	case mode == config.RunBackground:
+		a.Do = (*Model).runBackground
+	case mode == config.RunBoot && m.svc.Enabled:
+		a.Do = (*Model).enable
+	case mode == config.RunBoot:
+		a.Do = (*Model).confirmEnable
 	}
 	return a
+}
+
+// bootAction is b: start at boot, or no longer. It needs a service on this
+// init, and a strategy to start with.
+func (m Model) bootAction() (action, bool) {
+	if !m.svc.Supported || m.cfg.Strategy == nil {
+		return action{}, false
+	}
+	if m.svc.Enabled {
+		return action{Key: "b", Label: i18n.T("boot.act_off"), CLI: "sudo splitdpi disable", Do: func(m *Model) tea.Cmd {
+			return m.confirmDisable(config.RunBackground)
+		}}, true
+	}
+	return action{Key: "b", Label: i18n.T("boot.act_on"), CLI: "sudo splitdpi enable", Do: (*Model).confirmEnable}, true
 }
 
 func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
@@ -101,6 +136,11 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		if m.quitting {
 			return m, tea.Quit, true
+		}
+		if m.restarting {
+			m.restarting = false
+			cmd := m.runNow()
+			return m, batch(cmd, m.refresh()), true
 		}
 		return m, m.refresh(), true
 	case enableMsg:
@@ -120,6 +160,27 @@ func (statusPage) Update(m Model, msg tea.Msg) (Model, tea.Cmd, bool) {
 		}
 		cmd := batch(m.refresh(), m.restartLogs())
 		return m, cmd, true
+	case stopMsg:
+		if msg.err != nil {
+			m.note = errText(msg.err)
+		}
+		return m, m.refresh(), true
+	case restartStoppedMsg:
+		if msg.err != nil {
+			m.note = errText(msg.err)
+			return m, m.refresh(), true
+		}
+		m.st.State, m.pending = "stopped", false
+		var cmd tea.Cmd
+		switch msg.mode {
+		case "service":
+			cmd = m.enable()
+		case "background":
+			cmd = m.runBackground()
+		default:
+			cmd = m.startAction().Do(&m)
+		}
+		return m, batch(cmd, m.refresh()), true
 	case probeMsg:
 		m.probe, m.probeNames, m.note = msg.res, msg.names, ""
 		if msg.err != nil {
@@ -138,7 +199,7 @@ func (m *Model) runNow() tea.Cmd {
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	finished := make(chan struct{})
-	m.running, m.runCancel, m.runFinished, m.note = true, cancel, finished, ""
+	m.running, m.runCancel, m.runFinished, m.note, m.pending = true, cancel, finished, "", false
 	b := m.b
 	return func() tea.Msg {
 		defer close(finished)
@@ -152,7 +213,7 @@ func (m *Model) runBackground() tea.Cmd {
 	if m.bgStarting {
 		return nil
 	}
-	m.bgStarting, m.note = true, i18n.T("background_tui.starting")
+	m.bgStarting, m.note, m.pending = true, i18n.T("background_tui.starting"), false
 	b, ctx := m.b, m.ctx
 	return func() tea.Msg {
 		pid, err := b.Background(ctx)
@@ -168,18 +229,35 @@ func (m Model) printBackground(w io.Writer) {
 	}
 }
 
+// stop stops the bypass; a failure to stop leaves the last probe alone.
 func (m *Model) stop() tea.Cmd {
 	if m.running {
 		m.runCancel() // runDoneMsg follows once the rules are gone
 		return nil
 	}
 	b := m.b
-	return func() tea.Msg {
-		if err := b.Stop(); err != nil {
-			return probeMsg{err: err}
-		}
-		return readStatus(b)
+	return func() tea.Msg { return stopMsg{b.Stop()} }
+}
+
+// restart stops the bypass and starts it again the same way, so that it
+// picks up the changes saved since it started.
+func (m *Model) restart() tea.Cmd {
+	m.note = i18n.T("tui.restarting")
+	if m.running {
+		m.restarting = true
+		m.runCancel() // runDoneMsg starts it again
+		return nil
 	}
+	b, mode := m.b, m.st.Mode
+	return func() tea.Msg { return restartStoppedMsg{mode, b.Stop()} }
+}
+
+// restartCLI is the command that restarts the bypass the way it runs now.
+func (m Model) restartCLI() string {
+	if m.running {
+		return "sudo splitdpi stop && sudo splitdpi run"
+	}
+	return m.b.RestartCommand()
 }
 
 func (m *Model) probeApps() tea.Cmd {
@@ -252,7 +330,7 @@ func (m Model) probeSummary(w, names int, bar bool) []string {
 		parts = append(parts, neutralStyle.Render(i18n.T("probe_summary.untested", untested)))
 	}
 	value := w - labelStyle.GetWidth()
-	counts := joinWrapped(parts, mutedStyle.Render(" "+m.g.sep+" "), value)
+	counts := joinWrapped(parts, mutedStyle.Render(", "), value)
 	lines := []string{row(w, i18n.T("tui.probe"), counts)}
 	if bar {
 		lines = []string{
@@ -264,11 +342,9 @@ func (m Model) probeSummary(w, names int, bar bool) []string {
 	for _, b := range shown {
 		lines = append(lines, row(w, "", badStyle.Render(m.g.fail)+" "+b.name+"  "+badStyle.Render(i18n.T("probe_short."+string(b.cat)))))
 	}
-	more := i18n.T("probe_summary.all")
 	if n := len(blocked) - len(shown); n > 0 {
-		more = i18n.T("probe_summary.more", n)
+		lines = append(lines, row(w, "", mutedStyle.Render(i18n.T("probe_summary.more", n))))
 	}
-	lines = append(lines, row(w, "", mutedStyle.Render(more)))
 	if len(blocked) > 0 {
 		lines = append(lines, row(w, i18n.T("probe_tui.todo"), probeTodo(blocked[0].cat)))
 	}
@@ -333,18 +409,15 @@ type statusFit struct {
 	spacers bool // blank lines between the parts
 	names   int  // blocked sites named
 	bar     bool // the reachability bar over the counts
-	boot    bool // whether SplitDPI starts at boot
-	hint    bool // what b (or r) does
+	details bool // the details, when shown
 }
 
 var statusFits = []statusFit{
-	{true, 3, true, true, true},
-	{false, 3, true, true, true},
-	{false, 2, true, true, true},
-	{false, 1, true, true, true},
-	{false, 1, false, true, true},
-	{false, 1, false, false, true},
-	{false, 1, false, false, false},
+	{true, 3, true, true},
+	{false, 3, true, true},
+	{false, 1, true, true},
+	{false, 1, false, true},
+	{false, 1, false, false},
 }
 
 // View draws the first fit that takes at most h lines. If none does, the
@@ -364,63 +437,116 @@ func (statusPage) View(m Model, w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
+// headline is the bypass state in a word or two, and how it runs or how to
+// start it.
+func (m Model) headline() (string, string) {
+	big := lipgloss.NewStyle().Bold(true)
+	switch {
+	case m.bypassOn():
+		how := i18n.T("tui.how." + m.st.Mode)
+		if m.running {
+			how = i18n.T("tui.how.here")
+		}
+		return big.Foreground(good).Render(m.g.dot + " " + i18n.T("shell.pill.running")), how
+	case m.st.State == "failed":
+		return big.Foreground(bad).Render(m.g.dot + " " + i18n.T("tui.state_failed")), i18n.T("tui.how.failed")
+	case m.cfg.Strategy == nil:
+		return big.Render(m.g.dotOff + " " + i18n.T("tui.state_new")), i18n.T("tui.how.setup")
+	case m.bgStarting:
+		return big.Render(m.g.dotOff + " " + i18n.T("shell.pill.stopped")), i18n.T("background_tui.starting")
+	}
+	return big.Render(m.g.dotOff + " " + i18n.T("shell.pill.stopped")), i18n.T("tui.how.start_" + string(m.runMode()))
+}
+
 func (m Model) statusView(w int, fit statusFit) string {
+	wrap := lipgloss.NewStyle().Width(w)
+	spacer := func(lines []string) []string {
+		if fit.spacers {
+			return append(lines, "")
+		}
+		return lines
+	}
 	lines := m.takeoverView(w)
 	if n := len(lines); n > 0 && !fit.spacers {
 		lines = lines[:n-1]
 	}
-	state := i18n.Enum("state", m.st.State)
-	switch {
-	case m.running:
-		state = goodStyle.Render(i18n.T("tui.running_here"))
-	case m.st.State == "running":
-		proc := i18n.T("tui.process", i18n.Enum("mode", m.st.Mode), m.st.PID)
-		if m.st.Mode == "background" {
-			proc += ", " + i18n.T("background_tui.until_reboot")
-		}
-		state = goodStyle.Render(state) + mutedStyle.Render("  "+proc)
-	case m.st.State == "failed":
-		state = badStyle.Render(state)
-	default:
-		state = mutedStyle.Render(state)
+	head, how := m.headline()
+	lines = append(lines, head)
+	lines = append(lines, strings.Split(wrap.Foreground(muted).Render(how), "\n")...)
+	if m.pending && m.bypassOn() {
+		lines = append(lines, strings.Split(wrap.Foreground(warn).Render(i18n.T("tui.pending", restartKey)), "\n")...)
 	}
-	lines = append(lines, row(w, i18n.T("tui.state"), state))
-	if fit.boot {
+	lines = spacer(lines)
+
+	if m.cfg.Strategy != nil {
+		isp := mutedStyle.Render(i18n.T("tui.isp_unknown"))
+		if m.ispName != "" {
+			isp = m.ispName
+		}
+		lines = append(lines, row(w, i18n.T("tui.isp"), isp))
+	}
+	lines = append(lines, row(w, i18n.T("tui.apps"), m.appsValue()))
+	lines = append(lines, row(w, i18n.T("tui.dns"), m.dnsStatus()))
+	if m.svc.Supported {
 		lines = append(lines, row(w, i18n.T("boot.status_label"), bootValue(m)))
 	}
+	if p := m.probeSummary(w, fit.names, fit.bar); len(p) > 0 {
+		lines = append(spacer(lines), p...)
+	}
+	if m.details && fit.details {
+		lines = append(spacer(lines), groupStyle.Render(i18n.T("tui.details")))
+		lines = append(lines, m.detailRows(w)...)
+	}
+	if m.stErr != nil {
+		lines = append(lines, strings.Split(wrap.Foreground(bad).Render(m.stErr.Error()), "\n")...)
+	}
+	return strings.Join(lines, "\n")
+}
 
+// appsValue names the enabled apps; in broad scope the bypass handles the
+// other blocked sites it finds too, and says so.
+func (m Model) appsValue() string {
+	names := make([]string, len(m.cfg.Apps))
+	for i, id := range m.cfg.Apps {
+		names[i] = id
+		if n, ok := m.appNames[id]; ok {
+			names[i] = n
+		}
+	}
+	v := strings.Join(names, ", ")
+	if len(names) == 0 {
+		v = mutedStyle.Render(i18n.T("tui.none"))
+	}
+	if m.mode() == config.ModeBroad {
+		v += mutedStyle.Render(i18n.T("tui.apps_broad"))
+	}
+	return v
+}
+
+// dnsStatus is whether DNS goes encrypted, and through whom.
+func (m Model) dnsStatus() string {
+	if !m.cfg.DNSOn() {
+		return mutedStyle.Render(i18n.T("tui.dns_plain"))
+	}
+	return i18n.T("tui.dns_encrypted", m.dnsName(m.cfg.DNSProvider)) + mutedStyle.Render(" ("+m.cfg.DNSProtocol.Name()+")")
+}
+
+// detailRows are what a curious user or a bug report needs: the strategy
+// and where it came from, the engine, the process and the last error.
+func (m Model) detailRows(w int) []string {
+	var lines []string
 	if s := m.cfg.Strategy; s != nil {
 		lines = append(lines, row(w, i18n.T("tui.strategy"), s.ID+mutedStyle.Render("  "+s.Source)))
-	} else {
-		lines = append(lines, row(w, i18n.T("tui.strategy"), warnStyle.Render(i18n.T("tui.strategy_none"))))
 	}
 	if m.st.Engine != "" {
 		lines = append(lines, row(w, i18n.T("tui.engine"), "zapret2 "+m.st.Engine))
 	}
-	apps := i18n.T("tui.none")
-	if len(m.cfg.Apps) > 0 {
-		apps = strings.Join(m.cfg.Apps, ", ")
+	if m.bypassOn() && !m.running {
+		proc := i18n.T("tui.process", i18n.Enum("mode", m.st.Mode), m.st.PID)
+		lines = append(lines, row(w, i18n.T("tui.proc"), proc))
 	}
-	lines = append(lines, row(w, i18n.T("tui.apps"), apps))
-	if m.cfg.DNSOn() {
-		lines = append(lines, row(w, i18n.T("tui.dns"), warnStyle.Render(i18n.T("tui.dns_on"))))
-	}
-	lines = append(lines, m.probeSummary(w, fit.names, fit.bar)...)
 	if m.st.LastError != "" {
 		lines = append(lines, row(w, i18n.T("tui.last_error"), badStyle.Render(m.st.LastError)))
 	}
-	if m.stErr != nil {
-		lines = append(lines, badStyle.Render(m.stErr.Error()))
-	}
-	if m.canStart() && fit.hint {
-		k := "b"
-		if m.runMode() == config.RunBackground {
-			k = "r"
-		}
-		if fit.spacers {
-			lines = append(lines, "")
-		}
-		lines = append(lines, lipgloss.NewStyle().Width(w).Render(hint(k, i18n.T("background_tui.hint"))))
-	}
-	return strings.Join(lines, "\n")
+	return append(lines, row(w, i18n.T("tui.version"), appName+" "+m.version))
 }
