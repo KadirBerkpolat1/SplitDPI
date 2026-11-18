@@ -154,9 +154,9 @@ func TestScanDNSCheck(t *testing.T) {
 			}
 			var asked []probe.DNSResult
 			var log []string
-			opt := scan.Options{ASN: 9121, Site: "pastebin.com", DNSForce: tc.force, DNSCheck: func(_ context.Context, p []probe.DNSResult) string {
+			opt := scan.Options{ASN: 9121, Site: "pastebin.com", DNSForce: tc.force, DNSCheck: func(_ context.Context, p []probe.DNSResult) (string, error) {
 				asked = p
-				return tc.answer
+				return tc.answer, nil
 			}}
 			o.Scan(context.Background(), opt, func(l string) { log = append(log, l) })
 			if (asked != nil) != tc.asked {

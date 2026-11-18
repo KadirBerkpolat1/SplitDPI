@@ -29,11 +29,11 @@ func runScan(ctx context.Context, o *ops.Ops, w io.Writer, args []string) error 
 	if err != nil {
 		return usageError(i18n.T("scan.usage"))
 	}
-	opt.DNSCheck = func(ctx context.Context, poisoned []probe.DNSResult) string {
+	opt.DNSCheck = func(ctx context.Context, poisoned []probe.DNSResult) (string, error) {
 		return scanDNSChoice(ctx, o, w, dnsFlag, poisoned)
 	}
 	opt.DNSForce = dnsFlag != ""
-	opt.Packages = func(ctx context.Context, p sysinfo.Packages) bool {
+	opt.Packages = func(ctx context.Context, p sysinfo.Packages) (bool, error) {
 		return scanPackages(ctx, w, p)
 	}
 	if opt.Site != "" {
@@ -119,19 +119,18 @@ func suggestPresetsUpdate(w io.Writer, o *ops.Ops) {
 
 // scanPackages answers ops' question before blockcheck2 runs without curl or
 // nslookup/host. Without a terminal it says no, and ops prints the command
-// that installs them; so does a cancelled ctx, which ends the scan.
-func scanPackages(ctx context.Context, w io.Writer, p sysinfo.Packages) bool {
+// that installs them; a cancelled ctx returns its error, which ends the scan.
+func scanPackages(ctx context.Context, w io.Writer, p sysinfo.Packages) (bool, error) {
 	printPackages(w, p)
 	if !promptTTY() {
-		return false
+		return false, nil
 	}
-	yes, _ := askYes(ctx, w, i18n.T("deps.ask"))
-	return yes
+	return askYes(ctx, w, i18n.T("deps.ask"))
 }
 
 // scanDNSChoice answers ops' DNS question: dnsFlag is --dns ("" when not
-// given). A cancelled ctx, which ends the scan, keeps the system's DNS.
-func scanDNSChoice(ctx context.Context, o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) string {
+// given). A cancelled ctx returns its error, which ends the scan.
+func scanDNSChoice(ctx context.Context, o *ops.Ops, w io.Writer, dnsFlag string, poisoned []probe.DNSResult) (string, error) {
 	for _, r := range poisoned {
 		fmt.Fprintln(w, i18n.T("dns2.scan_poisoned", r.Domain, joinAddrs(r.System), joinAddrs(r.DoH)))
 	}
@@ -141,7 +140,7 @@ func scanDNSChoice(ctx context.Context, o *ops.Ops, w io.Writer, dnsFlag string,
 	case promptTTY():
 		switch yes, err := askYes(ctx, w, i18n.T("dns2.scan_ask")); {
 		case err != nil:
-			return ""
+			return "", err
 		case yes:
 			choice = dns.Auto
 		}
@@ -150,10 +149,10 @@ func scanDNSChoice(ctx context.Context, o *ops.Ops, w io.Writer, dnsFlag string,
 	}
 	if choice == "" || choice == "keep" {
 		fmt.Fprintln(w, i18n.T("dns2.scan_kept"))
-		return ""
+		return "", nil
 	}
 	fmt.Fprintln(w, i18n.T("dns2.scan_on", dnsChoice(o, choice).Name))
-	return choice
+	return choice, nil
 }
 
 func joinAddrs(addrs []netip.Addr) string {

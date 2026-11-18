@@ -82,23 +82,52 @@ func TestProbeStreamingBodyBounded(t *testing.T) {
 	}
 }
 
-func TestProbeElapsedCoversBody(t *testing.T) {
-	const delay = 300 * time.Millisecond
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
+// A stream that sends little and stays open (SSE, long polling) ends the
+// probe with its status, not at Timeout.
+func TestProbeQuietStreamEndsAtStatus(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte(": ok\n\n"))
 		w.(http.Flusher).Flush()
-		time.Sleep(delay)
-		w.Write([]byte("done"))
+		<-r.Context().Done()
 	}))
 	defer srv.Close()
 
 	p := probe.Prober{Client: srv.Client(), Timeout: 3 * time.Second}
+	start := time.Now()
 	res := p.Probe(context.Background(), []string{srv.URL})
+	if d := time.Since(start); d > time.Second {
+		t.Errorf("quiet stream took %v, want well under the 3s timeout", d)
+	}
 	if len(res) != 1 || !res[0].OK {
 		t.Fatalf("got %+v", res)
 	}
-	if res[0].Elapsed < delay {
-		t.Errorf("Elapsed %v, want at least the %v the body took", res[0].Elapsed, delay)
+}
+
+type countingTransport struct{ n atomic.Int32 }
+
+func (c *countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	c.n.Add(1)
+	return nil, r.Context().Err()
+}
+
+// Once ctx is done no probe starts; each URL fails with ctx's error.
+func TestProbeStopsOnCancel(t *testing.T) {
+	rt := &countingTransport{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	urls := make([]string, 20)
+	for i := range urls {
+		urls[i] = "https://h" + strconv.Itoa(i) + ".example/"
+	}
+	res := probe.Prober{Client: &http.Client{Transport: rt}}.Probe(ctx, urls)
+	if n := rt.n.Load(); n != 0 {
+		t.Errorf("%d requests after cancel", n)
+	}
+	for i, r := range res {
+		if r.URL != urls[i] || r.OK || !errors.Is(r.Cause, context.Canceled) {
+			t.Errorf("result %d: %+v", i, r)
+		}
 	}
 }
 

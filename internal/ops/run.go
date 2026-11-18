@@ -185,6 +185,7 @@ func (o *Ops) prepare(cfg config.Config, mode string, log io.Writer, extraHosts 
 		sup: &supervisor.Supervisor{
 			P: o.P, Exec: o.Exec, Spawn: spawn, Now: now, Sleep: time.Sleep, Log: log, UID: uid, GID: gid,
 			StartDNS: startDNS, FlushDNS: flushDNS,
+			Ready: func(pid int) bool { return o.queueBound(cfg.QNum, pid) },
 		},
 		eng:     eng,
 		out:     out,
@@ -296,7 +297,7 @@ func (o *Ops) startTrial(ctx context.Context, cfg config.Config, st presets.Stra
 	}
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
-	for !o.queueBound(cfg.QNum) {
+	for !o.queueBound(cfg.QNum, 0) {
 		select {
 		case err := <-done:
 			return nil, ended(err)
@@ -309,15 +310,17 @@ func (o *Ops) startTrial(ctx context.Context, cfg config.Config, st presets.Stra
 	return stop, nil
 }
 
-// queueBound reports whether a process has bound NFQUEUE qnum in our network namespace.
-func (o *Ops) queueBound(qnum int) bool {
+// queueBound reports whether NFQUEUE qnum is bound in our network namespace,
+// by pid unless that is 0. The binding's netlink port ID is the PID of the
+// process that bound it when, as nfqws2 does, it lets the kernel pick it.
+func (o *Ops) queueBound(qnum, pid int) bool {
 	b, err := fs.ReadFile(o.Root, "proc/net/netfilter/nfnetlink_queue")
 	if err != nil {
 		return false
 	}
-	want := strconv.Itoa(qnum)
+	want, port := strconv.Itoa(qnum), strconv.Itoa(pid)
 	for line := range strings.Lines(string(b)) {
-		if f := strings.Fields(line); len(f) > 0 && f[0] == want {
+		if f := strings.Fields(line); len(f) > 1 && f[0] == want && (pid == 0 || f[1] == port) {
 			return true
 		}
 	}
@@ -356,14 +359,22 @@ func (o *Ops) Stop() error {
 	return nil
 }
 
-// Status returns the last recorded status, corrected to "stopped" when no
-// supervisor holds the lock, and the config.
+// Status returns the last recorded status, corrected by the lock, and the
+// config. A scan holding the lock reads as running in mode scan, whatever
+// its trials last recorded; a status that is on but not of the process
+// holding the lock, in its mode, reads as stopped.
 func (o *Ops) Status() (supervisor.Status, config.Config, error) {
 	st, err := supervisor.ReadStatus(o.P)
 	if errors.Is(err, fs.ErrNotExist) {
 		st, err = supervisor.Status{State: "stopped"}, nil
 	}
-	if _, _, held := supervisor.LockInfo(o.P); !held && st.On() {
+	switch pid, mode, held := supervisor.LockInfo(o.P); {
+	case held && mode == "scan":
+		st = supervisor.Status{State: "running", Mode: mode, PID: pid}
+		if fi, err := os.Stat(o.P.LockFile); err == nil {
+			st.Since = fi.ModTime() // the lock records its holder when taken
+		}
+	case st.On() && (!held || st.PID != pid || st.Mode != mode):
 		st.State = "stopped"
 	}
 	cfg, cerr := config.Load(o.P)

@@ -67,7 +67,7 @@ func (o *Ops) Probe(ctx context.Context, apps []string) (map[string][]probe.Resu
 	if len(urls) == 0 {
 		return nil, NoAppsError{NoHosts: true}
 	}
-	p := probe.Prober{Client: o.HTTP, Timeout: probe.DefaultTimeout}
+	p := probe.Prober{Client: o.freshClient(), Timeout: probe.DefaultTimeout}
 	results := p.Probe(ctx, urls)
 	probe.MarkNoAddress(ctx, results, systemAddrs, dohAddrs(o.dnsClient(c)))
 	for i, s := range order {

@@ -529,17 +529,23 @@ func modeReason(fi fs.FileInfo) string {
 }
 
 // waitRunning waits up to enableWait for a supervisor in mode to hold the
-// lock and report running in a status of its own, and returns its PID: the
-// status of a run before it, or of one restarting nfqws2, does not count.
-// It gives up early when exited delivers: the process that was to run is gone.
+// lock and report running in a status of its own, the same on two looks
+// lockPoll apart, and returns its PID: the status of a run before it, of one
+// restarting nfqws2, or of an nfqws2 that died right after it started does
+// not count. It gives up early when exited delivers: the process that was
+// to run is gone.
 func (o *Ops) waitRunning(mode string, exited <-chan error) (int, bool) {
 	deadline := time.Now().Add(enableWait)
+	var seen supervisor.Status
 	for time.Now().Before(deadline) {
 		pid, m, held := supervisor.LockInfo(o.P)
 		st, _ := supervisor.ReadStatus(o.P)
-		if held && m == mode && st.State == "running" && st.PID == pid && st.Mode == mode {
+		if !held || m != mode || st.State != "running" || st.PID != pid || st.Mode != mode {
+			st = supervisor.Status{}
+		} else if seen.State == "running" && st.PID == seen.PID && st.ChildPID == seen.ChildPID && st.Since.Equal(seen.Since) {
 			return pid, true
 		}
+		seen = st
 		select {
 		case <-exited:
 			return 0, false

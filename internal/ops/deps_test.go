@@ -183,7 +183,7 @@ func TestScanPackages(t *testing.T) {
 		return slices.ContainsFunc(log, func(l string) bool { return strings.HasPrefix(l, "env DOMAINS=") })
 	}
 
-	for _, answer := range []func(context.Context, sysinfo.Packages) bool{nil, func(context.Context, sysinfo.Packages) bool { return false }} {
+	for _, answer := range []func(context.Context, sysinfo.Packages) (bool, error){nil, func(context.Context, sysinfo.Packages) (bool, error) { return false, nil }} {
 		o, m := setup(t)
 		var log []string
 		_, err := o.Scan(context.Background(), scan.Options{ASN: 9121, Site: "pastebin.com", Packages: answer}, func(l string) { log = append(log, l) })
@@ -200,7 +200,7 @@ func TestScanPackages(t *testing.T) {
 	o, m := setup(t)
 	m.fail["apt-get install"] = errors.New("apt-get: exit status 100: E: Unable to locate package curl")
 	var log []string
-	yes := func(context.Context, sysinfo.Packages) bool { return true }
+	yes := func(context.Context, sysinfo.Packages) (bool, error) { return true, nil }
 	_, err := o.Scan(context.Background(), scan.Options{ASN: 9121, Site: "pastebin.com", Packages: yes}, func(l string) { log = append(log, l) })
 	var ie InstallError
 	if !errors.As(err, &ie) || ranBlockcheck(log) {
@@ -210,9 +210,9 @@ func TestScanPackages(t *testing.T) {
 	o, m = setup(t)
 	var asked []string
 	log = nil
-	opt := scan.Options{ASN: 9121, Site: "pastebin.com", Packages: func(_ context.Context, p sysinfo.Packages) bool {
+	opt := scan.Options{ASN: 9121, Site: "pastebin.com", Packages: func(_ context.Context, p sysinfo.Packages) (bool, error) {
 		asked = p.Names
-		return true
+		return true, nil
 	}}
 	rep, err := o.Scan(context.Background(), opt, func(l string) { log = append(log, l) })
 	if err != nil || rep.Winner == nil {

@@ -56,6 +56,10 @@ type Supervisor struct {
 	// Locked means the caller holds the run lock (see Lock) for as long as Run
 	// runs, as a scan does around its trials; Run then does not take it.
 	Locked bool
+	// Ready, if set, reports whether nfqws2, by its PID (0 if unknown), has
+	// bound its queue. Until then the status says restarting, not running: a
+	// child that dies while it starts never reads as started.
+	Ready func(nfqws2PID int) bool
 }
 
 type ErrAlreadyRunning struct{ Mode string }
@@ -69,6 +73,7 @@ const (
 	failWindow  = 2 * time.Minute
 	maxBackoff  = 30 * time.Second
 	stopTimeout = 5 * time.Second
+	readyPoll   = 50 * time.Millisecond
 )
 
 // Run holds the lock until it returns. It returns nil after a clean stop
@@ -119,6 +124,9 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 				pid = c.Nfqws2PID()
 			}
 			st.State, st.ChildPID, st.Nfqws2PID, st.Since = "running", child.Pid(), pid, start
+			if s.Ready != nil {
+				st.State = StateRestarting
+			}
 			if werr := writeStatus(s.P, st); werr != nil {
 				fmt.Fprintln(log, werr)
 			}
@@ -127,11 +135,10 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 			}
 			done := make(chan error, 1)
 			go func() { done <- child.Wait() }()
-			select {
-			case <-ctx.Done():
+			var stopped bool
+			if stopped, err = s.watch(ctx, &st, pid, done, log); stopped {
 				stopChild(child, done)
 				return s.finish(ctx, st, "stopped", nil)
-			case err = <-done:
 			}
 			tail = child.StderrTail()
 			if err == nil {
@@ -164,6 +171,35 @@ func (s *Supervisor) Run(ctx context.Context, out render.Output, ruleset string,
 		case <-ctx.Done():
 			return s.finish(ctx, st, "stopped", nil)
 		case <-slept:
+		}
+	}
+}
+
+// watch returns once ctx ends (stopped) or the child exits, with its Wait
+// error. Meanwhile, while st is not running yet, it records st running as soon
+// as s.Ready reports nfqws2 ready.
+func (s *Supervisor) watch(ctx context.Context, st *Status, pid int, done <-chan error, log io.Writer) (stopped bool, err error) {
+	var poll <-chan time.Time
+	if st.State != "running" {
+		t := time.NewTicker(readyPoll)
+		defer t.Stop()
+		poll = t.C
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return true, nil
+		case err := <-done:
+			return false, err
+		case <-poll:
+			if !s.Ready(pid) {
+				continue
+			}
+			poll = nil
+			st.State = "running"
+			if werr := writeStatus(s.P, *st); werr != nil {
+				fmt.Fprintln(log, werr)
+			}
 		}
 	}
 }

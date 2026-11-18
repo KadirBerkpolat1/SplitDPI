@@ -652,7 +652,7 @@ func (m *Model) startScan() tea.Cmd {
 	b, prog, logs, asks, g, site := m.b, w.progress, m.logs, w.asks, m.g, w.site
 	opt := scan.Options{
 		ASN: w.info.ASN, Country: w.info.Country, Apps: w.chosenList(), Site: w.site,
-		DNSCheck: func(ctx context.Context, poisoned []probe.DNSResult) string { return askDNS(ctx, asks, poisoned) },
+		DNSCheck: func(ctx context.Context, p []probe.DNSResult) (string, error) { return askDNS(ctx, asks, p), ctx.Err() },
 		Trial:    func(tr scan.Trial) { writeTrial(prog, logs, g, tr) },
 	}
 	if w.site != "" {

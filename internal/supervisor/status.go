@@ -27,8 +27,9 @@ type Status struct {
 	Since      time.Time `json:"since"`
 }
 
-// StateRestarting is the state between nfqws2 exiting and its restart: the
-// supervisor still holds the lock, but no nfqws2 handles the queue.
+// StateRestarting is the state between nfqws2 exiting and its restart, and
+// between its start and Supervisor.Ready: the supervisor still holds the lock,
+// but no nfqws2 handles the queue.
 const StateRestarting = "restarting"
 
 // On reports whether the supervisor that wrote st was on: running, or

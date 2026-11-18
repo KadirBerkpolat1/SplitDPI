@@ -45,6 +45,11 @@ func (o *Ops) AppsEnable(id string) error {
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	return o.appsEnable(id)
+}
+
+// appsEnable is AppsEnable of a known app with o.mu held.
+func (o *Ops) appsEnable(id string) error {
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err
@@ -59,6 +64,11 @@ func (o *Ops) AppsEnable(id string) error {
 func (o *Ops) AppsDisable(id string) error {
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	return o.appsDisable(id)
+}
+
+// appsDisable is AppsDisable with o.mu held.
+func (o *Ops) appsDisable(id string) error {
 	c, err := config.Load(o.P)
 	if err != nil {
 		return err

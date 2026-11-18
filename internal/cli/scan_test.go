@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -16,6 +18,7 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/presets"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/probe"
 	"github.com/KadirBerkpolat1/SplitDPI/internal/scan"
+	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
 func TestParseScanSite(t *testing.T) {
@@ -176,13 +179,50 @@ func TestScanDNSChoice(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setPrompt(t, tc.tty, tc.input)
 			var w bytes.Buffer
-			got := scanDNSChoice(context.Background(), &ops.Ops{}, &w, tc.flag, poisoned)
+			got, err := scanDNSChoice(context.Background(), &ops.Ops{}, &w, tc.flag, poisoned)
+			if err != nil {
+				t.Fatal(err)
+			}
 			eq(t, got, tc.want)
 			has(t, w.String(), "pastebin.com resolves to 195.175.254.2 here, but to 104.20.0.1")
 			has(t, w.String(), tc.out)
 			if tc.notOut != "" && strings.Contains(w.String(), tc.notOut) {
 				t.Errorf("output has %q:\n%s", tc.notOut, w.String())
 			}
+		})
+	}
+}
+
+// Ctrl+C at a scan's questions reaches ops as the cancel: the package
+// question does not read as no, nor the DNS one as keeping the resolver.
+func TestScanQuestionsCancelled(t *testing.T) {
+	for name, ask := range map[string]func(context.Context, io.Writer) error{
+		"packages": func(ctx context.Context, w io.Writer) error {
+			_, err := scanPackages(ctx, w, sysinfo.Packages{})
+			return err
+		},
+		"dns": func(ctx context.Context, w io.Writer) error {
+			_, err := scanDNSChoice(ctx, &ops.Ops{}, w, "", nil)
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			in := blockingInput{make(chan struct{}), make(chan struct{})}
+			t.Cleanup(func() { close(in.done) })
+			oldIn, oldTTY := promptIn, promptTTY
+			t.Cleanup(func() { promptIn, promptTTY = oldIn, oldTTY })
+			promptIn, promptTTY = in, func() bool { return true }
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go func() {
+				<-in.started
+				cancel()
+			}()
+			var w bytes.Buffer
+			if err := ask(ctx, &w); !errors.Is(err, context.Canceled) {
+				t.Errorf("err %v, want context.Canceled", err)
+			}
+			notHas(t, w.String(), "Keeping the system resolver")
 		})
 	}
 }

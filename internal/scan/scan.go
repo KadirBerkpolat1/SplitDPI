@@ -27,15 +27,17 @@ type Options struct {
 	NoBlockcheck   bool
 	// DNSCheck is asked before blockcheck2 runs, when DNS is off and some of
 	// its domains look poisoned. It returns the dns_provider to turn on for
-	// the rest of the scan and keep, or "" to stay on the system resolver.
-	DNSCheck func(ctx context.Context, poisoned []probe.DNSResult) string
+	// the rest of the scan and keep, or "" to stay on the system resolver; an
+	// error, such as ctx's when the question was cancelled, ends the scan.
+	DNSCheck func(ctx context.Context, poisoned []probe.DNSResult) (string, error)
 	// DNSForce checks for poisoning even when the system already encrypts
 	// DNS, where the check is otherwise skipped (an explicit --dns).
 	DNSForce bool
 	// Packages is asked before blockcheck2 runs when curl or nslookup/host
 	// is missing and the package manager is known; true installs them. A
-	// nil Packages never installs, and the scan stops there.
-	Packages func(ctx context.Context, missing sysinfo.Packages) bool
+	// nil Packages never installs, and the scan stops there, as it does on
+	// an error.
+	Packages func(ctx context.Context, missing sysinfo.Packages) (bool, error)
 	// Trial, when set, gets each finished trial, preset or blockcheck2, in
 	// place of the progress line a blockcheck2 trial otherwise prints.
 	Trial func(Trial)
@@ -99,6 +101,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 			}
 			results := env.Probe(ctx, urls)
 			stop()
+			if err := ctx.Err(); err != nil {
+				return rep, err
+			}
 			ok := allProbeOK(results)
 			rep.Trials = append(rep.Trials, Trial{Candidate: cand, Results: results, OK: ok})
 			if opt.Trial != nil {
@@ -111,6 +116,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return rep, err
+	}
 	if opt.NoBlockcheck {
 		return rep, ErrNoStrategy
 	}
@@ -161,6 +169,9 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		}
 		results := env.Probe(ctx, urls)
 		stop()
+		if err := ctx.Err(); err != nil {
+			return rep, err
+		}
 		ok := allProbeOK(results)
 		rep.Trials = append(rep.Trials, Trial{Candidate: presets.Candidate{Strategy: st, Source: BlockcheckSource}, Results: results, OK: ok})
 		if opt.Trial != nil {

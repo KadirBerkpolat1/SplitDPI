@@ -4,7 +4,6 @@ package probe
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -113,25 +112,21 @@ func Hosts(set presets.Set, apps, sites []string) ([]string, error) {
 // can be long.
 const maxParallel = 8
 
-// maxBody bounds the body a probe reads: the status already answered, and a
-// stream or large page would hold the probe until Timeout.
-const maxBody = 16 << 10
-
 // Probe GETs each URL, up to maxParallel at once, so that blocked URLs cost
 // one Timeout together rather than one each; the results keep the order of
 // urls. OK means TLS verified and any HTTP status arrived within Timeout.
+// Once ctx is done no more probes start; those fail with ctx's error.
 func (p Prober) Probe(ctx context.Context, urls []string) []Result {
 	out := make([]Result, len(urls))
-	sem := make(chan struct{}, maxParallel)
-	var wg sync.WaitGroup
-	for i, u := range urls {
-		sem <- struct{}{}
-		wg.Go(func() {
-			defer func() { <-sem }()
-			out[i] = p.probeOne(ctx, u)
-		})
+	ran := make([]bool, len(urls))
+	each(ctx, len(urls), func(i int) {
+		out[i], ran[i] = p.probeOne(ctx, urls[i]), true
+	})
+	for i := range out {
+		if !ran[i] {
+			out[i] = Result{URL: urls[i], Err: ctx.Err().Error(), Cause: ctx.Err()}
+		}
 	}
-	wg.Wait()
 	return out
 }
 
@@ -177,7 +172,8 @@ func (p Prober) probeOne(ctx context.Context, rawURL string) Result {
 		r.Elapsed = time.Since(start)
 		return r
 	}
-	_, _ = io.CopyN(io.Discard, resp.Body, maxBody)
+	// The status answered; a body, such as a stream that never ends, would
+	// only hold the probe. Unread, the connection is not reused.
 	resp.Body.Close()
 	r.Elapsed = time.Since(start)
 	r.OK = true
