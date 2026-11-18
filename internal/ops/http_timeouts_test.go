@@ -99,11 +99,12 @@ func runWithin(t *testing.T, limit time.Duration, o *Ops, op func(context.Contex
 }
 
 func TestNetOpsFailWithoutResponseHeaders(t *testing.T) {
-	const limit = 200 * time.Millisecond
+	const limit = 100 * time.Millisecond
 	shorten(t, &headerTimeout, limit)
 	srv := stallServer(t, false)
 	for _, op := range netOps {
 		t.Run(op.name, func(t *testing.T) {
+			t.Parallel()
 			err := runWithin(t, limit, realOps(t, srv), op.run)
 			if err == nil || !strings.Contains(err.Error(), "timeout awaiting response headers") {
 				t.Errorf("err %v", err)
@@ -113,11 +114,14 @@ func TestNetOpsFailWithoutResponseHeaders(t *testing.T) {
 }
 
 func TestNetOpsFailWhenBodyStalls(t *testing.T) {
-	const limit = 250 * time.Millisecond
+	const limit = 100 * time.Millisecond
+	for _, op := range netOps {
+		shorten(t, op.limit, limit)
+	}
 	srv := stallServer(t, true)
 	for _, op := range netOps {
 		t.Run(op.name, func(t *testing.T) {
-			shorten(t, op.limit, limit)
+			t.Parallel()
 			if err := runWithin(t, limit, realOps(t, srv), op.run); !errors.Is(err, op.stalled) {
 				t.Errorf("err %v, want %v", err, op.stalled)
 			}
@@ -126,18 +130,18 @@ func TestNetOpsFailWhenBodyStalls(t *testing.T) {
 }
 
 func TestEngineDownloadOutlastsIdleLimit(t *testing.T) {
-	const idle = 500 * time.Millisecond
+	const idle = 150 * time.Millisecond
 	shorten(t, &engineIdleTimeout, idle)
 	piece := bytes.Repeat([]byte{'x'}, 1024)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 60 pieces 25 ms apart: 1.5 s in all, never a gap near the idle limit.
-		for range 60 {
+		// 35 pieces 10 ms apart: 350 ms in all, never a gap near the idle limit.
+		for range 35 {
 			w.Write(piece)
 			w.(http.Flusher).Flush()
 			select {
 			case <-r.Context().Done():
 				return
-			case <-time.After(25 * time.Millisecond):
+			case <-time.After(10 * time.Millisecond):
 			}
 		}
 	}))

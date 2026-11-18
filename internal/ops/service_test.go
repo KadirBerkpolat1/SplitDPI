@@ -175,7 +175,7 @@ func serviceOps(t *testing.T, in sysinfo.Init, host fstest.MapFS) (*Ops, *servic
 
 // fakeRunsvdir stands in for runit's runsvdir: once the service is linked,
 // its run comes up and holds the lock until the test ends. With rec.down it
-// never reports running, and it exits 300 ms after its link is gone: sv
+// never reports running, and it exits 60 ms after its link is gone: sv
 // down and the unlink only ask runsv to stop it.
 func fakeRunsvdir(t *testing.T, p paths.Paths, rec *serviceRecorder) {
 	t.Helper()
@@ -216,7 +216,7 @@ func fakeRunsvdir(t *testing.T, p paths.Paths, rec *serviceRecorder) {
 		if down && linkedIs(false) {
 			select {
 			case <-stop:
-			case <-time.After(300 * time.Millisecond):
+			case <-time.After(60 * time.Millisecond):
 			}
 			return
 		}
@@ -237,19 +237,28 @@ func terminateWith(t *testing.T, rec *serviceRecorder, what func() error) {
 	t.Cleanup(func() { TerminateRun = old })
 }
 
-// shortWait makes waiting for the service to run give up after 300 ms.
+// shortWait makes waiting for the service to run give up after 50 ms.
 func shortWait(t *testing.T) {
 	old := enableWait
-	enableWait = 300 * time.Millisecond
+	enableWait = 50 * time.Millisecond
 	t.Cleanup(func() { enableWait = old })
+	fastPoll(t)
 }
 
-// shortStopWait makes waiting for a run told to stop give up after 100 ms,
+// shortStopWait makes waiting for a run told to stop give up after 20 ms,
 // and waiting for it once more after more.
 func shortStopWait(t *testing.T, more time.Duration) {
 	oldRelease, oldMore := releaseWait, takeBackWait
-	releaseWait, takeBackWait = 100*time.Millisecond, more
+	releaseWait, takeBackWait = 20*time.Millisecond, more
 	t.Cleanup(func() { releaseWait, takeBackWait = oldRelease, oldMore })
+	fastPoll(t)
+}
+
+// fastPoll makes the waits for the run lock look again every 2 ms.
+func fastPoll(t *testing.T) {
+	old := lockPoll
+	lockPoll = 2 * time.Millisecond
+	t.Cleanup(func() { lockPoll = old })
 }
 
 func installAt(t *testing.T, path string) {
@@ -586,7 +595,7 @@ func slowStopOps(t *testing.T, more time.Duration) (*Ops, *serviceRecorder, func
 func TestEnableRunExitsLate(t *testing.T) {
 	o, rec, release := slowStopOps(t, 10*time.Second)
 	terminateWith(t, rec, func() error { return nil })
-	rec.hooks = map[string]func(){"systemctl disable splitdpi": func() { time.AfterFunc(300*time.Millisecond, release) }}
+	rec.hooks = map[string]func(){"systemctl disable splitdpi": func() { time.AfterFunc(60*time.Millisecond, release) }}
 	_, err := o.Enable(context.Background(), nil)
 	e := takeoverError(t, err)
 	if !errors.Is(err, ErrStopTimeout) || e.Restarted != backgroundPID || e.RestartErr != nil || e.Running != "" || e.Stopping != "" {
@@ -605,7 +614,7 @@ func TestEnableRunExitsLate(t *testing.T) {
 // still stopping: it does not run the bypass once it is gone, and nothing
 // is started in its place.
 func TestEnableRunStillStopping(t *testing.T) {
-	o, rec, _ := slowStopOps(t, 300*time.Millisecond)
+	o, rec, _ := slowStopOps(t, 60*time.Millisecond)
 	terminateWith(t, rec, func() error { return nil })
 	_, err := o.Enable(context.Background(), nil)
 	e := takeoverError(t, err)
@@ -624,7 +633,7 @@ func TestEnableRunStillStopping(t *testing.T) {
 // A run that took the lock once the stopped one had exited was never told
 // to stop: it still runs.
 func TestEnableAnotherRunTookLock(t *testing.T) {
-	o, rec, release := slowStopOps(t, 300*time.Millisecond)
+	o, rec, release := slowStopOps(t, 60*time.Millisecond)
 	terminateWith(t, rec, func() error {
 		release()
 		holdRunLock(t, o.P, "foreground", 4545)

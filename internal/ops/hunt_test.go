@@ -47,7 +47,7 @@ func TestStopSignalsNoScanNorSelf(t *testing.T) {
 	select {
 	case err := <-exited:
 		t.Fatalf("Stop signalled the scan: %v", err)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(50 * time.Millisecond):
 	}
 	release()
 
@@ -61,7 +61,7 @@ func TestStopSignalsNoScanNorSelf(t *testing.T) {
 	select {
 	case <-sigs:
 		t.Fatal("Stop sent SIGTERM to its own process")
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(50 * time.Millisecond):
 	}
 }
 

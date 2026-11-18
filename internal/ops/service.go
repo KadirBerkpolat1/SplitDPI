@@ -314,7 +314,7 @@ func (o *Ops) takeBack(ctx context.Context, s *serviceSetup, r EnableReport, tol
 			e.Stopping = mode
 			return e
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(lockPoll)
 	}
 }
 
@@ -377,6 +377,9 @@ func (s *serviceSetup) undo(ctx context.Context) error {
 // starting the bypass again in its place.
 var releaseWait, takeBackWait = 10 * time.Second, 20 * time.Second
 
+// lockPoll is how often a wait for the run lock looks again.
+var lockPoll = 100 * time.Millisecond
+
 // waitReleased waits up to releaseWait until no live process holds the lock.
 func (o *Ops) waitReleased() bool {
 	deadline := time.Now().Add(releaseWait)
@@ -387,7 +390,7 @@ func (o *Ops) waitReleased() bool {
 		if time.Now().After(deadline) {
 			return false
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(lockPoll)
 	}
 }
 
@@ -540,7 +543,7 @@ func (o *Ops) waitRunning(mode string, exited <-chan error) (int, bool) {
 		select {
 		case <-exited:
 			return 0, false
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(lockPoll):
 		}
 	}
 	return 0, false
