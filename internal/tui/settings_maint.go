@@ -141,7 +141,7 @@ func doctorValue(m Model) string {
 
 func doctorActions(Model) []action {
 	return []action{{Key: "enter", Label: i18n.T("settings_doctor.do"), CLI: "sudo splitdpi doctor", Do: func(m *Model) tea.Cmd {
-		m.settings.doctorOpen = true
+		m.settings.doctorOpen, m.settings.doctorTop = true, 0
 		return m.settingsDoctor()
 	}}}
 }
@@ -162,27 +162,74 @@ func (m Model) doctorViewActions() []action {
 	}
 }
 
-// doctorViewKey: esc closes the check; r is the action.
+// doctorViewKey: esc closes the check, the arrows and j k scroll it; r is
+// the action.
 func (m Model) doctorViewKey(s string) (Model, tea.Cmd, bool) {
-	if s == "esc" {
+	switch s {
+	case "esc":
 		m.settings.doctorOpen = false
-		return m, nil, true
+	case "up", "k":
+		m.settings.doctorTop = max(m.settings.doctorTop-1, 0)
+	case "down", "j":
+		if _, below := m.doctorWindow(m.pageSize()); below > 0 {
+			m.settings.doctorTop++
+		}
+	default:
+		return m, nil, false
 	}
-	return m, nil, false
+	return m, nil, true
 }
 
-// doctorView lists every check with its fix, problems first.
+// doctorView lists every check with its fix, problems first, from the check
+// at doctorTop on.
 func (m Model) doctorView(w, h int) string {
+	lines, _ := m.doctorWindow(w, h)
+	return strings.Join(lines, "\n")
+}
+
+// doctorWindow is doctorView's lines: "↑ n more" and "↓ n more" count the
+// checks cut off above and below, and below is that last count.
+func (m Model) doctorWindow(w, h int) (lines []string, below int) {
 	s := m.settings
-	lines := strings.Split(lipgloss.NewStyle().Width(w).Render(i18n.T("settings_doctor.head")), "\n")
+	lines = strings.Split(lipgloss.NewStyle().Width(w).Render(i18n.T("settings_doctor.head")), "\n")
 	lines = append(lines, "")
-	if s.checking {
-		lines = append(lines, working())
-		return strings.Join(lines, "\n")
+	switch {
+	case s.checking:
+		return append(lines, working()), 0
+	case len(s.checks) == 0:
+		return scroll(append(lines, goodStyle.Render(i18n.T("settings_doctor.none_found"))), 0, h, w), 0
 	}
+	items := m.doctorItems(w)
+	top := max(min(s.doctorTop, len(items)-1), 0)
+	room := h - len(lines)
+	if top > 0 {
+		lines = append(lines, m.more(m.g.up, top, w))
+		room--
+	}
+	left := 0
+	for _, it := range items[top:] {
+		left += len(it)
+	}
+	if left > room {
+		room-- // for the "↓ n more" line
+	}
+	i := top
+	for ; i < len(items) && (len(items[i]) <= room || i == top); i++ {
+		lines = append(lines, items[i]...)
+		room -= len(items[i])
+	}
+	if below = len(items) - i; below > 0 {
+		lines = append(lines, m.more(m.g.down, below, w))
+	}
+	return scroll(lines, 0, h, w), below
+}
+
+// doctorItems are the lines of each check, problems first.
+func (m Model) doctorItems(w int) [][]string {
+	var items [][]string
 	item := lipgloss.NewStyle().Width(w - 2)
 	for _, sev := range []doctor.Severity{doctor.Blocker, doctor.Warn, doctor.OK} {
-		for _, c := range s.checks {
+		for _, c := range m.settings.checks {
 			if c.Severity != sev {
 				continue
 			}
@@ -193,6 +240,7 @@ func (m Model) doctorView(w, h int) string {
 			case doctor.Blocker:
 				mark = badStyle.Render(m.g.fail)
 			}
+			var lines []string
 			for i, l := range strings.Split(item.Render(c.Msg), "\n") {
 				if i == 0 {
 					lines = append(lines, mark+strings.Repeat(" ", max(2-lipgloss.Width(mark), 1))+l)
@@ -203,12 +251,10 @@ func (m Model) doctorView(w, h int) string {
 			if c.Fix != "" {
 				lines = append(lines, "    "+mutedStyle.Render("$ ")+commandStyle.Render(c.Fix))
 			}
+			items = append(items, lines)
 		}
 	}
-	if len(s.checks) == 0 {
-		lines = append(lines, goodStyle.Render(i18n.T("settings_doctor.none_found")))
-	}
-	return strings.Join(scroll(lines, 0, h, w), "\n")
+	return items
 }
 
 func canTakeOverAny(m Model) bool {
@@ -306,7 +352,7 @@ func (m Model) maintUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 		s.result = m.withRestart([]string{goodStyle.Render(i18n.T("engine.installed", engine.Version, msg.eng.Dir))})
 		return m, m.refresh(), true
 	case settingsDoctorMsg:
-		s.checking, s.checks = false, msg.checks
+		s.checking, s.checks, s.doctorTop = false, msg.checks, 0
 		if s.checks == nil {
 			s.checks = []doctor.Check{}
 		}

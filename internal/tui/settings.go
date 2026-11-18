@@ -30,6 +30,7 @@ type settingsScreen struct {
 	text       *textEditor
 	ifaces     *ifaceEditor
 	doctorOpen bool
+	doctorTop  int // the first check the system check shows
 
 	busy      string         // the maintenance row at work, if any
 	checks    []doctor.Check // the last system check
@@ -353,9 +354,10 @@ func (m *Model) setLang(lang string) tea.Cmd {
 // The run modes in the picker's order: at boot first, this window last.
 var runModes = []config.RunMode{config.RunBoot, config.RunBackground, config.RunWindow}
 
-// runMode is the saved run mode; window while the config cannot be read.
+// runMode is the saved run mode; window while the config cannot be read,
+// and in place of boot where the init has no service to start at boot.
 func (m Model) runMode() config.RunMode {
-	if m.cfg.RunMode == "" {
+	if m.cfg.RunMode == "" || m.cfg.RunMode == config.RunBoot && !m.svc.Supported {
 		return config.RunWindow
 	}
 	return m.cfg.RunMode

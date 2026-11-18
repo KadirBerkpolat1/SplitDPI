@@ -87,6 +87,9 @@ func (m Model) layout() screen {
 	return s
 }
 
+// pageSize is the width and height View gives the page.
+func (m Model) pageSize() (int, int) { return m.width - 4, m.layout().frameH - 2 }
+
 // View is the tab bar, the page in its frame, the toast and the hint bar;
 // a popup covers the frame and the toast.
 func (m Model) View() string {

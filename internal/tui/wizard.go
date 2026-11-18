@@ -332,6 +332,7 @@ func (m Model) wizardUpdate(msg tea.Msg) (Model, tea.Cmd, bool) {
 				m.note = errText(msg.applied.err)
 			}
 		}
+		w.resumeErr = msg.resumeErr
 		if msg.resumeErr != nil {
 			m.note = errText(msg.resumeErr)
 		}
@@ -608,23 +609,28 @@ func (m *Model) scanSite() tea.Cmd {
 	return m.startScan()
 }
 
-// saveApps saves the apps chosen for the trials (`apps enable|disable`).
+// saveApps saves the apps chosen for the trials (`apps enable|disable`):
+// the new ones first, so that mode apps never runs out of apps between two
+// changes.
 func (m *Model) saveApps() tea.Cmd {
 	b, chosen, current := m.b, m.wiz.chosen, m.cfg.Apps
-	ids := make([]string, 0, len(m.wiz.apps))
+	var enable, disable []string
 	for _, a := range m.wiz.apps {
-		ids = append(ids, a.ID)
+		switch on := slices.Contains(current, a.ID); {
+		case chosen[a.ID] && !on:
+			enable = append(enable, a.ID)
+		case !chosen[a.ID] && on:
+			disable = append(disable, a.ID)
+		}
 	}
 	return func() tea.Msg {
-		for _, id := range ids {
-			var err error
-			switch on := slices.Contains(current, id); {
-			case chosen[id] && !on:
-				err = b.AppsEnable(id)
-			case !chosen[id] && on:
-				err = b.AppsDisable(id)
+		for _, id := range enable {
+			if err := b.AppsEnable(id); err != nil {
+				return appsAppliedMsg{err}
 			}
-			if err != nil {
+		}
+		for _, id := range disable {
+			if err := b.AppsDisable(id); err != nil {
 				return appsAppliedMsg{err}
 			}
 		}
@@ -862,6 +868,8 @@ func (m Model) wizardView(width, h int) string {
 		switch {
 		case w.scanning:
 			head = append(head, i18n.T("tui.wiz.scanning"))
+		case w.cancelled && w.resumeErr != nil:
+			head = append(head, badStyle.Render(i18n.T("fix_arayuz.cancelled_not_restarted")))
 		case w.cancelled && w.dnsOn:
 			head = append(head, warnStyle.Render(i18n.T("tui.wiz.cancelled_dns")))
 		case w.cancelled:
