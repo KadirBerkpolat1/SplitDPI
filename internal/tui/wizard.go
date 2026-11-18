@@ -500,7 +500,9 @@ func (m Model) doneActions() []action {
 	var acts []action
 	switch {
 	case m.bypassOn() && !m.wiz.paused:
-		acts = append(acts, action{Key: "r", Label: i18n.T("tui.act.restart"), CLI: m.restartCLI(), Do: finish((*Model).restart)})
+		if m.canRestart() {
+			acts = append(acts, action{Key: "r", Label: i18n.T("tui.act.restart"), CLI: m.restartCLI(), Do: finish((*Model).restart)})
+		}
 	case m.canStart():
 		a := m.startAction()
 		a.Do = finish(a.Do)
@@ -595,6 +597,9 @@ func (m *Model) askSite() tea.Cmd {
 
 // scanSite runs blockcheck2 on the typed site; the apps are left as they are.
 func (m *Model) scanSite() tea.Cmd {
+	if m.scanWaits() {
+		return nil
+	}
 	typed := strings.TrimSpace(m.wiz.input.Value())
 	if typed == "" {
 		return nil
@@ -643,6 +648,9 @@ func (m *Model) saveApps() tea.Cmd {
 // and starts again the same way after, once the chosen apps are saved. A run
 // in another terminal stays, and the scan refuses to start.
 func (m *Model) startScan() tea.Cmd {
+	if m.scanWaits() {
+		return nil
+	}
 	ctx, cancel := context.WithCancel(m.ctx)
 	w := &m.wiz
 	w.step, w.scanning, w.cancelled, w.dnsOn, w.err, w.report, w.resumeErr, w.scanCancel = wScan, true, false, false, nil, nil, nil, cancel
@@ -694,6 +702,20 @@ func (m *Model) startScan() tea.Cmd {
 		return msg
 	}
 	return batch(run, m.every(300*time.Millisecond, func(time.Time) tea.Msg { return scanTickMsg{} }))
+}
+
+// scanWaits is whether a scan has to wait, and then says why: a restart, a
+// service change or a background start is under way, whose bypass the scan
+// would stop halfway or run beside.
+func (m *Model) scanWaits() bool {
+	if m.waitHeld() {
+		return true
+	}
+	if m.svcOp != nil || m.bgStarting() {
+		m.note = i18n.T("fix2_arayuz.start_wait")
+		return true
+	}
+	return false
 }
 
 // resume starts the bypass the scan stopped again, the way it ran: mode is

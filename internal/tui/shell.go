@@ -182,13 +182,13 @@ func (m Model) tab(i int, title string) string {
 }
 
 // pill is the bypass state in words, or only its dot when words is false.
-// A setup scan shows itself, as on Status.
+// A setup scan shows itself, as on Status, and so does a restart under way.
 func (m Model) pill(words bool) string {
 	dot, label, style := m.g.dotOff, i18n.T("shell.pill.stopped"), mutedStyle
 	switch {
 	case m.wiz.scanning:
 		dot, label, style = m.g.dot, i18n.T("fix_arayuz.pill_scanning"), warnStyle
-	case !m.running && m.st.State == "restarting":
+	case m.restarting || m.st.State == "restarting":
 		dot, label, style = m.g.dot, i18n.T("fix_arayuz.pill_restarting"), warnStyle
 	case m.bypassOn():
 		dot, label, style = m.g.dot, i18n.T("shell.pill.running"), goodStyle
@@ -269,11 +269,10 @@ func hint(key, label string) string { return keyStyle.Render(key) + " " + label 
 // restartKey restarts a running bypass with pending changes from any page.
 const restartKey = "R"
 
-// restartAction is R while the running bypass has changes waiting. It waits
-// while restarting is held or a start is under way; a run in another
-// terminal restarts there, where it can be seen.
+// restartAction is R while the running bypass has changes waiting and can be
+// restarted here.
 func (m Model) restartAction() (action, bool) {
-	if !m.pending || !m.bypassOn() || m.held() || m.svcOp != nil || m.bgStarting || m.otherTerminal() {
+	if !m.pending || !m.canRestart() {
 		return action{}, false
 	}
 	return action{Key: restartKey, Label: i18n.T("tui.act.restart"), CLI: m.restartCLI(), Do: (*Model).restart}, true

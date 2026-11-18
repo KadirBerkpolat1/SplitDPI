@@ -90,6 +90,9 @@ type fake struct {
 	startErr   error         // the service does not start once the run there stopped
 	restartErr error         // and that run does not start again either
 	gate       chan struct{} // Enable and Disable wait for it, if set
+	bgGate     chan struct{} // Background waits for it, if set, or for its ctx to end
+
+	svcCtx context.Context // the context of the last Enable or Disable
 }
 
 func newFake() *fake {
@@ -128,6 +131,15 @@ func (f *fake) Run(ctx context.Context, service bool) error {
 }
 func (f *fake) Background(ctx context.Context) (int, error) {
 	f.record("background")
+	if f.bgGate != nil {
+		select {
+		case <-f.bgGate:
+		case <-ctx.Done():
+			f.record("background cut")
+			return 0, ctx.Err()
+		}
+		defer f.record("background done")
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.bgErr != nil {
@@ -262,6 +274,9 @@ func (f *fake) HasIPv6(ctx context.Context) bool { return f.ipv6 }
 // stopped run starts again in the background unless restartErr.
 func (f *fake) Enable(ctx context.Context, stopHere func()) (ops.EnableReport, error) {
 	f.record("enable")
+	f.mu.Lock()
+	f.svcCtx = ctx
+	f.mu.Unlock()
 	if f.gate != nil {
 		<-f.gate
 	}
@@ -300,6 +315,9 @@ func (f *fake) Enable(ctx context.Context, stopHere func()) (ops.EnableReport, e
 // Disable removes the service and leaves run mode boot, as the real one does.
 func (f *fake) Disable(ctx context.Context) error {
 	f.record("disable")
+	f.mu.Lock()
+	f.svcCtx = ctx
+	f.mu.Unlock()
 	if f.gate != nil {
 		<-f.gate
 	}

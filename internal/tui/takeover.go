@@ -60,6 +60,9 @@ func (m Model) takeoverAction() (action, bool) {
 
 // confirmTakeover lists what ops.Takeover will change for each install.
 func (m *Model) confirmTakeover() tea.Cmd {
+	if m.waitHeld() {
+		return nil
+	}
 	var kinds, changes []string
 	var todo []ops.Foreign
 	for _, f := range m.foreign {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -38,12 +39,19 @@ type serviceOp struct {
 	err error
 }
 
-// changeService runs change as the service change under way.
-func (m *Model) changeService(change func() (tea.Msg, error)) tea.Cmd {
+// changeService runs change as the service change under way; with one under
+// way already, it changes nothing. A signal or a lost terminal does not cut
+// change short: Run waits for it.
+func (m *Model) changeService(change func(ctx context.Context) (tea.Msg, error)) tea.Cmd {
+	if m.svcOp != nil {
+		m.note = i18n.T("tui.service_busy")
+		return nil
+	}
 	op := &serviceOp{job: newJob()}
 	m.svcOp = op
+	ctx := context.WithoutCancel(m.ctx)
 	return func() tea.Msg {
-		if !op.run(func() { op.msg, op.err = change() }) {
+		if !op.run(func() { op.msg, op.err = change(ctx) }) {
 			return nil
 		}
 		return serviceDoneMsg{op.msg, op.err}
@@ -124,6 +132,9 @@ func (m *Model) confirmEnable() tea.Cmd {
 		m.note = i18n.T("tui.boot_unsupported")
 		return nil
 	}
+	if m.waitHeld() {
+		return nil
+	}
 	if m.svcOp != nil {
 		m.note = i18n.T("tui.service_busy")
 		return nil
@@ -155,8 +166,8 @@ func (m *Model) enable() tea.Cmd {
 	if m.running {
 		stopHere = m.stopOwnRun()
 	}
-	b, ctx, w := m.b, m.ctx, m.logs
-	return m.changeService(func() (tea.Msg, error) {
+	b, w := m.b, m.logs
+	return m.changeService(func(ctx context.Context) (tea.Msg, error) {
 		_, err := b.Enable(ctx, stopHere)
 		if err != nil {
 			fmt.Fprintln(w, err)
@@ -165,8 +176,10 @@ func (m *Model) enable() tea.Cmd {
 	})
 }
 
-// enabled takes Enable's result.
+// enabled takes Enable's result, which ends a restart that started the
+// service again.
 func (m Model) enabled(err error) (Model, tea.Cmd) {
+	m.restarting = false
 	if err != nil {
 		m.note = errText(err)
 		return m, m.refresh()
@@ -223,6 +236,9 @@ func firstLine(err error) string {
 
 // confirmDisable asks before the service is removed for run mode mode.
 func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
+	if m.waitHeld() {
+		return nil
+	}
 	if m.svcOp != nil {
 		m.note = i18n.T("tui.service_busy")
 		return nil
@@ -243,8 +259,8 @@ func (m *Model) confirmDisable(mode config.RunMode) tea.Cmd {
 // disable removes the service, then saves run mode mode.
 func (m *Model) disable(mode config.RunMode) tea.Cmd {
 	m.note = i18n.T("shell.disable.working")
-	b, ctx := m.b, m.ctx
-	return m.changeService(func() (tea.Msg, error) {
+	b := m.b
+	return m.changeService(func(ctx context.Context) (tea.Msg, error) {
 		if err := b.Disable(ctx); err != nil && !errors.Is(err, ops.ErrNotEnabled) {
 			return runModeMsg{mode: mode, err: err}, err
 		}

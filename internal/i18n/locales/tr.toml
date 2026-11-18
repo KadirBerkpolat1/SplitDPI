@@ -991,3 +991,11 @@ pending_foreground = "Kaydettiğiniz değişiklikler henüz kullanılmıyor: eng
 restart_foreground = "Geçerli olması için engel aşmayı çalıştığı terminalde yeniden başlatın."
 cancelled_not_restarted = "Tarama iptal edildi, ancak durdurduğu engel aşma yeniden başlamadı."
 takeover_done_running = "Tamam. Diğer araç kapatıldı."
+
+[fix2_arayuz]
+scan_wait = "Bir tarama sürüyor; bitmesini bekleyin."
+restart_wait = "Yeniden başlatma sürüyor; bitmesini bekleyin."
+restart_scan = "Engel aşma yeniden başlatma için durdu, ancak bu sırada bir tarama başladı: tarama bitince r ile başlatın."
+start_wait = "SplitDPI başlıyor ya da açılış servisi değiştiriliyor; bu bitince tarayın."
+bg_wait = "Arka planda başlatılıyor. Lütfen bekleyin: bu bitince SplitDPI kapanır."
+how_restart = "Durup kaydettiğiniz değişikliklerle yeniden başlıyor."

@@ -603,6 +603,9 @@ func uninstallActions(Model) []action {
 
 // confirmUninstall lists what uninstall removes; nothing undoes it.
 func (m *Model) confirmUninstall() tea.Cmd {
+	if m.waitHeld() {
+		return nil
+	}
 	p := m.b.UninstallPlan()
 	if p.Service == "" && len(p.Paths) == 0 {
 		m.note = i18n.T("uninstall.nothing")

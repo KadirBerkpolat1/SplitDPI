@@ -165,9 +165,9 @@ type Model struct {
 	quitting    bool
 
 	// The bypass this TUI starts in the background (run --background).
-	bgStarting   bool
-	toBackground bool // quitting moves the bypass run here to the background
-	bgPID        int  // the background run quitting left behind
+	bgStart      *bgStart // the start under way, if any
+	toBackground bool     // quitting moves the bypass run here to the background
+	bgPID        int      // the background run quitting left behind
 
 	// The service change under way, if any, and the quit that waits for it.
 	svcOp     *serviceOp
@@ -209,12 +209,12 @@ func (m *Model) loadNames(set presets.Set) {
 }
 
 // Run opens the TUI on the terminal. A scan that stopped the bypass and a
-// service change the program ended in the middle of are waited for, and the
-// bypass it may run is stopped (and its rules removed), before Run returns,
-// also when a signal or a lost terminal ended it; then the share link of a
-// strategy saved in this session, the background run quitting left and what
-// the service change quitting waited for did are printed where the
-// scrollback keeps them.
+// service change or background start the program ended in the middle of are
+// waited for, and the bypass it may run is stopped (and its rules removed),
+// before Run returns, also when a signal or a lost terminal ended it; then the
+// share link of a strategy saved in this session, the background run quitting
+// or that start left and what the service change quitting waited for did are
+// printed where the scrollback keeps them.
 //
 // Signals are ctx's: the caller cancels it on SIGINT, SIGTERM and SIGHUP and
 // keeps catching them until Run returns. Bubble Tea's own handler would race
@@ -234,6 +234,7 @@ func (m Model) run(opts ...tea.ProgramOption) error {
 	if fm, ok := final.(Model); ok {
 		fm.stopAll()
 		fm.waitService(m.out)
+		fm.waitBackground(m.out)
 		fm.stopRun()
 		fm.printShare(m.out)
 		fm.printBackground(m.out)
@@ -577,8 +578,8 @@ func keyMsg(k string) tea.KeyMsg {
 
 // quit leaves the TUI, but first asks when it runs the bypass itself. It does
 // not leave while packages install: that would kill the package manager. Nor
-// during a service change, which cut short could leave no bypass running:
-// the quit goes on once that is done.
+// during a service change or a background start, which cut short could leave
+// no bypass running: the quit goes on once that is done.
 func (m *Model) quit() tea.Cmd {
 	if m.wiz.pkgsInstalling {
 		m.note = i18n.T("tui.pkgs.wait")
@@ -586,6 +587,10 @@ func (m *Model) quit() tea.Cmd {
 	}
 	if m.svcOp != nil {
 		m.note, m.quitAfter = i18n.T("tui.service_wait"), true
+		return nil
+	}
+	if m.bgStarting() { // bgDoneMsg quits
+		m.note, m.quitting = i18n.T("fix2_arayuz.bg_wait"), true
 		return nil
 	}
 	if m.running {

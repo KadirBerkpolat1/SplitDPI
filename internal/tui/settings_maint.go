@@ -301,6 +301,9 @@ func revertActions(Model) []action {
 
 // confirmRevert says that SplitDPI stops and what is turned back on.
 func (m *Model) confirmRevert() tea.Cmd {
+	if m.waitHeld() {
+		return nil
+	}
 	changes := []string{i18n.T("settings_revert.stop")}
 	for _, s := range m.settings.takenOver {
 		changes = append(changes, i18n.T("settings_revert.restore", s))
