@@ -15,12 +15,14 @@ type Lookup func(context.Context, string) ([]netip.Addr, error)
 // MarkNoAddress sets NoAddress on the failed results whose host has no
 // usable address by both sys and doh: none at all, or only loopback and
 // unspecified ones. Only results that failed in DNS or dialed such an
-// address are looked up, each host once. When doh finds an address the
-// system does not, the failure stays: that is what tampering looks like.
+// address are looked up, each host once, up to maxParallel hosts at once;
+// once ctx is done no more hosts are looked up. When doh finds an address
+// the system does not, the failure stays: that is what tampering looks like.
 func MarkNoAddress(ctx context.Context, rs []Result, sys, doh Lookup) {
-	known := map[string]bool{}
-	for i := range rs {
-		r := &rs[i]
+	hostOf := make([]string, len(rs))
+	index := map[string]int{}
+	var hosts []string
+	for i, r := range rs {
 		if r.OK || (classifyErr(r.Cause) != DNS && !dialedNowhere(r.Cause)) {
 			continue
 		}
@@ -29,12 +31,20 @@ func MarkNoAddress(ctx context.Context, rs []Result, sys, doh Lookup) {
 			continue
 		}
 		h := u.Hostname()
-		none, ok := known[h]
-		if !ok {
-			none = noAddress(ctx, h, sys) && noAddress(ctx, h, doh)
-			known[h] = none
+		hostOf[i] = h
+		if _, ok := index[h]; !ok {
+			index[h] = len(hosts)
+			hosts = append(hosts, h)
 		}
-		r.NoAddress = none
+	}
+	none := make([]bool, len(hosts))
+	each(ctx, len(hosts), func(i int) {
+		none[i] = noAddress(ctx, hosts[i], sys) && noAddress(ctx, hosts[i], doh)
+	})
+	for i, h := range hostOf {
+		if h != "" {
+			rs[i].NoAddress = none[index[h]]
+		}
 	}
 }
 
