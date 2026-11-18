@@ -42,9 +42,12 @@ type Options struct {
 }
 
 type Env struct {
-	Set        presets.Set
-	Lookup     func(context.Context) (ASNInfo, error)
-	StartTrial func(context.Context, presets.Strategy) (stop func(), err error)
+	Set    presets.Set
+	Lookup func(context.Context) (ASNInfo, error)
+	// StartTrial runs one candidate; country, the network's, picks the
+	// exclude list as it will once the strategy is saved.
+	StartTrial func(ctx context.Context, st presets.Strategy, country string) (stop func(), err error)
+	// Probe tests urls through the trial running, each over a new connection.
 	Probe      func(context.Context, []string) []probe.Result
 	Blockcheck func(context.Context, BlockcheckParams, func(string)) (string, error)
 	IPv6       bool
@@ -90,7 +93,7 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 
 	if !opt.BlockcheckOnly {
 		for _, cand := range cands {
-			stop, err := env.StartTrial(ctx, cand.Strategy)
+			stop, err := env.StartTrial(ctx, cand.Strategy, info.Country)
 			if err != nil {
 				return rep, err
 			}
@@ -152,7 +155,7 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 	}
 	for i, args := range tls {
 		st := presets.Strategy{ID: fmt.Sprintf("blockcheck-%d", i+1), TCPTLS: args, QUIC: bc.QUIC}
-		stop, err := env.StartTrial(ctx, st)
+		stop, err := env.StartTrial(ctx, st, info.Country)
 		if err != nil {
 			return rep, err
 		}
@@ -167,13 +170,14 @@ func Scan(ctx context.Context, env Env, opt Options) (Report, error) {
 		}
 		if ok {
 			rep.Winner = &config.Strategy{
-				ID:     "blockcheck",
-				Source: BlockcheckSource,
-				TCPTLS: args,
-				QUIC:   bc.QUIC,
-				ASN:    info.ASN,
-				Date:   env.Now().Format("2006-01-02"),
-				Engine: env.EngineVer,
+				ID:      "blockcheck",
+				Source:  BlockcheckSource,
+				TCPTLS:  args,
+				QUIC:    bc.QUIC,
+				ASN:     info.ASN,
+				Country: info.Country,
+				Date:    env.Now().Format("2006-01-02"),
+				Engine:  env.EngineVer,
 			}
 			return rep, nil
 		}
@@ -202,29 +206,47 @@ func strategyFromCandidate(c presets.Candidate, info ASNInfo, engineVer string, 
 		TCPHTTP: c.Strategy.TCPHTTP,
 		QUIC:    c.Strategy.QUIC,
 		ASN:     info.ASN,
+		Country: info.Country,
 		Date:    now.Format("2006-01-02"),
 		Engine:  engineVer,
 	}
 }
 
+// allProbeOK reports whether every result opened. One with no address to
+// test (probe.MarkNoAddress) neither fails nor passes a trial alone.
 func allProbeOK(rs []probe.Result) bool {
+	tested := false
 	for _, r := range rs {
+		if r.NoAddress {
+			continue
+		}
 		if !r.OK {
 			return false
 		}
+		tested = true
 	}
-	return len(rs) > 0
+	return tested
 }
 
+// probeURLs are the distinct probe URLs of apps, then sites, in that order.
 func probeURLs(set presets.Set, apps, sites []string) []string {
 	var urls []string
+	seen := map[string]bool{}
+	add := func(u string) {
+		if !seen[u] {
+			seen[u] = true
+			urls = append(urls, u)
+		}
+	}
 	for _, id := range apps {
 		if a, ok := set.Apps[id]; ok {
-			urls = append(urls, probe.AppURLs(a)...)
+			for _, u := range probe.AppURLs(a) {
+				add(u)
+			}
 		}
 	}
 	for _, d := range sites {
-		urls = append(urls, probe.SiteURL(d))
+		add(probe.SiteURL(d))
 	}
 	return urls
 }

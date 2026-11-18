@@ -24,6 +24,8 @@ func (o *Ops) ServiceState() ServiceState {
 // SplitDPI at boot. A config that cannot be read stays as it is: nothing can
 // read a run mode from it either.
 func (o *Ops) leaveBootMode() error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
 	c, err := config.Load(o.P)
 	if err != nil || c.RunMode != config.RunBoot {
 		return nil

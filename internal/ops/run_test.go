@@ -137,7 +137,11 @@ var candidate = presets.Strategy{ID: "tt", TCPTLS: "--payload=tls_client_hello -
 
 func TestTrialStartsAndTearsDown(t *testing.T) {
 	o, n, children := trialOps(t, fstest.MapFS{"proc/net/netfilter/nfnetlink_queue": {Data: []byte(queueBound)}})
-	stop, err := o.startTrial(context.Background(), trialConfig(), candidate, nil)
+	lf, err := supervisor.Lock(o.P, "scan")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop, err := o.startTrial(context.Background(), trialConfig(), candidate, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,8 +158,12 @@ func TestTrialStartsAndTearsDown(t *testing.T) {
 	if c := (*children)[0]; !slices.Contains(c.sigs, os.Signal(syscall.SIGTERM)) {
 		t.Errorf("child not stopped: %v", c.sigs)
 	}
+	if _, _, held := supervisor.LockInfo(o.P); !held {
+		t.Error("the trial released the scan's lock")
+	}
+	lf.Close()
 	if _, _, held := supervisor.LockInfo(o.P); held {
-		t.Error("lock held after stop")
+		t.Error("lock held after the scan")
 	}
 }
 
@@ -165,7 +173,7 @@ func TestTrialFailsIfQueueNeverBinds(t *testing.T) {
 	trialReadyTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { trialReadyTimeout = old })
 	o, n, _ := trialOps(t, fstest.MapFS{})
-	stop, err := o.startTrial(context.Background(), trialConfig(), candidate, nil)
+	stop, err := o.startTrial(context.Background(), trialConfig(), candidate, "", nil)
 	if err == nil {
 		stop()
 		t.Fatal("trial started although nfqws2 never bound the queue")

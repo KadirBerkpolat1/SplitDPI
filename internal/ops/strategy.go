@@ -85,31 +85,33 @@ func (o *Ops) StrategySet(id string) (ch StrategyChoice, running bool, err error
 	if i < 0 {
 		return StrategyChoice{}, false, UnknownStrategyError{ID: id}
 	}
-	c, err := config.Load(o.P)
-	if err != nil {
-		return StrategyChoice{}, false, err
-	}
 	ch = list[i]
-	st := &config.Strategy{
-		ID:      ch.Strategy.ID,
-		Source:  ch.Source,
-		TCPTLS:  ch.Strategy.TCPTLS,
-		TCPHTTP: ch.Strategy.TCPHTTP,
-		QUIC:    ch.Strategy.QUIC,
-		Date:    o.Now().Format("2006-01-02"),
-		Engine:  engine.Version,
-	}
-	// ASN is the user's network as scan found it; it selects the country
-	// exclude list. An ISP's strategy implies that ISP when there is none,
-	// or when the network is not in the ISP's country.
-	if c.Strategy != nil && (ch.ASN == 0 || countryFor(set, c.Strategy) == ch.Country) {
-		st.ASN = c.Strategy.ASN
-	}
-	if st.ASN == 0 {
-		st.ASN = ch.ASN
-	}
-	c.Strategy = st
-	if err := config.Save(o.P, c); err != nil {
+	err = o.updateConfig(func(c *config.Config) error {
+		st := &config.Strategy{
+			ID:      ch.Strategy.ID,
+			Source:  ch.Source,
+			TCPTLS:  ch.Strategy.TCPTLS,
+			TCPHTTP: ch.Strategy.TCPHTTP,
+			QUIC:    ch.Strategy.QUIC,
+			Date:    o.Now().Format("2006-01-02"),
+			Engine:  engine.Version,
+		}
+		// ASN and Country are the user's network as scan found it; Country
+		// selects the exclude list. An ISP's strategy implies that ISP when
+		// there is none, or when the network is not in the ISP's country.
+		if c.Strategy != nil && (ch.ASN == 0 || countryFor(set, c.Strategy) == ch.Country) {
+			st.ASN, st.Country = c.Strategy.ASN, countryFor(set, c.Strategy)
+		}
+		if st.ASN == 0 {
+			st.ASN = ch.ASN
+		}
+		if st.Country == "" {
+			st.Country = ch.Country
+		}
+		c.Strategy = st
+		return nil
+	})
+	if err != nil {
 		return StrategyChoice{}, false, err
 	}
 	_, _, held := supervisor.LockInfo(o.P)

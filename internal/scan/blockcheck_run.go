@@ -107,7 +107,9 @@ func RunBlockcheck(ctx context.Context, e engine.Engine, run execx.Runner, p Blo
 	cmd := exec.Command("sh", script)
 	cmd.Dir = e.Dir
 	cmd.Env = env
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Its own group keeps a terminal's Ctrl-C to us, so the stop stays orderly.
+	// If we die, SIGTERM makes it undo its tables and stop its nfqws2 itself.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGTERM}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

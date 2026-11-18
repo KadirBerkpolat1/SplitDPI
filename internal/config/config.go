@@ -40,6 +40,7 @@ type Strategy struct {
 	TCPHTTP string `toml:"tcp_http"`
 	QUIC    string `toml:"quic"`
 	ASN     int    `toml:"asn"`
+	Country string `toml:"country"` // the network's country, which picks exclude/<cc>.txt
 	Date    string `toml:"date"`
 	Engine  string `toml:"engine"`
 }

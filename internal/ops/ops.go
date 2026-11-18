@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/execx"
@@ -42,6 +43,10 @@ type Ops struct {
 	// Detach starts the process of `run --background` and reports when it
 	// exits; nil means c.Start.
 	Detach func(c *exec.Cmd) (exited <-chan error, err error)
+
+	// mu serializes every read-modify-write of config.toml and the user
+	// lists: the TUI saves from concurrent goroutines.
+	mu sync.Mutex
 }
 
 // New returns Ops wired to the real system. Our own files live under p;

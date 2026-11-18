@@ -49,12 +49,13 @@ func TestStrategySet(t *testing.T) {
 	}
 	got, _ := config.Load(o.P)
 	want := config.Strategy{
-		ID:     "tc-multidisorder",
-		Source: "isp/tr/as16135-turkcell.toml",
-		TCPTLS: ch.Strategy.TCPTLS,
-		ASN:    9121,
-		Date:   "2026-10-29",
-		Engine: engine.Version,
+		ID:      "tc-multidisorder",
+		Source:  "isp/tr/as16135-turkcell.toml",
+		TCPTLS:  ch.Strategy.TCPTLS,
+		ASN:     9121,
+		Country: "TR",
+		Date:    "2026-10-29",
+		Engine:  engine.Version,
 	}
 	if got.Strategy == nil || *got.Strategy != want || want.TCPTLS == "" {
 		t.Errorf("saved %+v, want %+v", got.Strategy, want)

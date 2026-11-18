@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/KadirBerkpolat1/SplitDPI/internal/config"
@@ -18,10 +19,15 @@ import (
 	"github.com/KadirBerkpolat1/SplitDPI/internal/sysinfo"
 )
 
-// RunLockError means splitdpi is already running.
-type RunLockError struct{}
+// RunLockError means splitdpi is already running; Mode is how.
+type RunLockError struct{ Mode string }
 
-func (RunLockError) Error() string { return i18n.T("scan.locked") }
+func (e RunLockError) Error() string {
+	if e.Mode == "scan" {
+		return i18n.T("fix_cekirdek.scan_running")
+	}
+	return i18n.T("scan.locked")
+}
 
 // Scan finds a working strategy and saves it to config. With opt.Site, the
 // site is added to the user sites too, so the strategy applies to it.
@@ -33,9 +39,16 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		}
 		opt.Site = n
 	}
-	if _, _, held := supervisor.LockInfo(o.P); held {
-		return scan.Report{}, RunLockError{}
+	// Held to the end, so that no run, enable or other scan starts meanwhile;
+	// the trials run under it.
+	lf, err := supervisor.Lock(o.P, "scan")
+	if already := (supervisor.ErrAlreadyRunning{}); errors.As(err, &already) {
+		return scan.Report{}, RunLockError{Mode: already.Mode}
 	}
+	if err != nil {
+		return scan.Report{}, err
+	}
+	defer lf.Close()
 	// Another bypass tool would skew both preset trials and blockcheck2.
 	if err := o.refuseConflicts(ctx); err != nil {
 		return scan.Report{}, err
@@ -70,6 +83,7 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 	if opt.Site != "" {
 		trialHosts = []string{opt.Site}
 	}
+	client := o.freshClient()
 	var preErr error // stopped blockcheck2 before it ran
 	env := scan.Env{
 		Set: set,
@@ -77,11 +91,13 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 			info, _, err := o.Detect(ctx, opt.ASN, opt.Country)
 			return info, err
 		},
-		StartTrial: func(ctx context.Context, st presets.Strategy) (func(), error) {
-			return o.startTrial(ctx, c, st, trialHosts)
+		StartTrial: func(ctx context.Context, st presets.Strategy, country string) (func(), error) {
+			return o.startTrial(ctx, c, st, country, trialHosts)
 		},
 		Probe: func(ctx context.Context, urls []string) []probe.Result {
-			return probe.Prober{Client: o.HTTP, Timeout: probe.DefaultTimeout}.Probe(ctx, urls)
+			rs := probe.Prober{Client: client, Timeout: probe.DefaultTimeout}.Probe(ctx, urls)
+			probe.MarkNoAddress(ctx, rs, systemAddrs, dohAddrs(o.dnsClient(c)))
+			return rs
 		},
 		// Trials after this see c, so a DNS turned on here serves them too.
 		Blockcheck: func(ctx context.Context, p scan.BlockcheckParams, prog func(string)) (string, error) {
@@ -111,8 +127,11 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		return rep, err
 	}
 	if rep.Winner != nil {
-		c.Strategy = rep.Winner
-		if err := config.Save(o.P, c); err != nil {
+		err := o.updateConfig(func(cfg *config.Config) error {
+			cfg.Strategy = rep.Winner
+			return nil
+		})
+		if err != nil {
 			return rep, err
 		}
 		if opt.Site != "" {
@@ -122,6 +141,26 @@ func (o *Ops) Scan(ctx context.Context, opt scan.Options, progress func(string))
 		}
 	}
 	return rep, nil
+}
+
+// freshClient is o.HTTP without keep-alives: each trial must open its own
+// connections through its own nfqws2, not reuse those of a trial before. A
+// RoundTripper other than *http.Transport has no pool of ours to turn off.
+func (o *Ops) freshClient() *http.Client {
+	var c http.Client
+	if o.HTTP != nil {
+		c = *o.HTTP
+	}
+	rt := c.Transport
+	if rt == nil {
+		rt = http.DefaultTransport
+	}
+	if tr, ok := rt.(*http.Transport); ok {
+		tr = tr.Clone()
+		tr.DisableKeepAlives = true
+		c.Transport = tr
+	}
+	return &c
 }
 
 // scanPackages makes sure blockcheck2 finds curl and nslookup or host, which
